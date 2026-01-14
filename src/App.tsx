@@ -59,10 +59,8 @@ function App() {
 
     console.log('Matches found:', matches.length);
 
-    const sortedMatches = matches.sort((a, b) => a.pick_rank - b.pick_rank);
-
-    const results = sortedMatches.length > 0
-      ? sortedMatches.slice(0, 3)
+    const results = matches.length > 0
+      ? matches.slice(0, 3)
       : [];
 
     setSelectedOutfits(results);

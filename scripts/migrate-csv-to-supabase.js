@@ -109,8 +109,6 @@ async function migrateData() {
             const row = filteredData[i];
             console.log(`Processing row ${i + 1}/${filteredData.length}: ${row.id}`);
 
-            const pickRank = row.pick_rank ? parseInt(row.pick_rank, 10) : 1;
-
             // Convert image URLs
             const [image_url, image_url_flatlay, image_url_on_model] = await Promise.all([
               convertIbbUrl(row.image_url),
@@ -122,7 +120,6 @@ async function migrateData() {
               id: row.id,
               occasion: row.where.trim(),
               style: row.style.trim(),
-              pick_rank: isNaN(pickRank) ? 1 : pickRank,
               image_url: image_url || '',
               image_url_flatlay: image_url_flatlay || null,
               image_url_on_model: image_url_on_model || null,

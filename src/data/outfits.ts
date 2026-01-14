@@ -2,7 +2,6 @@ export interface Outfit {
   id: string;
   where: string;
   style: string;
-  pick_rank: number;
   image_url: string;
   image_url_flatlay?: string;
   image_url_on_model?: string;
