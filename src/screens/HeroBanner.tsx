@@ -93,7 +93,7 @@ export default function HeroBanner({ images, autoPlayInterval = 5000 }: HeroBann
             <img
               src={image}
               alt={`Hero banner ${index + 1}`}
-              className="w-full h-[200px] sm:h-[250px] md:h-[300px] object-cover"
+              className="w-full h-[400px] sm:h-[450px] md:h-[500px] lg:h-[550px] object-cover"
             />
           </div>
         ))}

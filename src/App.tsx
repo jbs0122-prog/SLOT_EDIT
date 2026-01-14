@@ -39,6 +39,8 @@ function App() {
   };
 
   const handleGenerate = (where: string, style: string, subToggle: string | null, weather: WeatherData) => {
+    console.log('=== GENERATE BUTTON CLICKED ===');
+    console.log('Total outfits loaded:', outfits.length);
     console.log('Generating outfits for:', { where, style });
 
     const normalizedWhere = normalizeString(where);
@@ -65,6 +67,7 @@ function App() {
 
     setSelectedOutfits(results);
     setContext({ where, style, subToggle, weather });
+    console.log('Switching to results screen with', results.length, 'outfits');
     setCurrentScreen('results');
   };
 
