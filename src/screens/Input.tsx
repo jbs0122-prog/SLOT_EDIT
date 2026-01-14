@@ -173,20 +173,16 @@ export default function Input({ onGenerate }: InputProps) {
   const isComplete = weather !== null;
 
   const heroBannerImages = [
-    '/hero-banner-1.png',
-    '/hero-banner-2.png',
-    '/hero-banner-3.png',
+    'https://images.pexels.com/photos/1183266/pexels-photo-1183266.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    'https://images.pexels.com/photos/1374510/pexels-photo-1374510.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    'https://images.pexels.com/photos/1036622/pexels-photo-1036622.jpeg?auto=compress&cs=tinysrgb&w=1200',
   ];
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <header className="pt-8 pb-6 px-6">
         <div className="flex justify-center">
-          <img
-            src="/logo.png"
-            alt="SLOT EDIT"
-            className="h-24 w-auto"
-          />
+          <div className="text-3xl font-bold tracking-tight">SLOT EDIT</div>
         </div>
       </header>
 
@@ -205,7 +201,7 @@ export default function Input({ onGenerate }: InputProps) {
           </p>
           <div className="max-w-4xl mx-auto w-full mb-6">
             <img
-              src="/sub-banner.png"
+              src="https://images.pexels.com/photos/1124468/pexels-photo-1124468.jpeg?auto=compress&cs=tinysrgb&w=1200"
               alt="Sub Banner"
               className="w-full h-auto"
             />
