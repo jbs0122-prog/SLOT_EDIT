@@ -150,9 +150,11 @@ async function migrateData() {
               .upsert(batch, { onConflict: 'id' });
 
             if (error) {
-              console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
+              console.error(`Error inserting batch ${i / batchSize + 1}:`, JSON.stringify(error, null, 2));
+              console.error('Batch data:', JSON.stringify(batch[0], null, 2));
             } else {
               console.log(`Inserted batch ${i / batchSize + 1}/${Math.ceil(outfits.length / batchSize)}`);
+              console.log('Sample inserted data:', data ? data.length : 'no data returned');
             }
           }
 
