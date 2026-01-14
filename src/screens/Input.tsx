@@ -173,9 +173,9 @@ export default function Input({ onGenerate }: InputProps) {
   const isComplete = weather !== null;
 
   const heroBannerImages = [
-    '/히어로배너_1.png',
-    '/히어로배너_2.png',
-    '/히어로배너_3.png',
+    '/hero-banner-1.png',
+    '/hero-banner-2.png',
+    '/hero-banner-3.png',
   ];
 
   return (
@@ -183,7 +183,7 @@ export default function Input({ onGenerate }: InputProps) {
       <header className="pt-8 pb-6 px-6">
         <div className="flex justify-center">
           <img
-            src="/로고.png"
+            src="/logo.png"
             alt="SLOT EDIT"
             className="h-24 w-auto"
           />
@@ -205,7 +205,7 @@ export default function Input({ onGenerate }: InputProps) {
           </p>
           <div className="max-w-4xl mx-auto w-full mb-6">
             <img
-              src="/서브배너_교체.png"
+              src="/sub-banner.png"
               alt="Sub Banner"
               className="w-full h-auto"
             />
