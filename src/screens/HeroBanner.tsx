@@ -89,11 +89,18 @@ export default function HeroBanner({ images, autoPlayInterval = 5000 }: HeroBann
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
         {images.map((image, index) => (
-          <div key={index} className="w-full flex-shrink-0">
+          <div key={index} className="w-full flex-shrink-0 bg-gray-200">
             <img
               src={image}
               alt={`Hero banner ${index + 1}`}
               className="w-full h-[400px] sm:h-[450px] md:h-[500px] lg:h-[550px] object-cover"
+              onError={(e) => {
+                console.error(`Failed to load banner image ${index + 1}:`, image);
+                e.currentTarget.style.display = 'none';
+              }}
+              onLoad={(e) => {
+                console.log(`Successfully loaded banner image ${index + 1}:`, image);
+              }}
             />
           </div>
         ))}
