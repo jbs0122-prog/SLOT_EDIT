@@ -3,7 +3,7 @@ import Input from './screens/Input';
 import Results from './screens/Results';
 import Loading from './screens/Loading';
 import { Outfit } from './data/outfits';
-import { fetchOutfitsFromCSV } from './utils/csvParser';
+import { fetchOutfits } from './utils/outfitService';
 import { WeatherData } from './utils/weather';
 
 type Screen = 'loading' | 'input' | 'results';
@@ -22,7 +22,7 @@ function App() {
   useEffect(() => {
     const loadOutfits = async () => {
       try {
-        const data = await fetchOutfitsFromCSV();
+        const data = await fetchOutfits();
         setOutfits(data);
         setCurrentScreen('input');
       } catch (error) {
