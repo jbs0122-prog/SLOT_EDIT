@@ -206,9 +206,9 @@ export default function Input({ onGenerate }: InputProps) {
               className="w-full h-auto"
             />
           </div>
-          <p className="text-lg text-gray-700 font-normal text-center">
+          <h2 className="text-2xl font-bold text-center">
             DON'T SEARCH—SELECT.
-          </p>
+          </h2>
         </div>
 
         <div className="max-w-4xl mx-auto w-full">
