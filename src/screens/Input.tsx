@@ -182,7 +182,7 @@ export default function Input({ onGenerate }: InputProps) {
     <div className="min-h-screen bg-white flex flex-col">
       <header className="pt-8 pb-6 px-6">
         <div className="flex justify-center">
-          <img src="/logo.png" alt="SLOT EDIT" className="h-12" />
+          <img src="/logo.png" alt="SLOT EDIT" className="h-24" />
         </div>
       </header>
 
