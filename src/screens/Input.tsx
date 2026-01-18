@@ -186,6 +186,10 @@ export default function Input({ onGenerate }: InputProps) {
         </div>
       </header>
 
+      <div className="max-w-4xl mx-auto w-full px-6 mb-8">
+        <HeroBanner images={heroBannerImages} />
+      </div>
+
       <main className="flex-1 flex flex-col justify-center px-6 py-8">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-center mb-8">
@@ -346,10 +350,6 @@ export default function Input({ onGenerate }: InputProps) {
               Can't find your occasion?
             </button>
           </div>
-        </div>
-
-        <div className="max-w-4xl mx-auto w-full px-6 mt-16">
-          <HeroBanner images={heroBannerImages} />
         </div>
 
         <div className="mt-8 mb-8">
