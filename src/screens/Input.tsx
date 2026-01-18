@@ -186,27 +186,9 @@ export default function Input({ onGenerate }: InputProps) {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto w-full px-6">
-        <HeroBanner images={heroBannerImages} />
-      </div>
-
       <main className="flex-1 flex flex-col justify-center px-6 py-8">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-center mb-2">
-            SLOTS OVER SEARCH
-          </h2>
-          <p className="text-sm text-gray-600 font-light text-center mb-8">
-            NYC trends, edited weekly.<br />
-            Pick a slot—get 3 editor picks.
-          </p>
-          <div className="max-w-4xl mx-auto w-full mb-6">
-            <img
-              src="/sub-banner.png"
-              alt="Sub Banner"
-              className="w-full h-auto"
-            />
-          </div>
-          <h2 className="text-2xl font-bold text-center">
+          <h2 className="text-2xl font-bold text-center mb-8">
             DON'T SEARCH—SELECT.
           </h2>
         </div>
@@ -363,6 +345,27 @@ export default function Input({ onGenerate }: InputProps) {
               <HelpCircle className="w-4 h-4" />
               Can't find your occasion?
             </button>
+          </div>
+        </div>
+
+        <div className="max-w-4xl mx-auto w-full px-6 mt-16">
+          <HeroBanner images={heroBannerImages} />
+        </div>
+
+        <div className="mt-8 mb-8">
+          <h2 className="text-2xl font-bold text-center mb-2">
+            SLOTS OVER SEARCH
+          </h2>
+          <p className="text-sm text-gray-600 font-light text-center mb-8">
+            NYC trends, edited weekly.<br />
+            Pick a slot—get 3 editor picks.
+          </p>
+          <div className="max-w-4xl mx-auto w-full mb-6">
+            <img
+              src="/sub-banner.png"
+              alt="Sub Banner"
+              className="w-full h-auto"
+            />
           </div>
         </div>
       </main>
