@@ -93,12 +93,12 @@ export default function HeroBanner({ images, autoPlayInterval = 5000 }: HeroBann
             <img
               src={image}
               alt={`Hero banner ${index + 1}`}
-              className="w-full h-[280px] sm:h-[350px] md:h-[400px] object-cover"
+              className="w-full h-[200px] sm:h-[250px] md:h-[300px] object-cover"
               onError={(e) => {
                 console.error(`Failed to load banner image ${index + 1}:`, image);
                 const parent = e.currentTarget.parentElement;
                 if (parent) {
-                  parent.innerHTML = `<div class="w-full h-[280px] sm:h-[350px] md:h-[400px] flex items-center justify-center text-gray-400 text-sm">Image ${index + 1} not found</div>`;
+                  parent.innerHTML = `<div class="w-full h-[200px] sm:h-[250px] md:h-[300px] flex items-center justify-center text-gray-400 text-sm">Image ${index + 1} not found</div>`;
                 }
               }}
               onLoad={() => {
