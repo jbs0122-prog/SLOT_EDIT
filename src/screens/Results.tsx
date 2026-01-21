@@ -78,6 +78,11 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   const [isRankingMode, setIsRankingMode] = useState(false);
   const [rankingOutfits, setRankingOutfits] = useState<Outfit[]>([]);
 
+  const [openDropdown, setOpenDropdown] = useState<'gender' | 'bodyType' | 'vibe' | null>(null);
+  const [currentGender, setCurrentGender] = useState<string>(gender);
+  const [currentBodyType, setCurrentBodyType] = useState<string>(bodyType);
+  const [currentVibe, setCurrentVibe] = useState<string>(vibe);
+
   const newGenderRef = useRef<HTMLDivElement>(null);
   const newBodyTypeRef = useRef<HTMLDivElement>(null);
   const newVibeRef = useRef<HTMLDivElement>(null);
@@ -403,14 +408,73 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
     }, 800);
   };
 
+  const handleDropdownSelect = (type: 'gender' | 'bodyType' | 'vibe', value: string) => {
+    if (!weather) return;
+
+    setOpenDropdown(null);
+    setIsGenerating(true);
+
+    let selectedGender = currentGender;
+    let selectedBodyType = currentBodyType;
+    let selectedVibe = currentVibe;
+
+    if (type === 'gender') {
+      selectedGender = value;
+      setCurrentGender(value);
+    } else if (type === 'bodyType') {
+      selectedBodyType = value;
+      setCurrentBodyType(value);
+    } else if (type === 'vibe') {
+      selectedVibe = value;
+      setCurrentVibe(value);
+    }
+
+    setTimeout(() => {
+      setIsGenerating(false);
+      onGenerate(selectedGender, selectedBodyType, selectedVibe, weather);
+    }, 800);
+  };
+
+  useEffect(() => {
+    setCurrentGender(gender);
+    setCurrentBodyType(bodyType);
+    setCurrentVibe(vibe);
+  }, [gender, bodyType, vibe]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.relative')) {
+        setOpenDropdown(null);
+      }
+    };
+
+    if (openDropdown) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [openDropdown]);
+
   return (
     <div
       ref={containerRef}
-      className="h-screen flex flex-col bg-white"
+      className="h-screen flex flex-col bg-white relative"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {isGenerating && (
+        <div className="fixed inset-0 bg-white bg-opacity-90 z-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-lg font-light tracking-wider uppercase animate-pulse">
+              Finding your look...
+            </div>
+          </div>
+        </div>
+      )}
       <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between mb-3">
@@ -425,10 +489,83 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               </div>
             )}
           </div>
-          <div className="mb-2">
-            <p className="text-xs text-gray-600 font-light">
-              {gender} · {bodyType} · {isRankingMode ? 'ALL VIBES' : vibe}
-            </p>
+          <div className="mb-2 relative">
+            <div className="flex items-center gap-2 text-xs text-gray-600 font-light">
+              <div className="relative">
+                <button
+                  onClick={() => setOpenDropdown(openDropdown === 'gender' ? null : 'gender')}
+                  className="hover:text-black transition-colors cursor-pointer uppercase"
+                  disabled={isRankingMode}
+                >
+                  {currentGender}
+                </button>
+                {openDropdown === 'gender' && !isRankingMode && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[120px]">
+                    {GENDER_OPTIONS.map((option) => (
+                      <button
+                        key={option}
+                        onClick={() => handleDropdownSelect('gender', option)}
+                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${
+                          option === currentGender ? 'font-medium bg-gray-50' : ''
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <span>·</span>
+              <div className="relative">
+                <button
+                  onClick={() => setOpenDropdown(openDropdown === 'bodyType' ? null : 'bodyType')}
+                  className="hover:text-black transition-colors cursor-pointer uppercase"
+                  disabled={isRankingMode}
+                >
+                  {currentBodyType}
+                </button>
+                {openDropdown === 'bodyType' && !isRankingMode && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[120px]">
+                    {BODY_TYPE_OPTIONS.map((option) => (
+                      <button
+                        key={option}
+                        onClick={() => handleDropdownSelect('bodyType', option)}
+                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${
+                          option === currentBodyType ? 'font-medium bg-gray-50' : ''
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <span>·</span>
+              <div className="relative">
+                <button
+                  onClick={() => setOpenDropdown(openDropdown === 'vibe' ? null : 'vibe')}
+                  className="hover:text-black transition-colors cursor-pointer uppercase"
+                  disabled={isRankingMode}
+                >
+                  {isRankingMode ? 'ALL VIBES' : currentVibe}
+                </button>
+                {openDropdown === 'vibe' && !isRankingMode && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[180px]">
+                    {VIBE_OPTIONS.map((option) => (
+                      <button
+                        key={option}
+                        onClick={() => handleDropdownSelect('vibe', option)}
+                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${
+                          option === currentVibe ? 'font-medium bg-gray-50' : ''
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <button
