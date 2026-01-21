@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
     const { latitude, longitude, name } = geocodingData.results[0];
 
     // Step 2: Get weather data using Open-Meteo Weather API
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&temperature_unit=fahrenheit&timezone=auto`;
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto`;
     const weatherResponse = await fetch(weatherUrl);
     const weatherData = await weatherResponse.json();
 
@@ -75,8 +75,12 @@ Deno.serve(async (req: Request) => {
     else if (weatherCode <= 86) conditions = "Snowy";
     else conditions = "Stormy";
 
+    // Convert Celsius to Fahrenheit
+    const celsiusTemp = weatherData.current.temperature_2m;
+    const fahrenheitTemp = Math.round((celsiusTemp * 9/5) + 32);
+
     const result: WeatherData = {
-      temperature: Math.round(weatherData.current.temperature_2m),
+      temperature: fahrenheitTemp,
       conditions,
       location: name,
     };
