@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, TouchEvent } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { Outfit } from '../data/outfits';
 import { WeatherData, getWeatherEmoji } from '../utils/weather';
 import ImageSlider from './ImageSlider';
@@ -70,11 +69,14 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const firstOutfitRef = useRef<HTMLDivElement>(null);
 
   const [newGender, setNewGender] = useState<string>(gender);
   const [newBodyType, setNewBodyType] = useState<string>(bodyType);
   const [newVibe, setNewVibe] = useState<string>(vibe);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRankingMode, setIsRankingMode] = useState(false);
+  const [rankingOutfits, setRankingOutfits] = useState<Outfit[]>([]);
 
   const newGenderRef = useRef<HTMLDivElement>(null);
   const newBodyTypeRef = useRef<HTMLDivElement>(null);
@@ -85,6 +87,44 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   useEffect(() => {
     loadFeedbackCounts();
   }, [outfits]);
+
+  useEffect(() => {
+    if (isRankingMode && rankingOutfits.length > 0) {
+      loadRankingFeedbackCounts();
+    }
+  }, [rankingOutfits, isRankingMode]);
+
+  const loadRankingFeedbackCounts = async () => {
+    const sessionId = getOrCreateSessionId();
+    const outfitIds = rankingOutfits.map(o => o.id);
+
+    try {
+      const { data: feedbackData, error } = await supabase
+        .from('outfit_feedback')
+        .select('outfit_id, feedback_type, session_id')
+        .in('outfit_id', outfitIds);
+
+      if (error) throw error;
+
+      const counts: FeedbackCounts = {};
+      outfitIds.forEach(id => {
+        const feedbackForOutfit = feedbackData?.filter(f => f.outfit_id === id) || [];
+        const likes = feedbackForOutfit.filter(f => f.feedback_type === 'like').length;
+        const dislikes = feedbackForOutfit.filter(f => f.feedback_type === 'dislike').length;
+        const userFeedback = feedbackForOutfit.find(f => f.session_id === sessionId);
+
+        counts[id] = {
+          likes,
+          dislikes,
+          userFeedback: userFeedback ? userFeedback.feedback_type as 'like' | 'dislike' : null
+        };
+      });
+
+      setFeedbackCounts(counts);
+    } catch (error) {
+      console.error('Failed to load ranking feedback counts:', error);
+    }
+  };
 
   useEffect(() => {
     if (shouldUpdateSort()) {
@@ -189,6 +229,70 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
     } catch (error) {
       console.error('Failed to submit feedback:', error);
     }
+  };
+
+  const handleTodayRanking = async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayISO = today.toISOString();
+
+      const { data: allOutfits, error: outfitsError } = await supabase
+        .from('outfits')
+        .select('*')
+        .eq('gender', gender)
+        .eq('body_type', bodyType);
+
+      if (outfitsError) throw outfitsError;
+      if (!allOutfits || allOutfits.length === 0) {
+        setIsRankingMode(true);
+        setRankingOutfits([]);
+        return;
+      }
+
+      const outfitIds = allOutfits.map(o => o.id);
+
+      const { data: feedbackData, error: feedbackError } = await supabase
+        .from('outfit_feedback')
+        .select('outfit_id, feedback_type, created_at')
+        .in('outfit_id', outfitIds)
+        .gte('created_at', todayISO);
+
+      if (feedbackError) throw feedbackError;
+
+      const likeCounts: { [key: string]: number } = {};
+      feedbackData?.forEach(f => {
+        if (f.feedback_type === 'like') {
+          likeCounts[f.outfit_id] = (likeCounts[f.outfit_id] || 0) + 1;
+        }
+      });
+
+      const sortedByLikes = [...allOutfits].sort((a, b) => {
+        const aLikes = likeCounts[a.id] || 0;
+        const bLikes = likeCounts[b.id] || 0;
+        return bLikes - aLikes;
+      });
+
+      setRankingOutfits(sortedByLikes);
+      setIsRankingMode(true);
+
+      setTimeout(() => {
+        if (firstOutfitRef.current) {
+          firstOutfitRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Failed to load today\'s ranking:', error);
+    }
+  };
+
+  const handleBackToNormal = () => {
+    setIsRankingMode(false);
+    setTimeout(() => {
+      if (firstOutfitRef.current) {
+        firstOutfitRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   const handleTouchStart = (e: TouchEvent) => {
@@ -309,53 +413,60 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
     >
       <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
         <div className="px-6 py-4">
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-between mb-3">
             <img
               src="/logo.png"
               alt="SLOT EDIT"
-              className="h-16 cursor-pointer"
-              onClick={onBack}
+              className="h-12"
             />
-          </div>
-        </div>
-      </header>
-
-      <div className="flex-1 overflow-y-auto pt-[88px] pb-8">
-        <div className="px-6 py-4 mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={onBack}
-                className="p-1 hover:bg-gray-50 transition-colors flex items-center gap-1"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h2 className="text-lg font-light tracking-tight">
-                NYC Trend Drop
-              </h2>
-            </div>
             {weather && (
-              <div className="text-sm text-gray-600 font-light">
+              <div className="text-sm text-gray-700 font-medium">
                 {getWeatherEmoji(weather.condition)} {weather.temperature}°F
               </div>
             )}
           </div>
-          <div className="pl-9">
-            <p className="text-xs text-gray-500 font-light">
-              {gender} · {bodyType} · {vibe}
+          <div className="text-center mb-2">
+            <p className="text-xs text-gray-600 font-light">
+              {gender} · {bodyType} · {isRankingMode ? 'ALL VIBES' : vibe}
             </p>
           </div>
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <button
+              onClick={handleBackToNormal}
+              className={`font-light transition-colors ${
+                !isRankingMode ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              HOME
+            </button>
+            <span className="text-gray-300">/</span>
+            <button
+              onClick={handleTodayRanking}
+              className={`font-light transition-colors ${
+                isRankingMode ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              TODAY's Ranking
+            </button>
+          </div>
         </div>
+      </header>
 
-        {sortedOutfits.length === 0 ? (
+      <div className="flex-1 overflow-y-auto pt-[148px] pb-8">
+
+        {(isRankingMode ? rankingOutfits : sortedOutfits).length === 0 ? (
           <div className="min-h-[calc(100vh-200px)] flex items-center justify-center">
             <div className="px-6 text-center max-w-md mx-auto">
               <div className="mb-6">
                 <div className="text-6xl mb-4">👔</div>
                 <h2 className="text-xl font-light mb-3">No Outfits Found</h2>
                 <p className="text-gray-500 font-light text-sm leading-relaxed">
-                  We don't have outfit recommendations for <span className="font-medium">{gender} · {bodyType} · {vibe}</span> yet.
-                  Try a different combination or check back soon!
+                  {isRankingMode ? (
+                    <>No outfits with likes today for <span className="font-medium">{gender} · {bodyType}</span>. Check back later!</>
+                  ) : (
+                    <>We don't have outfit recommendations for <span className="font-medium">{gender} · {bodyType} · {vibe}</span> yet.
+                    Try a different combination or check back soon!</>
+                  )}
                 </p>
               </div>
               <button
@@ -367,7 +478,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
             </div>
           </div>
         ) : (
-          sortedOutfits.map((outfit, index) => {
+          (isRankingMode ? rankingOutfits : sortedOutfits).map((outfit, index) => {
             const images = [];
 
             if (outfit.image_url_flatlay1) {
@@ -387,6 +498,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
             return (
               <div
                 key={outfit.id}
+                ref={index === 0 ? firstOutfitRef : null}
                 className="mb-12 flex flex-col md:flex-row md:items-start md:justify-center md:gap-8 md:px-12"
               >
                 <div className="flex-shrink-0 w-full md:w-[500px] mb-6 md:mb-0">
