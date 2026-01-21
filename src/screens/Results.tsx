@@ -195,8 +195,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                 key={outfit.id}
                 className="h-screen snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
               >
-                <div className="flex-shrink-0 h-[62vh] md:h-auto md:w-[400px] md:max-h-[80vh]">
-                  <ImageSlider
+                <div className="flex-shrink-0 h-[55vh] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
+                  <div className="h-full w-[85%] md:w-full">
+                    <ImageSlider
                     images={images}
                     alt={`Look ${index + 1}`}
                     outfitNumber={index + 1}
@@ -206,6 +207,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                     dislikeCount={feedback.dislikes}
                     userFeedback={feedback.userFeedback}
                   />
+                  </div>
                 </div>
 
                 <div className="h-[35vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-x-scroll md:overflow-y-scroll snap-x snap-mandatory md:snap-none flex md:flex-col scrollbar-hide">
