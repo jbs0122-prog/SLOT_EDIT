@@ -240,7 +240,7 @@ export default function Input({ onGenerate }: InputProps) {
                       {weather.location}
                     </div>
                     <div className="text-xl font-semibold text-black mb-1">
-                      {weather.temperature}°C
+                      {weather.temperature}°F
                     </div>
                     <div className="text-sm text-gray-700">
                       {getWeatherEmoji(weather.condition)} {weather.condition}
@@ -248,7 +248,7 @@ export default function Input({ onGenerate }: InputProps) {
                   </div>
                 ) : weatherError ? (
                   <div className="text-center">
-                    <div className="text-lg text-gray-400 mb-1">--°C</div>
+                    <div className="text-lg text-gray-400 mb-1">--°F</div>
                     <div className="text-xs text-gray-400">Weather unavailable</div>
                   </div>
                 ) : (
