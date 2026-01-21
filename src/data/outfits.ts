@@ -3,9 +3,9 @@ export interface Outfit {
   gender: string;
   body_type: string;
   vibe: string;
-  image_url: string;
-  image_url_flatlay?: string;
-  image_url_on_model?: string;
+  image_url_flatlay1: string;
+  image_url_flatlay2: string;
+  image_url_on_model: string;
   insight_text: string;
   top_name: string;
   top_image: string;
