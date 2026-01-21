@@ -175,33 +175,34 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
   return (
     <div className="h-screen flex flex-col bg-white">
       <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
-        <div className="px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="p-1 hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2">
+        <div className="px-6 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onBack}
+                className="p-1 hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
               <h1 className="text-base font-light tracking-tight">
                 NYC Trend Drop
               </h1>
-              <span className="text-xs text-gray-400">·</span>
-              <p className="text-xs text-gray-500 font-light">
-                {gender} · {bodyType} · {vibe}
-              </p>
             </div>
+            {weather && (
+              <div className="text-sm text-gray-600 font-light">
+                {getWeatherEmoji(weather.condition)} {weather.temperature}°F
+              </div>
+            )}
           </div>
-          {weather && (
-            <div className="text-sm text-gray-600 font-light">
-              {getWeatherEmoji(weather.condition)} {weather.temperature}°F
-            </div>
-          )}
+          <div className="pl-10">
+            <p className="text-xs text-gray-500 font-light">
+              {gender} · {bodyType} · {vibe}
+            </p>
+          </div>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '57px' }}>
+      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '73px' }}>
         {sortedOutfits.length === 0 ? (
           <div className="h-screen flex items-center justify-center snap-start">
             <div className="px-6 text-center max-w-md mx-auto">
@@ -244,7 +245,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                 key={outfit.id}
                 className="h-screen snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
               >
-                <div className="flex-shrink-0 h-[72vh] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
+                <div className="flex-shrink-0 h-[73vh] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
                   <div className="h-full w-full md:w-full">
                     <ImageSlider
                     images={images}
@@ -260,7 +261,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                   </div>
                 </div>
 
-                <div className="h-[25vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-y-auto px-6 py-4 md:py-0 flex flex-col">
+                <div className="h-[25vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-y-auto px-6 py-2 md:py-0 flex flex-col">
                   <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
                     AI INSIGHT
                   </div>
@@ -275,7 +276,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
       </div>
 
       {sortedOutfits.length > 1 && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-[3vh] z-40 flex items-center justify-center gap-2">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-[2vh] z-40 flex items-center justify-center gap-2">
           <span className="text-xs text-gray-500 font-light">Scroll for more</span>
           <ChevronDown className="w-3 h-3 text-gray-500 animate-bounce" />
         </div>
