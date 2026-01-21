@@ -33,6 +33,31 @@ function getOrCreateSessionId(): string {
   return sessionId;
 }
 
+const SORT_CACHE_DURATION = 60 * 60 * 1000;
+
+function shouldUpdateSort(): boolean {
+  const lastSortTime = localStorage.getItem('lastSortTime');
+  if (!lastSortTime) return true;
+
+  const timeSinceLastSort = Date.now() - parseInt(lastSortTime);
+  return timeSinceLastSort >= SORT_CACHE_DURATION;
+}
+
+function getCachedSortOrder(): string[] | null {
+  const cached = localStorage.getItem('cachedSortOrder');
+  if (!cached) return null;
+  try {
+    return JSON.parse(cached);
+  } catch {
+    return null;
+  }
+}
+
+function setCachedSortOrder(outfitIds: string[]): void {
+  localStorage.setItem('cachedSortOrder', JSON.stringify(outfitIds));
+  localStorage.setItem('lastSortTime', Date.now().toString());
+}
+
 export default function Results({ outfits, context, onBack }: ResultsProps) {
   const { gender, bodyType, vibe, weather } = context;
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
@@ -43,12 +68,35 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
   }, [outfits]);
 
   useEffect(() => {
-    const sorted = [...outfits].sort((a, b) => {
-      const aLikes = feedbackCounts[a.id]?.likes || 0;
-      const bLikes = feedbackCounts[b.id]?.likes || 0;
-      return bLikes - aLikes;
-    });
-    setSortedOutfits(sorted);
+    if (shouldUpdateSort()) {
+      const sorted = [...outfits].sort((a, b) => {
+        const aLikes = feedbackCounts[a.id]?.likes || 0;
+        const bLikes = feedbackCounts[b.id]?.likes || 0;
+        return bLikes - aLikes;
+      });
+      setSortedOutfits(sorted);
+      setCachedSortOrder(sorted.map(o => o.id));
+    } else {
+      const cachedOrder = getCachedSortOrder();
+      if (cachedOrder) {
+        const sorted = [...outfits].sort((a, b) => {
+          const aIndex = cachedOrder.indexOf(a.id);
+          const bIndex = cachedOrder.indexOf(b.id);
+          if (aIndex === -1) return 1;
+          if (bIndex === -1) return -1;
+          return aIndex - bIndex;
+        });
+        setSortedOutfits(sorted);
+      } else {
+        const sorted = [...outfits].sort((a, b) => {
+          const aLikes = feedbackCounts[a.id]?.likes || 0;
+          const bLikes = feedbackCounts[b.id]?.likes || 0;
+          return bLikes - aLikes;
+        });
+        setSortedOutfits(sorted);
+        setCachedSortOrder(sorted.map(o => o.id));
+      }
+    }
   }, [outfits, feedbackCounts]);
 
   const loadFeedbackCounts = async () => {
