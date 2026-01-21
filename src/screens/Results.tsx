@@ -14,7 +14,12 @@ interface ResultsProps {
     weather: WeatherData | null;
   };
   onBack: () => void;
+  onGenerate: (gender: string, bodyType: string, vibe: string, weather: WeatherData) => void;
 }
+
+const GENDER_OPTIONS = ['MALE', 'FEMALE'];
+const BODY_TYPE_OPTIONS = ['SLIM', 'REGULAR', 'PLUS-SIZE'];
+const VIBE_OPTIONS = ['ELEVATED COOL', 'EFFORTLESS NATURAL', 'ARTISTIC MINIMAL', 'RETRO LUXE', 'SPORT-MODERN', 'CREATIVE LAYERED'];
 
 interface FeedbackCounts {
   [outfitId: string]: {
@@ -58,13 +63,22 @@ function setCachedSortOrder(outfitIds: string[]): void {
   localStorage.setItem('lastSortTime', Date.now().toString());
 }
 
-export default function Results({ outfits, context, onBack }: ResultsProps) {
+export default function Results({ outfits, context, onBack, onGenerate }: ResultsProps) {
   const { gender, bodyType, vibe, weather } = context;
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
   const [sortedOutfits, setSortedOutfits] = useState<Outfit[]>(outfits);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const [newGender, setNewGender] = useState<string>(gender);
+  const [newBodyType, setNewBodyType] = useState<string>(bodyType);
+  const [newVibe, setNewVibe] = useState<string>(vibe);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const newGenderRef = useRef<HTMLDivElement>(null);
+  const newBodyTypeRef = useRef<HTMLDivElement>(null);
+  const newVibeRef = useRef<HTMLDivElement>(null);
 
   const minSwipeDistance = 100;
 
@@ -195,6 +209,94 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
     if (isRightSwipe) {
       onBack();
     }
+  };
+
+  useEffect(() => {
+    const setupScrollPicker = (
+      containerRef: React.RefObject<HTMLDivElement>,
+      options: string[],
+      setState: (value: string) => void
+    ) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const items = container.querySelectorAll('[data-scroll-item]');
+      if (items.length === 0) return;
+
+      const getCenteredItem = () => {
+        const containerRect = container.getBoundingClientRect();
+        const containerCenter = containerRect.top + containerRect.height / 2;
+
+        let closestItem: Element | null = null;
+        let closestDistance = Infinity;
+
+        items.forEach((item) => {
+          const itemRect = item.getBoundingClientRect();
+          const itemCenter = itemRect.top + itemRect.height / 2;
+          const distance = Math.abs(containerCenter - itemCenter);
+
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            closestItem = item;
+          }
+        });
+
+        return closestItem;
+      };
+
+      const updateSelection = () => {
+        const centeredItem = getCenteredItem();
+        if (centeredItem) {
+          const value = centeredItem.getAttribute('data-value');
+          if (value) {
+            setState(value);
+          }
+        }
+      };
+
+      const firstItem = items[0] as HTMLElement;
+      const containerHeight = container.clientHeight;
+      const itemHeight = firstItem.clientHeight;
+      const targetScrollTop = firstItem.offsetTop - (containerHeight / 2) + (itemHeight / 2);
+      container.scrollTop = targetScrollTop;
+
+      updateSelection();
+
+      let scrollTimeout: number;
+      const handleScroll = () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = window.setTimeout(() => {
+          updateSelection();
+        }, 50);
+      };
+
+      container.addEventListener('scroll', handleScroll);
+
+      return () => {
+        container.removeEventListener('scroll', handleScroll);
+        clearTimeout(scrollTimeout);
+      };
+    };
+
+    const cleanup1 = setupScrollPicker(newGenderRef, GENDER_OPTIONS, setNewGender);
+    const cleanup2 = setupScrollPicker(newBodyTypeRef, BODY_TYPE_OPTIONS, setNewBodyType);
+    const cleanup3 = setupScrollPicker(newVibeRef, VIBE_OPTIONS, setNewVibe);
+
+    return () => {
+      cleanup1?.();
+      cleanup2?.();
+      cleanup3?.();
+    };
+  }, []);
+
+  const handleNewGenerate = () => {
+    if (!weather) return;
+
+    setIsGenerating(true);
+    setTimeout(() => {
+      setIsGenerating(false);
+      onGenerate(newGender, newBodyType, newVibe, weather);
+    }, 800);
   };
 
   return (
@@ -358,51 +460,158 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                 </div>
 
                 <div className="grid grid-cols-4 gap-4">
-                  <div className="h-[100px] flex items-center justify-center">
-                    {weather ? (
-                      <div className="text-center">
-                        <div className="text-xs text-gray-500 mb-1">
-                          {weather.location}
+                  <div className="relative">
+                    <div className="absolute inset-0 pointer-events-none z-10">
+                      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
+                      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
+                    </div>
+                    <div className="h-[200px] flex flex-col items-center justify-center">
+                      {weather ? (
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500 mb-1">
+                            {weather.location}
+                          </div>
+                          <div className="text-xl font-semibold text-black mb-1">
+                            {weather.temperature}°F
+                          </div>
+                          <div className="text-sm text-gray-700">
+                            {getWeatherEmoji(weather.condition)} {weather.condition}
+                          </div>
                         </div>
-                        <div className="text-lg font-semibold text-black mb-1">
-                          {weather.temperature}°F
+                      ) : (
+                        <div className="text-center">
+                          <div className="text-lg text-gray-400">--°F</div>
                         </div>
-                        <div className="text-xs text-gray-700">
-                          {getWeatherEmoji(weather.condition)} {weather.condition}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center">
-                        <div className="text-sm text-gray-400">--°F</div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
-                  <div className="h-[100px] flex items-center justify-center border border-gray-200">
-                    <span className="text-sm font-bold text-black tracking-wider uppercase">
-                      {gender}
-                    </span>
+                  <div className="relative">
+                    <div className="absolute inset-0 pointer-events-none z-10">
+                      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y border-gray-200" />
+                      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
+                    </div>
+                    <div
+                      ref={newGenderRef}
+                      className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
+                      style={{
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        WebkitOverflowScrolling: 'touch'
+                      }}
+                    >
+                      <div className="h-[76px]" />
+                      {GENDER_OPTIONS.map((option) => (
+                        <div
+                          key={option}
+                          data-scroll-item
+                          data-value={option}
+                          className="h-12 snap-center flex items-center justify-center transition-all duration-200"
+                        >
+                          <span
+                            className={`tracking-wider uppercase transition-all duration-200 ${
+                              newGender === option
+                                ? 'text-lg font-bold text-black'
+                                : 'text-base font-normal text-gray-600'
+                            }`}
+                          >
+                            {option}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="h-[76px]" />
+                    </div>
                   </div>
 
-                  <div className="h-[100px] flex items-center justify-center border border-gray-200">
-                    <span className="text-xs font-bold text-black tracking-wider uppercase">
-                      {bodyType}
-                    </span>
+                  <div className="relative">
+                    <div className="absolute inset-0 pointer-events-none z-10">
+                      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y border-gray-200" />
+                      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
+                    </div>
+                    <div
+                      ref={newBodyTypeRef}
+                      className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
+                      style={{
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        WebkitOverflowScrolling: 'touch'
+                      }}
+                    >
+                      <div className="h-[76px]" />
+                      {BODY_TYPE_OPTIONS.map((option) => (
+                        <div
+                          key={option}
+                          data-scroll-item
+                          data-value={option}
+                          className="h-12 snap-center flex items-center justify-center transition-all duration-200"
+                        >
+                          <span
+                            className={`tracking-wider uppercase transition-all duration-200 ${
+                              newBodyType === option
+                                ? 'text-base font-bold text-black'
+                                : 'text-sm font-normal text-gray-600'
+                            }`}
+                          >
+                            {option}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="h-[76px]" />
+                    </div>
                   </div>
 
-                  <div className="h-[100px] flex items-center justify-center border border-gray-200">
-                    <span className="text-xs font-bold text-black tracking-wider uppercase text-center px-2">
-                      {vibe}
-                    </span>
+                  <div className="relative">
+                    <div className="absolute inset-0 pointer-events-none z-10">
+                      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y border-gray-200" />
+                      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
+                    </div>
+                    <div
+                      ref={newVibeRef}
+                      className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
+                      style={{
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        WebkitOverflowScrolling: 'touch'
+                      }}
+                    >
+                      <div className="h-[76px]" />
+                      {VIBE_OPTIONS.map((option) => (
+                        <div
+                          key={option}
+                          data-scroll-item
+                          data-value={option}
+                          className="h-12 snap-center flex items-center justify-center transition-all duration-200"
+                        >
+                          <span
+                            className={`tracking-wider uppercase transition-all duration-200 text-center px-2 ${
+                              newVibe === option
+                                ? 'text-sm font-bold text-black'
+                                : 'text-xs font-normal text-gray-600'
+                            }`}
+                          >
+                            {option}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="h-[76px]" />
+                    </div>
                   </div>
                 </div>
               </div>
 
               <button
-                onClick={onBack}
-                className="w-full py-5 px-8 text-base tracking-widest font-normal uppercase bg-black text-white hover:bg-gray-900 transition-all"
+                onClick={handleNewGenerate}
+                disabled={!weather || isGenerating}
+                className={`w-full py-5 px-8 text-base tracking-widest font-normal uppercase transition-all ${
+                  weather && !isGenerating
+                    ? 'bg-black text-white hover:bg-gray-900 cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
               >
-                Explore Another Slot
+                {isGenerating ? 'Finding your look...' : 'Generate New Look'}
               </button>
             </div>
           </div>

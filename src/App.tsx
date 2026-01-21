@@ -110,6 +110,7 @@ function App() {
           outfits={selectedOutfits}
           context={context}
           onBack={handleBack}
+          onGenerate={handleGenerate}
         />
       )}
       {currentScreen === 'admin' && <AdminPins />}
