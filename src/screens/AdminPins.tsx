@@ -65,6 +65,12 @@ export default function AdminPins() {
     setPins(newPins);
   };
 
+  const handlePinUrlChange = (index: number, url: string) => {
+    const newPins = [...pins];
+    newPins[index].url = url;
+    setPins(newPins);
+  };
+
   const handlePinDelete = (index: number) => {
     const newPins = pins.filter((_, i) => i !== index);
     setPins(newPins);
@@ -267,27 +273,44 @@ export default function AdminPins() {
                     삭제
                   </button>
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">
-                    연결할 아이템
-                  </label>
-                  <select
-                    value={pins[selectedPinIndex].item}
-                    onChange={(e) =>
-                      handlePinItemChange(
-                        selectedPinIndex,
-                        e.target.value as ImagePin['item']
-                      )
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="outer">아우터</option>
-                    <option value="top">상의</option>
-                    <option value="bottom">하의</option>
-                    <option value="shoes">신발</option>
-                    <option value="bag">가방</option>
-                    <option value="accessory">액세서리</option>
-                  </select>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">
+                      연결할 아이템
+                    </label>
+                    <select
+                      value={pins[selectedPinIndex].item}
+                      onChange={(e) =>
+                        handlePinItemChange(
+                          selectedPinIndex,
+                          e.target.value as ImagePin['item']
+                        )
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="outer">아우터</option>
+                      <option value="top">상의</option>
+                      <option value="bottom">하의</option>
+                      <option value="shoes">신발</option>
+                      <option value="bag">가방</option>
+                      <option value="accessory">액세서리</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">
+                      쇼핑 링크 URL
+                    </label>
+                    <input
+                      type="url"
+                      value={pins[selectedPinIndex].url || ''}
+                      onChange={(e) => handlePinUrlChange(selectedPinIndex, e.target.value)}
+                      placeholder="https://example.com/product"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      이 URL이 설정되면 outfit의 기본 아이템 링크 대신 이 링크가 사용됩니다.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -303,14 +326,21 @@ export default function AdminPins() {
                   {pins.map((pin, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between bg-white rounded p-2"
+                      className="bg-white rounded p-2"
                     >
-                      <span className="text-sm text-gray-700">
-                        핀 #{index + 1}: {getItemLabel(pin.item)}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        ({pin.x.toFixed(1)}%, {pin.y.toFixed(1)}%)
-                      </span>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-700">
+                          핀 #{index + 1}: {getItemLabel(pin.item)}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ({pin.x.toFixed(1)}%, {pin.y.toFixed(1)}%)
+                        </span>
+                      </div>
+                      {pin.url && (
+                        <div className="text-xs text-blue-600 truncate">
+                          URL: {pin.url}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -45,6 +45,11 @@ export default function ImageSlider({
   const handlePinClick = (pin: ImagePin) => {
     if (!outfit) return;
 
+    if (pin.url) {
+      window.open(pin.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     const itemMap: Record<string, string> = {
       outer: outfit.outer_link,
       top: outfit.top_link,

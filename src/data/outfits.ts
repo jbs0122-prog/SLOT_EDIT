@@ -2,6 +2,7 @@ export interface ImagePin {
   x: number;
   y: number;
   item: 'outer' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
+  url?: string;
 }
 
 export interface Outfit {
