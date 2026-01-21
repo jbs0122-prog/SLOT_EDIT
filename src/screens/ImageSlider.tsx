@@ -12,6 +12,7 @@ interface ImageSliderProps {
   dislikeCount?: number;
   userFeedback?: 'like' | 'dislike' | null;
   outfit?: Outfit;
+  showOutfitInfo?: boolean;
 }
 
 export default function ImageSlider({
@@ -23,7 +24,8 @@ export default function ImageSlider({
   likeCount = 0,
   dislikeCount = 0,
   userFeedback = null,
-  outfit
+  outfit,
+  showOutfitInfo = false
 }: ImageSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
@@ -120,6 +122,14 @@ export default function ImageSlider({
           }}
         />
 
+        {showOutfitInfo && outfit && (
+          <div className="absolute bottom-20 left-0 right-0 flex justify-center z-10 px-4">
+            <div className="bg-black/70 text-white px-4 py-2 text-xs uppercase tracking-wider">
+              {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+            </div>
+          </div>
+        )}
+
         {pins.map((pin, index) => (
           <button
             key={index}
@@ -213,6 +223,14 @@ export default function ImageSlider({
                   e.currentTarget.style.display = 'none';
                 }}
               />
+
+              {showOutfitInfo && outfit && (
+                <div className="absolute bottom-20 left-0 right-0 flex justify-center z-10 px-4">
+                  <div className="bg-black/70 text-white px-4 py-2 text-xs uppercase tracking-wider">
+                    {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+                  </div>
+                </div>
+              )}
 
               {pins.map((pin, pinIndex) => (
                 <button

@@ -3,6 +3,7 @@ import { Outfit } from '../data/outfits';
 import { WeatherData, getWeatherEmoji } from '../utils/weather';
 import ImageSlider from './ImageSlider';
 import { supabase } from '../utils/supabase';
+import { fetchRankingOutfits } from '../utils/outfitService';
 
 interface ResultsProps {
   outfits: Outfit[];
@@ -75,7 +76,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   const [newBodyType, setNewBodyType] = useState<string>(bodyType);
   const [newVibe, setNewVibe] = useState<string>(vibe);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isRankingMode, setIsRankingMode] = useState(false);
+  const [rankingGender, setRankingGender] = useState<'MALE' | 'FEMALE' | null>(null);
   const [rankingOutfits, setRankingOutfits] = useState<Outfit[]>([]);
 
   const [openDropdown, setOpenDropdown] = useState<'gender' | 'bodyType' | 'vibe' | null>(null);
@@ -94,10 +95,10 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   }, [outfits]);
 
   useEffect(() => {
-    if (isRankingMode && rankingOutfits.length > 0) {
+    if (rankingGender && rankingOutfits.length > 0) {
       loadRankingFeedbackCounts();
     }
-  }, [rankingOutfits, isRankingMode]);
+  }, [rankingOutfits, rankingGender]);
 
   const loadRankingFeedbackCounts = async () => {
     const sessionId = getOrCreateSessionId();
@@ -236,50 +237,11 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
     }
   };
 
-  const handleTodayRanking = async () => {
+  const handleMensRanking = async () => {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayISO = today.toISOString();
-
-      const { data: allOutfits, error: outfitsError } = await supabase
-        .from('outfits')
-        .select('*')
-        .eq('gender', gender)
-        .eq('body_type', bodyType);
-
-      if (outfitsError) throw outfitsError;
-      if (!allOutfits || allOutfits.length === 0) {
-        setIsRankingMode(true);
-        setRankingOutfits([]);
-        return;
-      }
-
-      const outfitIds = allOutfits.map(o => o.id);
-
-      const { data: feedbackData, error: feedbackError } = await supabase
-        .from('outfit_feedback')
-        .select('outfit_id, feedback_type, created_at')
-        .in('outfit_id', outfitIds)
-        .gte('created_at', todayISO);
-
-      if (feedbackError) throw feedbackError;
-
-      const likeCounts: { [key: string]: number } = {};
-      feedbackData?.forEach(f => {
-        if (f.feedback_type === 'like') {
-          likeCounts[f.outfit_id] = (likeCounts[f.outfit_id] || 0) + 1;
-        }
-      });
-
-      const sortedByLikes = [...allOutfits].sort((a, b) => {
-        const aLikes = likeCounts[a.id] || 0;
-        const bLikes = likeCounts[b.id] || 0;
-        return bLikes - aLikes;
-      });
-
-      setRankingOutfits(sortedByLikes);
-      setIsRankingMode(true);
+      const outfits = await fetchRankingOutfits('MALE');
+      setRankingOutfits(outfits);
+      setRankingGender('MALE');
 
       setTimeout(() => {
         if (firstOutfitRef.current) {
@@ -287,12 +249,28 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
         }
       }, 100);
     } catch (error) {
-      console.error('Failed to load today\'s ranking:', error);
+      console.error('Failed to load men\'s ranking:', error);
+    }
+  };
+
+  const handleWomensRanking = async () => {
+    try {
+      const outfits = await fetchRankingOutfits('FEMALE');
+      setRankingOutfits(outfits);
+      setRankingGender('FEMALE');
+
+      setTimeout(() => {
+        if (firstOutfitRef.current) {
+          firstOutfitRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Failed to load women\'s ranking:', error);
     }
   };
 
   const handleBackToNormal = () => {
-    setIsRankingMode(false);
+    setRankingGender(null);
     setTimeout(() => {
       if (firstOutfitRef.current) {
         firstOutfitRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -495,11 +473,11 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 <button
                   onClick={() => setOpenDropdown(openDropdown === 'gender' ? null : 'gender')}
                   className="hover:text-black transition-colors cursor-pointer uppercase"
-                  disabled={isRankingMode}
+                  disabled={!!rankingGender}
                 >
-                  {currentGender}
+                  {rankingGender || currentGender}
                 </button>
-                {openDropdown === 'gender' && !isRankingMode && (
+                {openDropdown === 'gender' && !rankingGender && (
                   <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[120px]">
                     {GENDER_OPTIONS.map((option) => (
                       <button
@@ -520,11 +498,11 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 <button
                   onClick={() => setOpenDropdown(openDropdown === 'bodyType' ? null : 'bodyType')}
                   className="hover:text-black transition-colors cursor-pointer uppercase"
-                  disabled={isRankingMode}
+                  disabled={!!rankingGender}
                 >
-                  {currentBodyType}
+                  {rankingGender ? 'ALL BODY TYPES' : currentBodyType}
                 </button>
-                {openDropdown === 'bodyType' && !isRankingMode && (
+                {openDropdown === 'bodyType' && !rankingGender && (
                   <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[120px]">
                     {BODY_TYPE_OPTIONS.map((option) => (
                       <button
@@ -545,11 +523,11 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 <button
                   onClick={() => setOpenDropdown(openDropdown === 'vibe' ? null : 'vibe')}
                   className="hover:text-black transition-colors cursor-pointer uppercase"
-                  disabled={isRankingMode}
+                  disabled={!!rankingGender}
                 >
-                  {isRankingMode ? 'ALL VIBES' : currentVibe}
+                  {rankingGender ? 'ALL VIBES' : currentVibe}
                 </button>
-                {openDropdown === 'vibe' && !isRankingMode && (
+                {openDropdown === 'vibe' && !rankingGender && (
                   <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[180px]">
                     {VIBE_OPTIONS.map((option) => (
                       <button
@@ -571,19 +549,28 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
             <button
               onClick={handleBackToNormal}
               className={`font-light transition-colors ${
-                !isRankingMode ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                !rankingGender ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
               HOME
             </button>
             <span className="text-gray-300">/</span>
             <button
-              onClick={handleTodayRanking}
+              onClick={handleMensRanking}
               className={`font-light transition-colors ${
-                isRankingMode ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                rankingGender === 'MALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
-              TODAY's Ranking
+              Men's Ranking
+            </button>
+            <span className="text-gray-300">/</span>
+            <button
+              onClick={handleWomensRanking}
+              className={`font-light transition-colors ${
+                rankingGender === 'FEMALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              Women's Ranking
             </button>
           </div>
         </div>
@@ -591,15 +578,15 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
 
       <div className="flex-1 overflow-y-auto pt-[148px] pb-8">
 
-        {(isRankingMode ? rankingOutfits : sortedOutfits).length === 0 ? (
+        {(rankingGender ? rankingOutfits : sortedOutfits).length === 0 ? (
           <div className="min-h-[calc(100vh-200px)] flex items-center justify-center">
             <div className="px-6 text-center max-w-md mx-auto">
               <div className="mb-6">
                 <div className="text-6xl mb-4">👔</div>
                 <h2 className="text-xl font-light mb-3">No Outfits Found</h2>
                 <p className="text-gray-500 font-light text-sm leading-relaxed">
-                  {isRankingMode ? (
-                    <>No outfits with likes today for <span className="font-medium">{gender} · {bodyType}</span>. Check back later!</>
+                  {rankingGender ? (
+                    <>No outfits with likes yet for <span className="font-medium">{rankingGender === 'MALE' ? 'Men' : 'Women'}</span>. Check back later!</>
                   ) : (
                     <>We don't have outfit recommendations for <span className="font-medium">{gender} · {bodyType} · {vibe}</span> yet.
                     Try a different combination or check back soon!</>
@@ -615,7 +602,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
             </div>
           </div>
         ) : (
-          (isRankingMode ? rankingOutfits : sortedOutfits).map((outfit, index) => {
+          (rankingGender ? rankingOutfits : sortedOutfits).map((outfit, index) => {
             const images = [];
 
             if (outfit.image_url_flatlay1) {
@@ -649,6 +636,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                     dislikeCount={feedback.dislikes}
                     userFeedback={feedback.userFeedback}
                     outfit={outfit}
+                    showOutfitInfo={!!rankingGender}
                   />
                 </div>
 
