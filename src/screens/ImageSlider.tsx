@@ -1,5 +1,6 @@
 import { useState, useRef, TouchEvent } from 'react';
 import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Outfit, ImagePin } from '../data/outfits';
 
 interface ImageSliderProps {
   images: { url: string; label: string }[];
@@ -10,6 +11,7 @@ interface ImageSliderProps {
   likeCount?: number;
   dislikeCount?: number;
   userFeedback?: 'like' | 'dislike' | null;
+  outfit?: Outfit;
 }
 
 export default function ImageSlider({
@@ -20,7 +22,8 @@ export default function ImageSlider({
   onFeedback,
   likeCount = 0,
   dislikeCount = 0,
-  userFeedback = null
+  userFeedback = null,
+  outfit
 }: ImageSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
@@ -28,6 +31,34 @@ export default function ImageSlider({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const minSwipeDistance = 50;
+
+  const getPinsForImage = (imageLabel: string): ImagePin[] => {
+    if (!outfit) return [];
+
+    if (imageLabel === 'Flatlay 1') return outfit.flatlay1_pins || [];
+    if (imageLabel === 'Flatlay 2') return outfit.flatlay2_pins || [];
+    if (imageLabel === 'On Model') return outfit.on_model_pins || [];
+
+    return [];
+  };
+
+  const handlePinClick = (pin: ImagePin) => {
+    if (!outfit) return;
+
+    const itemMap: Record<string, string> = {
+      outer: outfit.outer_link,
+      top: outfit.top_link,
+      bottom: outfit.bottom_link,
+      shoes: outfit.shoes_link,
+      bag: outfit.bag_link,
+      accessory: outfit.accessory_link
+    };
+
+    const link = itemMap[pin.item];
+    if (link) {
+      window.open(link, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   const handleTouchStart = (e: TouchEvent) => {
     setTouchEnd(0);
@@ -66,6 +97,8 @@ export default function ImageSlider({
   }
 
   if (images.length === 1) {
+    const pins = getPinsForImage(images[0].label);
+
     return (
       <div className="relative bg-gray-100 h-full">
         <div className="absolute inset-0 flex items-center justify-center p-4">
@@ -90,6 +123,25 @@ export default function ImageSlider({
             e.currentTarget.style.display = 'none';
           }}
         />
+
+        {pins.map((pin, index) => (
+          <button
+            key={index}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePinClick(pin);
+            }}
+            className="absolute w-10 h-10 rounded-full bg-white/95 hover:bg-white flex items-center justify-center text-black font-bold transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-20 border-2 border-black"
+            style={{
+              left: `${pin.x}%`,
+              top: `${pin.y}%`,
+            }}
+            aria-label={`Shop ${pin.item}`}
+          >
+            +
+          </button>
+        ))}
+
         {onFeedback && (
           <div className="absolute bottom-6 right-6 flex gap-2 z-10">
             <button
@@ -138,32 +190,54 @@ export default function ImageSlider({
         className="flex transition-transform duration-300 ease-out h-full"
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
-        {images.map((image, index) => (
-          <div key={index} className="w-full h-full flex-shrink-0 relative bg-gray-100">
-            <div className="absolute inset-0 flex items-center justify-center p-4">
-              <div className="text-center max-w-full">
-                <p className="text-xs text-gray-500 mb-2">{image.label}</p>
-                <p className="text-xs text-gray-400 break-all font-mono">{image.url || 'No URL'}</p>
+        {images.map((image, index) => {
+          const pins = getPinsForImage(image.label);
+
+          return (
+            <div key={index} className="w-full h-full flex-shrink-0 relative bg-gray-100">
+              <div className="absolute inset-0 flex items-center justify-center p-4">
+                <div className="text-center max-w-full">
+                  <p className="text-xs text-gray-500 mb-2">{image.label}</p>
+                  <p className="text-xs text-gray-400 break-all font-mono">{image.url || 'No URL'}</p>
+                </div>
               </div>
+              <img
+                src={image.url}
+                alt={`${alt} - ${image.label}`}
+                className="w-full h-full object-cover relative z-10"
+                onLoad={(e) => {
+                  const parent = e.currentTarget.parentElement;
+                  if (parent) {
+                    const infoDiv = parent.querySelector('div');
+                    if (infoDiv) infoDiv.style.display = 'none';
+                  }
+                }}
+                onError={(e) => {
+                  console.error('Image failed to load:', image.url);
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+
+              {pins.map((pin, pinIndex) => (
+                <button
+                  key={pinIndex}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePinClick(pin);
+                  }}
+                  className="absolute w-10 h-10 rounded-full bg-white/95 hover:bg-white flex items-center justify-center text-black font-bold transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-20 border-2 border-black"
+                  style={{
+                    left: `${pin.x}%`,
+                    top: `${pin.y}%`,
+                  }}
+                  aria-label={`Shop ${pin.item}`}
+                >
+                  +
+                </button>
+              ))}
             </div>
-            <img
-              src={image.url}
-              alt={`${alt} - ${image.label}`}
-              className="w-full h-full object-cover relative z-10"
-              onLoad={(e) => {
-                const parent = e.currentTarget.parentElement;
-                if (parent) {
-                  const infoDiv = parent.querySelector('div');
-                  if (infoDiv) infoDiv.style.display = 'none';
-                }
-              }}
-              onError={(e) => {
-                console.error('Image failed to load:', image.url);
-                e.currentTarget.style.display = 'none';
-              }}
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {currentIndex > 0 && (

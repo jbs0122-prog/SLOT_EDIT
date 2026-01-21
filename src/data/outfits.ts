@@ -1,3 +1,9 @@
+export interface ImagePin {
+  x: number;
+  y: number;
+  item: 'outer' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
+}
+
 export interface Outfit {
   id: string;
   gender: string;
@@ -25,6 +31,9 @@ export interface Outfit {
   accessory_name: string;
   accessory_image: string;
   accessory_link: string;
+  flatlay1_pins?: ImagePin[];
+  flatlay2_pins?: ImagePin[];
+  on_model_pins?: ImagePin[];
 }
 
 export const outfits: Outfit[] = [];

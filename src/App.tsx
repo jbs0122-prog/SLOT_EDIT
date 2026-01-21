@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import Input from './screens/Input';
 import Results from './screens/Results';
 import Loading from './screens/Loading';
+import AdminPins from './screens/AdminPins';
 import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
 import { WeatherData } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'results';
+type Screen = 'loading' | 'input' | 'results' | 'admin';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('loading');
@@ -20,6 +21,11 @@ function App() {
   });
 
   useEffect(() => {
+    if (window.location.hash === '#admin') {
+      setCurrentScreen('admin');
+      return;
+    }
+
     const loadOutfits = async () => {
       try {
         const data = await fetchOutfits();
@@ -90,6 +96,7 @@ function App() {
           onBack={handleBack}
         />
       )}
+      {currentScreen === 'admin' && <AdminPins />}
     </>
   );
 }

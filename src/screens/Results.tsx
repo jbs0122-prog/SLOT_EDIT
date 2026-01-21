@@ -254,6 +254,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                     likeCount={feedback.likes}
                     dislikeCount={feedback.dislikes}
                     userFeedback={feedback.userFeedback}
+                    outfit={outfit}
                   />
                   </div>
                 </div>
