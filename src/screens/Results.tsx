@@ -425,12 +425,12 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               </div>
             )}
           </div>
-          <div className="text-center mb-2">
+          <div className="mb-2">
             <p className="text-xs text-gray-600 font-light">
               {gender} · {bodyType} · {isRankingMode ? 'ALL VIBES' : vibe}
             </p>
           </div>
-          <div className="flex items-center justify-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm">
             <button
               onClick={handleBackToNormal}
               className={`font-light transition-colors ${
