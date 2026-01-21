@@ -263,10 +263,6 @@ export default function ImageSlider({
         ))}
       </div>
 
-      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/75 text-white px-3 py-1 text-xs font-light z-10">
-        {images[currentIndex].label}
-      </div>
-
       {onFeedback && (
         <div className="absolute bottom-6 right-6 flex gap-2 z-10">
           <button

@@ -175,18 +175,19 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
   return (
     <div className="h-screen flex flex-col bg-white">
       <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 hover:bg-gray-50 transition-colors flex items-center gap-2"
+              className="p-1 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div>
-              <h1 className="text-lg font-light tracking-tight">
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-light tracking-tight">
                 NYC Trend Drop
               </h1>
+              <span className="text-xs text-gray-400">·</span>
               <p className="text-xs text-gray-500 font-light">
                 {gender} · {bodyType} · {vibe}
               </p>
@@ -200,7 +201,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '73px' }}>
+      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '57px' }}>
         {sortedOutfits.length === 0 ? (
           <div className="h-screen flex items-center justify-center snap-start">
             <div className="px-6 text-center max-w-md mx-auto">
@@ -243,7 +244,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                 key={outfit.id}
                 className="h-screen snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
               >
-                <div className="flex-shrink-0 h-[70vh] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
+                <div className="flex-shrink-0 h-[72vh] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
                   <div className="h-full w-full md:w-full">
                     <ImageSlider
                     images={images}
@@ -259,7 +260,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                   </div>
                 </div>
 
-                <div className="h-[25vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-y-auto px-6 py-6 md:py-0 flex flex-col">
+                <div className="h-[25vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-y-auto px-6 py-4 md:py-0 flex flex-col">
                   <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
                     AI INSIGHT
                   </div>
