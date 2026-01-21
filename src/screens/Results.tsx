@@ -210,8 +210,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
 
                 <div className="h-[35vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-x-scroll md:overflow-y-scroll snap-x snap-mandatory md:snap-none flex md:flex-col scrollbar-hide">
                   <div className="min-w-full md:min-w-0 snap-center md:snap-align-none px-6 py-6 md:py-0 flex flex-col md:mb-8">
-                    <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
-                      SHOP THE CONTEXT
+                    <div className="text-xs font-bold tracking-widest text-black uppercase mb-4 flex items-center justify-between">
+                      <span>SHOP THE CONTEXT</span>
+                      <span className="md:hidden text-gray-400 font-light">AI INSIGHT →</span>
                     </div>
                     <div className="grid grid-cols-3 gap-3 md:gap-6">
                       <a
