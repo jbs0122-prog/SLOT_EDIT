@@ -202,9 +202,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '48px', scrollPaddingTop: '0px' }}>
+      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '55px', scrollPaddingTop: '0px' }}>
         {sortedOutfits.length === 0 ? (
-          <div className="h-[calc(100vh-48px-4vh)] flex items-center justify-center snap-start">
+          <div className="h-[calc(100vh-55px-4vh)] flex items-center justify-center snap-start">
             <div className="px-6 text-center max-w-md mx-auto">
               <div className="mb-6">
                 <div className="text-6xl mb-4">👔</div>
@@ -243,9 +243,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
             return (
               <div
                 key={outfit.id}
-                className="h-[calc(100vh-48px-4vh)] snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
+                className="h-[calc(100vh-55px-4vh)] snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
               >
-                <div className="flex-shrink-0 h-[calc(100vh-48px-4vh-22vh)] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
+                <div className="flex-shrink-0 h-[calc(100vh-55px-4vh-22vh)] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
                   <div className="h-full w-full md:w-full">
                     <ImageSlider
                     images={images}
