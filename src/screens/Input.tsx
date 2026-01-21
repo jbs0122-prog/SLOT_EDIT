@@ -283,10 +283,10 @@ export default function Input({ onGenerate }: InputProps) {
                     className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                   >
                     <span
-                      className={`tracking-wider uppercase transition-all duration-200 text-sm ${
+                      className={`tracking-wider uppercase transition-all duration-200 ${
                         gender === option
-                          ? 'font-bold text-black'
-                          : 'font-normal text-gray-600'
+                          ? 'text-lg font-bold text-black'
+                          : 'text-base font-normal text-gray-600'
                       }`}
                     >
                       {option}
@@ -321,10 +321,10 @@ export default function Input({ onGenerate }: InputProps) {
                     className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                   >
                     <span
-                      className={`tracking-wider uppercase transition-all duration-200 text-xs ${
+                      className={`tracking-wider uppercase transition-all duration-200 ${
                         bodyType === option
-                          ? 'font-bold text-black'
-                          : 'font-normal text-gray-600'
+                          ? 'text-base font-bold text-black'
+                          : 'text-sm font-normal text-gray-600'
                       }`}
                     >
                       {option}
@@ -359,10 +359,10 @@ export default function Input({ onGenerate }: InputProps) {
                     className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                   >
                     <span
-                      className={`tracking-wider uppercase transition-all duration-200 text-xs ${
+                      className={`tracking-wider uppercase transition-all duration-200 ${
                         vibe === option
-                          ? 'font-bold text-black'
-                          : 'font-normal text-gray-600'
+                          ? 'text-sm font-bold text-black'
+                          : 'text-xs font-normal text-gray-600'
                       }`}
                     >
                       {option}
