@@ -7,6 +7,9 @@ export interface Outfit {
   image_url_flatlay2: string;
   image_url_on_model: string;
   insight_text: string;
+  outer_name: string;
+  outer_image: string;
+  outer_link: string;
   top_name: string;
   top_image: string;
   top_link: string;
@@ -16,6 +19,12 @@ export interface Outfit {
   shoes_name: string;
   shoes_image: string;
   shoes_link: string;
+  bag_name: string;
+  bag_image: string;
+  bag_link: string;
+  accessory_name: string;
+  accessory_image: string;
+  accessory_link: string;
 }
 
 export const outfits: Outfit[] = [];

@@ -244,7 +244,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                 className="h-screen snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
               >
                 <div className="flex-shrink-0 h-[55vh] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
-                  <div className="h-full w-[85%] md:w-full">
+                  <div className="h-full w-full md:w-full">
                     <ImageSlider
                     images={images}
                     alt={`Look ${index + 1}`}
@@ -264,7 +264,29 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                       <span>SHOP THE CONTEXT</span>
                       <span className="md:hidden text-gray-400 font-light">AI INSIGHT →</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3 md:gap-6">
+                    <div className="grid grid-cols-3 gap-3 md:gap-4">
+                      <a
+                        href={outfit.outer_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <div className="mb-2">
+                          <img
+                            src={outfit.outer_image}
+                            alt={outfit.outer_name}
+                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
+                          />
+                        </div>
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
+                          {outfit.outer_name}
+                        </div>
+                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Now
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </a>
+
                       <a
                         href={outfit.top_link}
                         target="_blank"
@@ -324,6 +346,50 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                         </div>
                         <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
                           {outfit.shoes_name}
+                        </div>
+                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Now
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </a>
+
+                      <a
+                        href={outfit.bag_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <div className="mb-2">
+                          <img
+                            src={outfit.bag_image}
+                            alt={outfit.bag_name}
+                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
+                          />
+                        </div>
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
+                          {outfit.bag_name}
+                        </div>
+                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Now
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </a>
+
+                      <a
+                        href={outfit.accessory_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <div className="mb-2">
+                          <img
+                            src={outfit.accessory_image}
+                            alt={outfit.accessory_name}
+                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
+                          />
+                        </div>
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
+                          {outfit.accessory_name}
                         </div>
                         <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
                           Shop Now
