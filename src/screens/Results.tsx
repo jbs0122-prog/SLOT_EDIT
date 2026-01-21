@@ -137,7 +137,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
           </button>
           {weather && (
             <div className="text-sm text-gray-600 font-light">
-              {getWeatherEmoji(weather.condition)} {weather.temperature}°C
+              {getWeatherEmoji(weather.condition)} {weather.temperature}°F
             </div>
           )}
         </div>

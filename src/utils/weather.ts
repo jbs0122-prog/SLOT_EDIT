@@ -95,7 +95,7 @@ export async function fetchNYCWeather(daysAhead: 0 | 1 = 0): Promise<WeatherData
     console.error('Failed to fetch weather:', error);
 
     const fallback = cached || {
-      temperature: 15,
+      temperature: 59,
       condition: 'Cloudy' as WeatherCondition,
       location: 'New York',
       timestamp: Date.now()
