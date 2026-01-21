@@ -67,7 +67,7 @@ export default function ImageSlider({
 
   if (images.length === 1) {
     return (
-      <div className="relative bg-gray-100">
+      <div className="relative bg-gray-100 h-full">
         <div className="absolute top-6 left-6 bg-black text-white px-4 py-2 text-xs font-light tracking-wider z-10">
           #{outfitNumber}
         </div>
@@ -80,7 +80,7 @@ export default function ImageSlider({
         <img
           src={images[0].url}
           alt={alt}
-          className="w-full aspect-[3/4] object-cover relative z-10"
+          className="w-full h-full object-cover relative z-10"
           onLoad={(e) => {
             const parent = e.currentTarget.parentElement;
             if (parent) {
@@ -132,7 +132,7 @@ export default function ImageSlider({
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden"
+      className="relative overflow-hidden h-full"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -142,11 +142,11 @@ export default function ImageSlider({
       </div>
 
       <div
-        className="flex transition-transform duration-300 ease-out"
+        className="flex transition-transform duration-300 ease-out h-full"
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
         {images.map((image, index) => (
-          <div key={index} className="w-full flex-shrink-0 relative bg-gray-100">
+          <div key={index} className="w-full h-full flex-shrink-0 relative bg-gray-100">
             <div className="absolute inset-0 flex items-center justify-center p-4">
               <div className="text-center max-w-full">
                 <p className="text-xs text-gray-500 mb-2">{image.label}</p>
@@ -156,7 +156,7 @@ export default function ImageSlider({
             <img
               src={image.url}
               alt={`${alt} - ${image.label}`}
-              className="w-full aspect-[3/4] object-cover relative z-10"
+              className="w-full h-full object-cover relative z-10"
               onLoad={(e) => {
                 const parent = e.currentTarget.parentElement;
                 if (parent) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, ChevronDown } from 'lucide-react';
 import { Outfit } from '../data/outfits';
 import { WeatherData, getWeatherEmoji } from '../utils/weather';
 import ImageSlider from './ImageSlider';
@@ -125,35 +125,55 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
   };
 
   return (
-    <div className="h-screen overflow-y-scroll snap-y snap-mandatory bg-white">
-      {sortedOutfits.length === 0 ? (
-        <div className="h-screen flex items-center justify-center snap-start">
-          <div className="px-6 text-center max-w-md mx-auto">
+    <div className="h-screen flex flex-col bg-white">
+      <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
+        <div className="px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <button
               onClick={onBack}
-              className="absolute top-6 left-6 p-2 hover:bg-gray-50 transition-colors flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded"
+              className="p-2 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <ArrowLeft className="w-5 h-5" />
-              <span className="text-sm font-light">Back</span>
             </button>
-            <div className="mb-6">
-              <div className="text-6xl mb-4">👔</div>
-              <h2 className="text-xl font-light mb-3">No Outfits Found</h2>
-              <p className="text-gray-500 font-light text-sm leading-relaxed">
-                We don't have outfit recommendations for <span className="font-medium">{gender} · {bodyType} · {vibe}</span> yet.
-                Try a different combination or check back soon!
+            <div>
+              <h1 className="text-lg font-light tracking-tight">
+                NYC Trend Drop
+              </h1>
+              <p className="text-xs text-gray-500 font-light">
+                {gender} · {bodyType} · {vibe}
               </p>
             </div>
-            <button
-              onClick={onBack}
-              className="px-6 py-3 text-sm tracking-wider font-light uppercase border border-black hover:bg-black hover:text-white transition-all"
-            >
-              Try Again
-            </button>
           </div>
+          {weather && (
+            <div className="text-sm text-gray-600 font-light">
+              {getWeatherEmoji(weather.condition)} {weather.temperature}°F
+            </div>
+          )}
         </div>
-      ) : (
-        sortedOutfits.map((outfit, index) => {
+      </header>
+
+      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '73px' }}>
+        {sortedOutfits.length === 0 ? (
+          <div className="h-screen flex items-center justify-center snap-start">
+            <div className="px-6 text-center max-w-md mx-auto">
+              <div className="mb-6">
+                <div className="text-6xl mb-4">👔</div>
+                <h2 className="text-xl font-light mb-3">No Outfits Found</h2>
+                <p className="text-gray-500 font-light text-sm leading-relaxed">
+                  We don't have outfit recommendations for <span className="font-medium">{gender} · {bodyType} · {vibe}</span> yet.
+                  Try a different combination or check back soon!
+                </p>
+              </div>
+              <button
+                onClick={onBack}
+                className="px-6 py-3 text-sm tracking-wider font-light uppercase border border-black hover:bg-black hover:text-white transition-all"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        ) : (
+          sortedOutfits.map((outfit, index) => {
             const images = [];
 
             if (outfit.image_url_flatlay1) {
@@ -173,25 +193,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
             return (
               <div
                 key={outfit.id}
-                className="h-screen snap-start flex flex-col overflow-y-auto relative"
+                className="min-h-screen snap-start flex flex-col relative"
               >
-                {index === 0 && (
-                  <button
-                    onClick={onBack}
-                    className="absolute top-6 left-6 z-30 p-2 hover:bg-gray-50 transition-colors flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded shadow-sm"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                    <span className="text-sm font-light">Back</span>
-                  </button>
-                )}
-
-                {weather && index === 0 && (
-                  <div className="absolute top-6 right-6 z-30 text-sm text-gray-600 font-light bg-white/90 backdrop-blur-sm px-3 py-2 rounded shadow-sm">
-                    {getWeatherEmoji(weather.condition)} {weather.temperature}°F
-                  </div>
-                )}
-
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 max-h-[60vh] md:max-h-[50vh]">
                   <ImageSlider
                     images={images}
                     alt={`Look ${index + 1}`}
@@ -204,8 +208,8 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                   />
                 </div>
 
-                <div className="flex-1 px-6 py-6 overflow-y-auto">
-                  <div className="mb-6">
+                <div className="flex-1 px-6 py-6 pb-12">
+                  <div className="mb-8 max-w-3xl mx-auto">
                     <div className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
                       AI Insight
                     </div>
@@ -214,11 +218,11 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                     </p>
                   </div>
 
-                  <div className="pb-6">
+                  <div className="max-w-3xl mx-auto">
                     <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
                       SHOP THE CONTEXT
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-3 gap-4 md:gap-6">
                       <a
                         href={outfit.top_link}
                         target="_blank"
@@ -287,10 +291,18 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                     </div>
                   </div>
                 </div>
+
+                {index < sortedOutfits.length - 1 && (
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center animate-bounce z-20">
+                    <span className="text-xs text-gray-500 font-light mb-1">Scroll for more</span>
+                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                  </div>
+                )}
               </div>
             );
           })
         )}
+      </div>
     </div>
   );
 }
