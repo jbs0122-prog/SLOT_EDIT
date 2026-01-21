@@ -98,7 +98,8 @@ function App() {
   };
 
   const handleBack = () => {
-    window.history.back();
+    setCurrentScreen('input');
+    window.history.pushState({ screen: 'input' }, '', window.location.href);
   };
 
   return (

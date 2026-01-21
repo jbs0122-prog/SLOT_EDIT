@@ -419,6 +419,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
         {sortedOutfits.length > 0 && (
           <div className="mt-16 mb-8 px-6">
             <div className="max-w-4xl mx-auto">
+              <div className="w-full border-t border-gray-200 mb-12"></div>
               <h2 className="text-2xl font-bold text-center mb-2">
                 COMING SOON
               </h2>
