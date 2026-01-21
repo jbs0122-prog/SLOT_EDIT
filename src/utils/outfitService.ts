@@ -19,7 +19,7 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
         image_url_flatlay1: row.image_url_flatlay1 || '',
         image_url_flatlay2: row.image_url_flatlay2 || '',
         image_url_on_model: row.image_url_on_model || '',
-        insight_text: row.insight_text || '',
+        insight_text: row['AI insight'] || '',
         top_name: row.top_name || '',
         top_image: row.top_image || '',
         top_link: row.top_link || '',
