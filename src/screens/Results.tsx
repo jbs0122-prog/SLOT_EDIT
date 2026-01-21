@@ -175,36 +175,36 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
   return (
     <div className="h-screen flex flex-col bg-white">
       <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
-        <div className="px-6 py-2">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-3">
+        <div className="px-6 py-1">
+          <div className="flex items-center justify-between mb-0">
+            <div className="flex items-center gap-2">
               <button
                 onClick={onBack}
-                className="p-1 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                className="p-0.5 hover:bg-gray-50 transition-colors flex items-center gap-1"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4" />
               </button>
-              <h1 className="text-base font-light tracking-tight">
+              <h1 className="text-sm font-light tracking-tight">
                 NYC Trend Drop
               </h1>
             </div>
             {weather && (
-              <div className="text-sm text-gray-600 font-light">
+              <div className="text-xs text-gray-600 font-light">
                 {getWeatherEmoji(weather.condition)} {weather.temperature}°F
               </div>
             )}
           </div>
-          <div className="pl-10">
-            <p className="text-xs text-gray-500 font-light">
+          <div className="pl-7">
+            <p className="text-[10px] text-gray-500 font-light">
               {gender} · {bodyType} · {vibe}
             </p>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '62px', scrollPaddingTop: '0px' }}>
+      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '48px', scrollPaddingTop: '0px' }}>
         {sortedOutfits.length === 0 ? (
-          <div className="h-[calc(100vh-62px)] flex items-center justify-center snap-start">
+          <div className="h-[calc(100vh-48px-4vh)] flex items-center justify-center snap-start">
             <div className="px-6 text-center max-w-md mx-auto">
               <div className="mb-6">
                 <div className="text-6xl mb-4">👔</div>
@@ -243,9 +243,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
             return (
               <div
                 key={outfit.id}
-                className="h-[calc(100vh-62px)] snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
+                className="h-[calc(100vh-48px-4vh)] snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
               >
-                <div className="flex-shrink-0 h-[calc(100vh-62px-26vh)] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
+                <div className="flex-shrink-0 h-[calc(100vh-48px-4vh-22vh)] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
                   <div className="h-full w-full md:w-full">
                     <ImageSlider
                     images={images}
