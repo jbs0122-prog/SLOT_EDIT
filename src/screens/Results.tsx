@@ -193,9 +193,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
             return (
               <div
                 key={outfit.id}
-                className="h-screen snap-start flex flex-col"
+                className="h-screen snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
               >
-                <div className="flex-shrink-0 h-[62vh]">
+                <div className="flex-shrink-0 h-[62vh] md:h-auto md:w-[400px] md:max-h-[80vh]">
                   <ImageSlider
                     images={images}
                     alt={`Look ${index + 1}`}
@@ -208,12 +208,12 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                   />
                 </div>
 
-                <div className="h-[35vh] overflow-x-scroll snap-x snap-mandatory flex scrollbar-hide">
-                  <div className="min-w-full snap-center px-6 py-6 flex flex-col">
+                <div className="h-[35vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-x-scroll md:overflow-y-scroll snap-x snap-mandatory md:snap-none flex md:flex-col scrollbar-hide">
+                  <div className="min-w-full md:min-w-0 snap-center md:snap-align-none px-6 py-6 md:py-0 flex flex-col md:mb-8">
                     <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
                       SHOP THE CONTEXT
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 gap-3 md:gap-6">
                       <a
                         href={outfit.top_link}
                         target="_blank"
@@ -282,7 +282,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                     </div>
                   </div>
 
-                  <div className="min-w-full snap-center px-6 py-6 flex flex-col">
+                  <div className="min-w-full md:min-w-0 snap-center md:snap-align-none px-6 py-6 md:py-0 flex flex-col">
                     <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
                       AI INSIGHT
                     </div>
@@ -298,7 +298,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
       </div>
 
       {sortedOutfits.length > 1 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-[3vh] z-40 flex items-center justify-center gap-2">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-[3vh] z-40 flex items-center justify-center gap-2">
           <span className="text-xs text-gray-500 font-light">Scroll for more</span>
           <ChevronDown className="w-3 h-3 text-gray-500 animate-bounce" />
         </div>
