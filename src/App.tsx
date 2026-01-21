@@ -38,6 +38,21 @@ function App() {
     };
 
     loadOutfits();
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.screen) {
+        setCurrentScreen(event.state.screen);
+      } else {
+        setCurrentScreen('input');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.history.replaceState({ screen: 'input' }, '', window.location.href);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   const normalizeString = (str: string): string => {
@@ -79,10 +94,11 @@ function App() {
     setContext({ gender, bodyType, vibe, weather });
     console.log('Switching to results screen with', results.length, 'outfits');
     setCurrentScreen('results');
+    window.history.pushState({ screen: 'results' }, '', window.location.href);
   };
 
   const handleBack = () => {
-    setCurrentScreen('input');
+    window.history.back();
   };
 
   return (

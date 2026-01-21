@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, TouchEvent } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Outfit } from '../data/outfits';
 import { WeatherData, getWeatherEmoji } from '../utils/weather';
@@ -62,6 +62,11 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
   const { gender, bodyType, vibe, weather } = context;
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
   const [sortedOutfits, setSortedOutfits] = useState<Outfit[]>(outfits);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const minSwipeDistance = 100;
 
   useEffect(() => {
     loadFeedbackCounts();
@@ -172,12 +177,43 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
     }
   };
 
+  const handleTouchStart = (e: TouchEvent) => {
+    setTouchEnd(0);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+
+    const distance = touchStart - touchEnd;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isRightSwipe) {
+      onBack();
+    }
+  };
+
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div
+      ref={containerRef}
+      className="h-screen flex flex-col bg-white"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
         <div className="px-6 py-4">
           <div className="flex items-center justify-center">
-            <img src="/logo.png" alt="SLOT EDIT" className="h-16" />
+            <img
+              src="/logo.png"
+              alt="SLOT EDIT"
+              className="h-16 cursor-pointer"
+              onClick={onBack}
+            />
           </div>
         </div>
       </header>
@@ -276,6 +312,100 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
               </div>
             );
           })
+        )}
+
+        {sortedOutfits.length > 0 && (
+          <div className="mt-16 mb-8 px-6">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-2xl font-bold text-center mb-2">
+                COMING SOON
+              </h2>
+              <p className="text-sm text-gray-600 font-light text-center mb-6">
+                Your next curated flatlay is being styled.<br />
+                We're preparing a new look — inspired by New York trends and your selected vibe.<br />
+                Every combination is refined with fit, tone, and texture in mind.
+              </p>
+
+              <div className="mb-8">
+                <h3 className="text-lg font-bold text-center mb-6">
+                  → Explore another slot
+                </h3>
+                <p className="text-sm text-gray-600 font-light text-center mb-6">
+                  Discover fresh directions and new fashion moods.
+                </p>
+
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <div className="text-center">
+                    <h4 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+                      Weather
+                    </h4>
+                  </div>
+                  <div className="text-center">
+                    <h4 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+                      Gender
+                    </h4>
+                  </div>
+                  <div className="text-center">
+                    <h4 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+                      Body Type
+                    </h4>
+                  </div>
+                  <div className="text-center">
+                    <h4 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+                      Vibe
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="h-[100px] flex items-center justify-center">
+                    {weather ? (
+                      <div className="text-center">
+                        <div className="text-xs text-gray-500 mb-1">
+                          {weather.location}
+                        </div>
+                        <div className="text-lg font-semibold text-black mb-1">
+                          {weather.temperature}°F
+                        </div>
+                        <div className="text-xs text-gray-700">
+                          {getWeatherEmoji(weather.condition)} {weather.condition}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <div className="text-sm text-gray-400">--°F</div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="h-[100px] flex items-center justify-center border border-gray-200">
+                    <span className="text-sm font-bold text-black tracking-wider uppercase">
+                      {gender}
+                    </span>
+                  </div>
+
+                  <div className="h-[100px] flex items-center justify-center border border-gray-200">
+                    <span className="text-xs font-bold text-black tracking-wider uppercase">
+                      {bodyType}
+                    </span>
+                  </div>
+
+                  <div className="h-[100px] flex items-center justify-center border border-gray-200">
+                    <span className="text-xs font-bold text-black tracking-wider uppercase text-center px-2">
+                      {vibe}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={onBack}
+                className="w-full py-5 px-8 text-base tracking-widest font-normal uppercase bg-black text-white hover:bg-gray-900 transition-all"
+              >
+                Explore Another Slot
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
