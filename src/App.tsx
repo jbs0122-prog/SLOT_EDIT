@@ -40,6 +40,7 @@ function App() {
     loadOutfits();
 
     const handlePopState = (event: PopStateEvent) => {
+      console.log('PopState event:', event.state);
       if (event.state && event.state.screen) {
         setCurrentScreen(event.state.screen);
       } else {
@@ -48,7 +49,10 @@ function App() {
     };
 
     window.addEventListener('popstate', handlePopState);
-    window.history.replaceState({ screen: 'input' }, '', window.location.href);
+
+    if (!window.history.state || !window.history.state.screen) {
+      window.history.replaceState({ screen: 'input' }, '', window.location.href);
+    }
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
@@ -93,12 +97,19 @@ function App() {
     setSelectedOutfits(results);
     setContext({ gender, bodyType, vibe, weather });
     console.log('Switching to results screen with', results.length, 'outfits');
-    setCurrentScreen('results');
+
     window.history.pushState({ screen: 'results' }, '', window.location.href);
+    setCurrentScreen('results');
   };
 
   const handleBack = () => {
-    window.history.back();
+    console.log('Back button clicked, current screen:', currentScreen);
+    if (currentScreen === 'results') {
+      setCurrentScreen('input');
+      window.history.back();
+    } else {
+      window.history.back();
+    }
   };
 
   return (

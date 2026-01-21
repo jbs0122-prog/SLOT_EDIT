@@ -49,15 +49,18 @@ export default function ImageSlider({
   };
 
   const handleTouchStart = (e: TouchEvent) => {
+    e.stopPropagation();
     setTouchEnd(0);
     setTouchStart(e.targetTouches[0].clientX);
   };
 
   const handleTouchMove = (e: TouchEvent) => {
+    e.stopPropagation();
     setTouchEnd(e.targetTouches[0].clientX);
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: TouchEvent) => {
+    e.stopPropagation();
     if (!touchStart || !touchEnd) return;
 
     const distance = touchStart - touchEnd;
@@ -88,7 +91,12 @@ export default function ImageSlider({
     const pins = getPinsForImage(images[0].label);
 
     return (
-      <div className="relative bg-gray-100 h-full">
+      <div
+        className="relative bg-gray-100 h-full"
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+      >
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <div className="text-center max-w-full">
             <p className="text-xs text-gray-500 mb-2">{images[0].label}</p>
