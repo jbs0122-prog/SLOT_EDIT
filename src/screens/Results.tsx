@@ -176,9 +176,14 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
     <div className="h-screen flex flex-col bg-white">
       <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
         <div className="px-6 py-4">
-          <div className="flex items-center justify-center mb-3">
+          <div className="flex items-center justify-center">
             <img src="/logo.png" alt="SLOT EDIT" className="h-16" />
           </div>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto pt-[88px] pb-8">
+        <div className="px-6 py-4 mb-6">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
               <button
@@ -203,11 +208,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
             </p>
           </div>
         </div>
-      </header>
 
-      <div className="flex-1 overflow-y-auto pt-[120px] pb-8">
         {sortedOutfits.length === 0 ? (
-          <div className="min-h-[calc(100vh-120px)] flex items-center justify-center">
+          <div className="min-h-[calc(100vh-200px)] flex items-center justify-center">
             <div className="px-6 text-center max-w-md mx-auto">
               <div className="mb-6">
                 <div className="text-6xl mb-4">👔</div>
