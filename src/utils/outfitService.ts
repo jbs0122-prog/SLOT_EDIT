@@ -118,7 +118,7 @@ export const fetchRankingOutfits = async (gender: 'MALE' | 'FEMALE'): Promise<Ou
 
     const sorted = outfitsWithLikes.sort((a, b) => b.likeCount - a.likeCount);
 
-    return sorted.filter(o => o.likeCount > 0);
+    return sorted.filter(o => o.likeCount > 0).slice(0, 10);
   } catch (error) {
     console.error('Error fetching ranking outfits:', error);
     return [];
