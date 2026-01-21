@@ -20,6 +20,9 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
         image_url_flatlay2: row.image_url_flatlay2 || '',
         image_url_on_model: row.image_url_on_model || '',
         insight_text: row['AI insight'] || '',
+        outer_name: row.outer_name || '',
+        outer_image: row.outer_image || '',
+        outer_link: row.outer_link || '',
         top_name: row.top_name || '',
         top_image: row.top_image || '',
         top_link: row.top_link || '',
@@ -29,6 +32,15 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
         shoes_name: row.shoes_name || '',
         shoes_image: row.shoes_image || '',
         shoes_link: row.shoes_link || '',
+        bag_name: row.bag_name || '',
+        bag_image: row.bag_image || '',
+        bag_link: row.bag_link || '',
+        accessory_name: row.accessory_name || '',
+        accessory_image: row.accessory_image || '',
+        accessory_link: row.accessory_link || '',
+        flatlay1_pins: row.flatlay1_pins || [],
+        flatlay2_pins: row.flatlay2_pins || [],
+        on_model_pins: row.on_model_pins || [],
       }));
     }
 
