@@ -43,25 +43,8 @@ export default function ImageSlider({
   };
 
   const handlePinClick = (pin: ImagePin) => {
-    if (!outfit) return;
-
     if (pin.url) {
       window.open(pin.url, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    const itemMap: Record<string, string> = {
-      outer: outfit.outer_link,
-      top: outfit.top_link,
-      bottom: outfit.bottom_link,
-      shoes: outfit.shoes_link,
-      bag: outfit.bag_link,
-      accessory: outfit.accessory_link
-    };
-
-    const link = itemMap[pin.item];
-    if (link) {
-      window.open(link, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -136,7 +119,7 @@ export default function ImageSlider({
               e.stopPropagation();
               handlePinClick(pin);
             }}
-            className="absolute w-10 h-10 rounded-full bg-white/95 hover:bg-white flex items-center justify-center text-black font-bold transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-20 border-2 border-black"
+            className="absolute w-7 h-7 rounded-full bg-white/95 hover:bg-white flex items-center justify-center text-black text-sm font-bold transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-20 border-2 border-black"
             style={{
               left: `${pin.x}%`,
               top: `${pin.y}%`,
@@ -230,7 +213,7 @@ export default function ImageSlider({
                     e.stopPropagation();
                     handlePinClick(pin);
                   }}
-                  className="absolute w-10 h-10 rounded-full bg-white/95 hover:bg-white flex items-center justify-center text-black font-bold transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-20 border-2 border-black"
+                  className="absolute w-7 h-7 rounded-full bg-white/95 hover:bg-white flex items-center justify-center text-black text-sm font-bold transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-20 border-2 border-black"
                   style={{
                     left: `${pin.x}%`,
                     top: `${pin.y}%`,

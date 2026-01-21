@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ExternalLink, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { Outfit } from '../data/outfits';
 import { WeatherData, getWeatherEmoji } from '../utils/weather';
 import ImageSlider from './ImageSlider';
@@ -259,155 +259,13 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                   </div>
                 </div>
 
-                <div className="h-[25vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-x-scroll md:overflow-y-scroll snap-x snap-mandatory md:snap-none flex md:flex-col scrollbar-hide">
-                  <div className="min-w-full md:min-w-0 snap-center md:snap-align-none px-6 py-6 md:py-0 flex flex-col md:mb-8">
-                    <div className="text-xs font-bold tracking-widest text-black uppercase mb-4 flex items-center justify-between">
-                      <span>SHOP THE CONTEXT</span>
-                      <span className="md:hidden text-gray-400 font-light">AI INSIGHT →</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3 md:gap-4">
-                      <a
-                        href={outfit.outer_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
-                      >
-                        <div className="mb-2">
-                          <img
-                            src={outfit.outer_image}
-                            alt={outfit.outer_name}
-                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                          />
-                        </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
-                          {outfit.outer_name}
-                        </div>
-                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Now
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </a>
-
-                      <a
-                        href={outfit.top_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
-                      >
-                        <div className="mb-2">
-                          <img
-                            src={outfit.top_image}
-                            alt={outfit.top_name}
-                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                          />
-                        </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
-                          {outfit.top_name}
-                        </div>
-                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Now
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </a>
-
-                      <a
-                        href={outfit.bottom_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
-                      >
-                        <div className="mb-2">
-                          <img
-                            src={outfit.bottom_image}
-                            alt={outfit.bottom_name}
-                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                          />
-                        </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
-                          {outfit.bottom_name}
-                        </div>
-                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Now
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </a>
-
-                      <a
-                        href={outfit.shoes_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
-                      >
-                        <div className="mb-2">
-                          <img
-                            src={outfit.shoes_image}
-                            alt={outfit.shoes_name}
-                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                          />
-                        </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
-                          {outfit.shoes_name}
-                        </div>
-                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Now
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </a>
-
-                      <a
-                        href={outfit.bag_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
-                      >
-                        <div className="mb-2">
-                          <img
-                            src={outfit.bag_image}
-                            alt={outfit.bag_name}
-                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                          />
-                        </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
-                          {outfit.bag_name}
-                        </div>
-                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Now
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </a>
-
-                      <a
-                        href={outfit.accessory_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
-                      >
-                        <div className="mb-2">
-                          <img
-                            src={outfit.accessory_image}
-                            alt={outfit.accessory_name}
-                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                          />
-                        </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
-                          {outfit.accessory_name}
-                        </div>
-                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Now
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </a>
-                    </div>
+                <div className="h-[25vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-y-auto px-6 py-6 md:py-0 flex flex-col">
+                  <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
+                    AI INSIGHT
                   </div>
-
-                  <div className="min-w-full md:min-w-0 snap-center md:snap-align-none px-6 py-6 md:py-0 flex flex-col">
-                    <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
-                      AI INSIGHT
-                    </div>
-                    <p className="text-sm leading-relaxed font-light text-gray-800">
-                      {outfit.insight_text}
-                    </p>
-                  </div>
+                  <p className="text-sm leading-relaxed font-light text-gray-800">
+                    {outfit.insight_text}
+                  </p>
                 </div>
               </div>
             );
