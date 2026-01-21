@@ -13,12 +13,13 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
       console.log(`Loaded ${data.length} outfits from Supabase`);
       return data.map(row => ({
         id: row.id,
-        where: row.where,
-        style: row.style,
+        gender: row.gender,
+        body_type: row.body_type,
+        vibe: row.vibe,
         image_url: row.image_url || '',
         image_url_flatlay: row.image_url_flatlay || undefined,
         image_url_on_model: row.image_url_on_model || undefined,
-        insight_text: row.reasoning || '',
+        insight_text: row.insight_text || '',
         top_name: row.top_name || '',
         top_image: row.top_image || '',
         top_link: row.top_link || '',

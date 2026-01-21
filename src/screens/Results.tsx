@@ -8,9 +8,9 @@ import { supabase } from '../utils/supabase';
 interface ResultsProps {
   outfits: Outfit[];
   context: {
-    where: string;
-    style: string;
-    subToggle: string | null;
+    gender: string;
+    bodyType: string;
+    vibe: string;
     weather: WeatherData | null;
   };
   onBack: () => void;
@@ -34,7 +34,7 @@ function getOrCreateSessionId(): string {
 }
 
 export default function Results({ outfits, context, onBack }: ResultsProps) {
-  const { where, style, subToggle, weather } = context;
+  const { gender, bodyType, vibe, weather } = context;
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
   const [sortedOutfits, setSortedOutfits] = useState<Outfit[]>(outfits);
 
@@ -146,7 +146,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
             NYC Trend Drop
           </h1>
           <p className="text-sm text-gray-500 font-light">
-            {where} · {style}
+            {gender} · {bodyType} · {vibe}
           </p>
         </div>
       </header>
@@ -158,7 +158,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
               <div className="text-6xl mb-4">👔</div>
               <h2 className="text-xl font-light mb-3">No Outfits Found</h2>
               <p className="text-gray-500 font-light text-sm leading-relaxed">
-                We don't have outfit recommendations for <span className="font-medium">{where} · {style}</span> yet.
+                We don't have outfit recommendations for <span className="font-medium">{gender} · {bodyType} · {vibe}</span> yet.
                 Try a different combination or check back soon!
               </p>
             </div>

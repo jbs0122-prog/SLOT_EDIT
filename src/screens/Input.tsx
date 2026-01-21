@@ -5,15 +5,17 @@ import { HelpCircle, X } from 'lucide-react';
 import HeroBanner from './HeroBanner';
 
 interface InputProps {
-  onGenerate: (where: string, style: string, subToggle: string | null, weather: WeatherData) => void;
+  onGenerate: (gender: string, bodyType: string, vibe: string, weather: WeatherData) => void;
 }
 
-const WHERE_OPTIONS = ['Office', 'Gym', 'City Walk', 'Night Out', 'Wedding', 'Date', 'Interview'];
-const STYLE_OPTIONS = ['Minimal', 'Casual', 'Street', 'Dandy', 'Sporty'];
+const GENDER_OPTIONS = ['MALE', 'FEMALE'];
+const BODY_TYPE_OPTIONS = ['SLIM', 'REGULAR', 'PLUS-SIZE'];
+const VIBE_OPTIONS = ['ELEVATED COOL', 'EFFORTLESS NATURAL', 'ARTISTIC MINIMAL', 'RETRO LUXE', 'SPORT-MODERN', 'CREATIVE LAYERED'];
 
 export default function Input({ onGenerate }: InputProps) {
-  const [where, setWhere] = useState<string>(WHERE_OPTIONS[0]);
-  const [style, setStyle] = useState<string>(STYLE_OPTIONS[0]);
+  const [gender, setGender] = useState<string>(GENDER_OPTIONS[0]);
+  const [bodyType, setBodyType] = useState<string>(BODY_TYPE_OPTIONS[0]);
+  const [vibe, setVibe] = useState<string>(VIBE_OPTIONS[0]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherError, setWeatherError] = useState(false);
@@ -22,8 +24,9 @@ export default function Input({ onGenerate }: InputProps) {
   const [feedbackEmail, setFeedbackEmail] = useState('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
-  const whereRef = useRef<HTMLDivElement>(null);
-  const styleRef = useRef<HTMLDivElement>(null);
+  const genderRef = useRef<HTMLDivElement>(null);
+  const bodyTypeRef = useRef<HTMLDivElement>(null);
+  const vibeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadWeather();
@@ -112,12 +115,14 @@ export default function Input({ onGenerate }: InputProps) {
       };
     };
 
-    const cleanup1 = setupScrollPicker(whereRef, WHERE_OPTIONS, setWhere);
-    const cleanup2 = setupScrollPicker(styleRef, STYLE_OPTIONS, setStyle);
+    const cleanup1 = setupScrollPicker(genderRef, GENDER_OPTIONS, setGender);
+    const cleanup2 = setupScrollPicker(bodyTypeRef, BODY_TYPE_OPTIONS, setBodyType);
+    const cleanup3 = setupScrollPicker(vibeRef, VIBE_OPTIONS, setVibe);
 
     return () => {
       cleanup1?.();
       cleanup2?.();
+      cleanup3?.();
     };
   }, []);
 
@@ -127,7 +132,7 @@ export default function Input({ onGenerate }: InputProps) {
     setIsGenerating(true);
     setTimeout(() => {
       setIsGenerating(false);
-      onGenerate(where, style, null, weather);
+      onGenerate(gender, bodyType, vibe, weather);
     }, 800);
   };
 
@@ -198,7 +203,7 @@ export default function Input({ onGenerate }: InputProps) {
         </div>
 
         <div className="max-w-4xl mx-auto w-full">
-          <div className="grid grid-cols-3 gap-6 mb-6">
+          <div className="grid grid-cols-4 gap-4 mb-6">
             <div className="text-center">
               <h3 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
                 Weather
@@ -206,18 +211,23 @@ export default function Input({ onGenerate }: InputProps) {
             </div>
             <div className="text-center">
               <h3 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
-                Where
+                Gender
               </h3>
             </div>
             <div className="text-center">
               <h3 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
-                Style
+                Body Type
+              </h3>
+            </div>
+            <div className="text-center">
+              <h3 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+                Vibe
               </h3>
             </div>
           </div>
 
           <div className="relative">
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-4 gap-4">
               <div className="relative">
                 <div className="absolute inset-0 pointer-events-none z-10">
                   <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
@@ -226,13 +236,13 @@ export default function Input({ onGenerate }: InputProps) {
                 <div className="h-[200px] flex flex-col items-center justify-center">
                 {weather ? (
                   <div className="text-center">
-                    <div className="text-sm text-gray-500 mb-1">
+                    <div className="text-xs text-gray-500 mb-1">
                       {weather.location}
                     </div>
-                    <div className="text-2xl font-semibold text-black mb-1">
+                    <div className="text-xl font-semibold text-black mb-1">
                       {weather.temperature}°C
                     </div>
-                    <div className="text-base text-gray-700">
+                    <div className="text-sm text-gray-700">
                       {getWeatherEmoji(weather.condition)} {weather.condition}
                     </div>
                   </div>
@@ -256,7 +266,7 @@ export default function Input({ onGenerate }: InputProps) {
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
                 </div>
                 <div
-                  ref={whereRef}
+                  ref={genderRef}
                   className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
                 style={{
                   scrollbarWidth: 'none',
@@ -265,7 +275,7 @@ export default function Input({ onGenerate }: InputProps) {
                 }}
               >
                 <div className="h-[76px]" />
-                {WHERE_OPTIONS.map((option) => (
+                {GENDER_OPTIONS.map((option) => (
                   <div
                     key={option}
                     data-scroll-item
@@ -273,10 +283,10 @@ export default function Input({ onGenerate }: InputProps) {
                     className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                   >
                     <span
-                      className={`tracking-wider uppercase transition-all duration-200 ${
-                        where === option
-                          ? 'text-lg font-bold text-black'
-                          : 'text-base font-normal text-gray-600'
+                      className={`tracking-wider uppercase transition-all duration-200 text-sm ${
+                        gender === option
+                          ? 'font-bold text-black'
+                          : 'font-normal text-gray-600'
                       }`}
                     >
                       {option}
@@ -294,7 +304,7 @@ export default function Input({ onGenerate }: InputProps) {
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
                 </div>
                 <div
-                  ref={styleRef}
+                  ref={bodyTypeRef}
                   className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
                 style={{
                   scrollbarWidth: 'none',
@@ -303,7 +313,7 @@ export default function Input({ onGenerate }: InputProps) {
                 }}
               >
                 <div className="h-[76px]" />
-                {STYLE_OPTIONS.map((option) => (
+                {BODY_TYPE_OPTIONS.map((option) => (
                   <div
                     key={option}
                     data-scroll-item
@@ -311,10 +321,48 @@ export default function Input({ onGenerate }: InputProps) {
                     className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                   >
                     <span
-                      className={`tracking-wider uppercase transition-all duration-200 ${
-                        style === option
-                          ? 'text-lg font-bold text-black'
-                          : 'text-base font-normal text-gray-600'
+                      className={`tracking-wider uppercase transition-all duration-200 text-xs ${
+                        bodyType === option
+                          ? 'font-bold text-black'
+                          : 'font-normal text-gray-600'
+                      }`}
+                    >
+                      {option}
+                    </span>
+                  </div>
+                ))}
+                <div className="h-[76px]" />
+                </div>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 pointer-events-none z-10">
+                  <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
+                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y border-gray-200" />
+                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
+                </div>
+                <div
+                  ref={vibeRef}
+                  className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
+                style={{
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  WebkitOverflowScrolling: 'touch'
+                }}
+              >
+                <div className="h-[76px]" />
+                {VIBE_OPTIONS.map((option) => (
+                  <div
+                    key={option}
+                    data-scroll-item
+                    data-value={option}
+                    className="h-12 snap-center flex items-center justify-center transition-all duration-200"
+                  >
+                    <span
+                      className={`tracking-wider uppercase transition-all duration-200 text-xs ${
+                        vibe === option
+                          ? 'font-bold text-black'
+                          : 'font-normal text-gray-600'
                       }`}
                     >
                       {option}

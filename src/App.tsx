@@ -13,9 +13,9 @@ function App() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [selectedOutfits, setSelectedOutfits] = useState<Outfit[]>([]);
   const [context, setContext] = useState({
-    where: '',
-    style: '',
-    subToggle: null as string | null,
+    gender: '',
+    bodyType: '',
+    vibe: '',
     weather: null as WeatherData | null,
   });
 
@@ -38,25 +38,29 @@ function App() {
     return str.trim().toLowerCase();
   };
 
-  const handleGenerate = (where: string, style: string, subToggle: string | null, weather: WeatherData) => {
+  const handleGenerate = (gender: string, bodyType: string, vibe: string, weather: WeatherData) => {
     console.log('=== GENERATE BUTTON CLICKED ===');
     console.log('Total outfits loaded:', outfits.length);
-    console.log('Generating outfits for:', { where, style });
+    console.log('Generating outfits for:', { gender, bodyType, vibe });
 
-    const normalizedWhere = normalizeString(where);
-    const normalizedStyle = normalizeString(style);
+    const normalizedGender = normalizeString(gender);
+    const normalizedBodyType = normalizeString(bodyType);
+    const normalizedVibe = normalizeString(vibe);
 
     const matches = outfits.filter(outfit => {
-      const matchesWhere = normalizeString(outfit.where) === normalizedWhere;
-      const matchesStyle = normalizeString(outfit.style) === normalizedStyle;
+      const matchesGender = normalizeString(outfit.gender) === normalizedGender;
+      const matchesBodyType = normalizeString(outfit.body_type) === normalizedBodyType;
+      const matchesVibe = normalizeString(outfit.vibe) === normalizedVibe;
       console.log('Checking outfit:', {
-        outfit: `${outfit.where} - ${outfit.style}`,
-        matchesWhere,
-        matchesStyle,
-        normalizedWhere,
-        normalizedStyle
+        outfit: `${outfit.gender} - ${outfit.body_type} - ${outfit.vibe}`,
+        matchesGender,
+        matchesBodyType,
+        matchesVibe,
+        normalizedGender,
+        normalizedBodyType,
+        normalizedVibe
       });
-      return matchesWhere && matchesStyle;
+      return matchesGender && matchesBodyType && matchesVibe;
     });
 
     console.log('Matches found:', matches.length);
@@ -66,7 +70,7 @@ function App() {
       : [];
 
     setSelectedOutfits(results);
-    setContext({ where, style, subToggle, weather });
+    setContext({ gender, bodyType, vibe, weather });
     console.log('Switching to results screen with', results.length, 'outfits');
     setCurrentScreen('results');
   };
