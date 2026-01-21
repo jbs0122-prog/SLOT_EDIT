@@ -125,35 +125,17 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <header className="sticky top-0 bg-white z-20 border-b border-gray-100">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <button
-            onClick={onBack}
-            className="p-2 hover:bg-gray-50 transition-colors flex items-center gap-2"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm font-light">Back</span>
-          </button>
-          {weather && (
-            <div className="text-sm text-gray-600 font-light">
-              {getWeatherEmoji(weather.condition)} {weather.temperature}°F
-            </div>
-          )}
-        </div>
-        <div className="px-6 pb-6">
-          <h1 className="text-3xl font-light tracking-tight mb-2">
-            NYC Trend Drop
-          </h1>
-          <p className="text-sm text-gray-500 font-light">
-            {gender} · {bodyType} · {vibe}
-          </p>
-        </div>
-      </header>
-
-      <main className="pb-12">
-        {sortedOutfits.length === 0 ? (
-          <div className="px-6 py-12 text-center max-w-md mx-auto">
+    <div className="h-screen overflow-y-scroll snap-y snap-mandatory bg-white">
+      {sortedOutfits.length === 0 ? (
+        <div className="h-screen flex items-center justify-center snap-start">
+          <div className="px-6 text-center max-w-md mx-auto">
+            <button
+              onClick={onBack}
+              className="absolute top-6 left-6 p-2 hover:bg-gray-50 transition-colors flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span className="text-sm font-light">Back</span>
+            </button>
             <div className="mb-6">
               <div className="text-6xl mb-4">👔</div>
               <h2 className="text-xl font-light mb-3">No Outfits Found</h2>
@@ -169,8 +151,9 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
               Try Again
             </button>
           </div>
-        ) : (
-          sortedOutfits.map((outfit, index) => {
+        </div>
+      ) : (
+        sortedOutfits.map((outfit, index) => {
             const images = [];
 
             if (outfit.image_url_flatlay1) {
@@ -190,9 +173,25 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
             return (
               <div
                 key={outfit.id}
-                className="mb-16 last:mb-0 md:max-w-3xl md:mx-auto"
+                className="h-screen snap-start flex flex-col overflow-y-auto relative"
               >
-                <div className="mb-6">
+                {index === 0 && (
+                  <button
+                    onClick={onBack}
+                    className="absolute top-6 left-6 z-30 p-2 hover:bg-gray-50 transition-colors flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded shadow-sm"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                    <span className="text-sm font-light">Back</span>
+                  </button>
+                )}
+
+                {weather && index === 0 && (
+                  <div className="absolute top-6 right-6 z-30 text-sm text-gray-600 font-light bg-white/90 backdrop-blur-sm px-3 py-2 rounded shadow-sm">
+                    {getWeatherEmoji(weather.condition)} {weather.temperature}°F
+                  </div>
+                )}
+
+                <div className="flex-shrink-0">
                   <ImageSlider
                     images={images}
                     alt={`Look ${index + 1}`}
@@ -205,94 +204,93 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                   />
                 </div>
 
-              <div className="px-6">
-                <div className="mb-8">
-                  <div className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
-                    AI Insight
+                <div className="flex-1 px-6 py-6 overflow-y-auto">
+                  <div className="mb-6">
+                    <div className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+                      AI Insight
+                    </div>
+                    <p className="text-base leading-relaxed font-light text-gray-800">
+                      {outfit.insight_text}
+                    </p>
                   </div>
-                  <p className="text-base leading-relaxed font-light text-gray-800">
-                    {outfit.insight_text}
-                  </p>
-                </div>
 
-                <div>
-                  <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
-                    SHOP THE CONTEXT
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <a
-                      href={outfit.top_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group"
-                    >
-                      <div className="mb-3">
-                        <img
-                          src={outfit.top_image}
-                          alt={outfit.top_name}
-                          className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                        />
-                      </div>
-                      <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
-                        {outfit.top_name}
-                      </div>
-                      <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                        Shop Top
-                        <ExternalLink className="w-3 h-3" />
-                      </button>
-                    </a>
+                  <div className="pb-6">
+                    <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
+                      SHOP THE CONTEXT
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <a
+                        href={outfit.top_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <div className="mb-3">
+                          <img
+                            src={outfit.top_image}
+                            alt={outfit.top_name}
+                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
+                          />
+                        </div>
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
+                          {outfit.top_name}
+                        </div>
+                        <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Top
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </a>
 
-                    <a
-                      href={outfit.bottom_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group"
-                    >
-                      <div className="mb-3">
-                        <img
-                          src={outfit.bottom_image}
-                          alt={outfit.bottom_name}
-                          className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                        />
-                      </div>
-                      <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
-                        {outfit.bottom_name}
-                      </div>
-                      <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                        Shop Bottom
-                        <ExternalLink className="w-3 h-3" />
-                      </button>
-                    </a>
+                      <a
+                        href={outfit.bottom_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <div className="mb-3">
+                          <img
+                            src={outfit.bottom_image}
+                            alt={outfit.bottom_name}
+                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
+                          />
+                        </div>
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
+                          {outfit.bottom_name}
+                        </div>
+                        <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Bottom
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </a>
 
-                    <a
-                      href={outfit.shoes_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group"
-                    >
-                      <div className="mb-3">
-                        <img
-                          src={outfit.shoes_image}
-                          alt={outfit.shoes_name}
-                          className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
-                        />
-                      </div>
-                      <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
-                        {outfit.shoes_name}
-                      </div>
-                      <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                        Shop Shoes
-                        <ExternalLink className="w-3 h-3" />
-                      </button>
-                    </a>
+                      <a
+                        href={outfit.shoes_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <div className="mb-3">
+                          <img
+                            src={outfit.shoes_image}
+                            alt={outfit.shoes_name}
+                            className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
+                          />
+                        </div>
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
+                          {outfit.shoes_name}
+                        </div>
+                        <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Shoes
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             );
           })
         )}
-      </main>
     </div>
   );
 }
