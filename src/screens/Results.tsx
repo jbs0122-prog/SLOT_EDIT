@@ -152,7 +152,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '73px' }}>
+      <div className="flex-1 overflow-y-scroll snap-y snap-mandatory" style={{ marginTop: '73px', paddingBottom: '80px' }}>
         {sortedOutfits.length === 0 ? (
           <div className="h-screen flex items-center justify-center snap-start">
             <div className="px-6 text-center max-w-md mx-auto">
@@ -195,7 +195,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                 key={outfit.id}
                 className="min-h-screen snap-start flex flex-col relative"
               >
-                <div className="flex-shrink-0 max-h-[60vh] md:max-h-[50vh]">
+                <div className="flex-shrink-0 h-[45vh] md:max-h-[50vh]">
                   <ImageSlider
                     images={images}
                     alt={`Look ${index + 1}`}
@@ -208,39 +208,39 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                   />
                 </div>
 
-                <div className="flex-1 px-6 py-6 pb-12">
-                  <div className="mb-8 max-w-3xl mx-auto">
-                    <div className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+                <div className="flex-1 px-6 py-4 pb-4">
+                  <div className="mb-5 max-w-3xl mx-auto">
+                    <div className="text-xs font-light tracking-widest text-gray-400 uppercase mb-2">
                       AI Insight
                     </div>
-                    <p className="text-base leading-relaxed font-light text-gray-800">
+                    <p className="text-sm leading-relaxed font-light text-gray-800">
                       {outfit.insight_text}
                     </p>
                   </div>
 
                   <div className="max-w-3xl mx-auto">
-                    <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
+                    <div className="text-xs font-bold tracking-widest text-black uppercase mb-3">
                       SHOP THE CONTEXT
                     </div>
-                    <div className="grid grid-cols-3 gap-4 md:gap-6">
+                    <div className="grid grid-cols-3 gap-3 md:gap-6">
                       <a
                         href={outfit.top_link}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="group"
                       >
-                        <div className="mb-3">
+                        <div className="mb-2">
                           <img
                             src={outfit.top_image}
                             alt={outfit.top_name}
                             className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
                           />
                         </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
                           {outfit.top_name}
                         </div>
-                        <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Top
+                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Now
                           <ExternalLink className="w-3 h-3" />
                         </button>
                       </a>
@@ -251,18 +251,18 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                         rel="noopener noreferrer"
                         className="group"
                       >
-                        <div className="mb-3">
+                        <div className="mb-2">
                           <img
                             src={outfit.bottom_image}
                             alt={outfit.bottom_name}
                             className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
                           />
                         </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
                           {outfit.bottom_name}
                         </div>
-                        <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Bottom
+                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Now
                           <ExternalLink className="w-3 h-3" />
                         </button>
                       </a>
@@ -273,36 +273,36 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                         rel="noopener noreferrer"
                         className="group"
                       >
-                        <div className="mb-3">
+                        <div className="mb-2">
                           <img
                             src={outfit.shoes_image}
                             alt={outfit.shoes_name}
                             className="w-full aspect-square object-cover border border-gray-200 group-hover:border-black transition-colors"
                           />
                         </div>
-                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight">
+                        <div className="text-xs font-light text-gray-600 mb-2 leading-tight line-clamp-2">
                           {outfit.shoes_name}
                         </div>
-                        <button className="w-full py-2 px-3 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
-                          Shop Shoes
+                        <button className="w-full py-2 px-2 text-xs tracking-wider font-light uppercase border border-black transition-all group-hover:bg-black group-hover:text-white flex items-center justify-center gap-1">
+                          Shop Now
                           <ExternalLink className="w-3 h-3" />
                         </button>
                       </a>
                     </div>
                   </div>
                 </div>
-
-                {index < sortedOutfits.length - 1 && (
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center animate-bounce z-20">
-                    <span className="text-xs text-gray-500 font-light mb-1">Scroll for more</span>
-                    <ChevronDown className="w-5 h-5 text-gray-500" />
-                  </div>
-                )}
               </div>
             );
           })
         )}
       </div>
+
+      {sortedOutfits.length > 1 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-3 z-40 flex flex-col items-center">
+          <span className="text-xs text-gray-500 font-light mb-1">Scroll for more</span>
+          <ChevronDown className="w-4 h-4 text-gray-500 animate-bounce" />
+        </div>
+      )}
     </div>
   );
 }

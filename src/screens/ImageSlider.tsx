@@ -68,9 +68,6 @@ export default function ImageSlider({
   if (images.length === 1) {
     return (
       <div className="relative bg-gray-100 h-full">
-        <div className="absolute top-6 left-6 bg-black text-white px-4 py-2 text-xs font-light tracking-wider z-10">
-          #{outfitNumber}
-        </div>
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <div className="text-center max-w-full">
             <p className="text-xs text-gray-500 mb-2">{images[0].label}</p>
@@ -137,10 +134,6 @@ export default function ImageSlider({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="absolute top-6 left-6 bg-black text-white px-4 py-2 text-xs font-light tracking-wider z-10">
-        #{outfitNumber}
-      </div>
-
       <div
         className="flex transition-transform duration-300 ease-out h-full"
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
