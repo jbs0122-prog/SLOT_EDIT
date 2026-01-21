@@ -7,7 +7,7 @@ export interface WeatherData {
   timestamp: number;
 }
 
-const CACHE_KEY = 'nyc_weather_cache_v2';
+const CACHE_KEY = 'nyc_weather_cache_v3';
 const CACHE_DURATION = 30 * 60 * 1000;
 
 function mapConditionsToWeatherCondition(conditions: string): WeatherCondition {
