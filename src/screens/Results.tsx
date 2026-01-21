@@ -243,7 +243,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                 key={outfit.id}
                 className="h-screen snap-start flex flex-col md:flex-row md:items-center md:justify-center md:gap-8 md:px-12"
               >
-                <div className="flex-shrink-0 h-[55vh] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
+                <div className="flex-shrink-0 h-[60vh] md:h-auto md:w-[400px] md:max-h-[80vh] flex items-center justify-center">
                   <div className="h-full w-full md:w-full">
                     <ImageSlider
                     images={images}
@@ -258,7 +258,7 @@ export default function Results({ outfits, context, onBack }: ResultsProps) {
                   </div>
                 </div>
 
-                <div className="h-[35vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-x-scroll md:overflow-y-scroll snap-x snap-mandatory md:snap-none flex md:flex-col scrollbar-hide">
+                <div className="h-[30vh] md:h-auto md:w-[500px] md:max-h-[80vh] overflow-x-scroll md:overflow-y-scroll snap-x snap-mandatory md:snap-none flex md:flex-col scrollbar-hide">
                   <div className="min-w-full md:min-w-0 snap-center md:snap-align-none px-6 py-6 md:py-0 flex flex-col md:mb-8">
                     <div className="text-xs font-bold tracking-widest text-black uppercase mb-4 flex items-center justify-between">
                       <span>SHOP THE CONTEXT</span>
