@@ -82,16 +82,36 @@ export default function AdminPins() {
 
     setSaving(true);
     try {
+      console.log('Saving pins:', pins);
+      console.log('Selected image:', selectedImage);
+      console.log('Outfit ID:', selectedOutfit.id);
+
       const updateData: Record<string, ImagePin[]> = {
         [`${selectedImage}_pins`]: pins,
       };
 
-      const { error } = await supabase
+      console.log('Update data:', updateData);
+
+      const { data, error } = await supabase
         .from('outfits')
         .update(updateData)
-        .eq('id', selectedOutfit.id);
+        .eq('id', selectedOutfit.id)
+        .select();
 
       if (error) throw error;
+
+      console.log('Save result:', data);
+
+      // Verify the save by reading back from database
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('outfits')
+        .select(`${selectedImage}_pins`)
+        .eq('id', selectedOutfit.id)
+        .single();
+
+      if (verifyError) throw verifyError;
+
+      console.log('Verified data from DB:', verifyData);
 
       alert('저장되었습니다!');
 
