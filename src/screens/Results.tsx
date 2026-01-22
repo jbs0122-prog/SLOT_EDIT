@@ -411,7 +411,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   return (
     <div
       ref={containerRef}
-      className="h-screen flex flex-col bg-white relative"
+      className="h-screen flex flex-col md:flex-row bg-white relative"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -425,22 +425,22 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
           </div>
         </div>
       )}
-      <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between mb-3">
+      <header className="fixed md:sticky top-0 left-0 right-0 md:left-auto md:right-auto bg-white z-50 border-b md:border-b-0 md:border-r border-gray-200 md:h-screen md:w-[400px] flex-shrink-0">
+        <div className="px-6 py-4 md:py-8">
+          <div className="flex md:flex-col items-center md:items-start justify-between md:justify-start mb-3 md:mb-8">
             <img
               src="/logo.png"
               alt="SLOT EDIT"
-              className="h-12"
+              className="h-12 md:h-24"
             />
             {weather && (
-              <div className="text-sm text-gray-700 font-medium">
+              <div className="text-sm md:text-2xl text-gray-700 font-medium md:mt-6">
                 {getWeatherEmoji(weather.condition)} {weather.temperature}°F
               </div>
             )}
           </div>
-          <div className="mb-2 relative">
-            <div className="flex items-center gap-2 text-xs text-gray-600 font-light">
+          <div className="mb-2 md:mb-6 relative">
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-xl text-gray-600 font-light">
               <div className="relative">
                 <button
                   onClick={() => setOpenDropdown(openDropdown === 'gender' ? null : 'gender')}
@@ -455,7 +455,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                       <button
                         key={option}
                         onClick={() => handleDropdownSelect('gender', option)}
-                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${
+                        className={`block w-full text-left px-4 py-2 text-xs md:text-base uppercase hover:bg-gray-100 transition-colors ${
                           option === currentGender ? 'font-medium bg-gray-50' : ''
                         }`}
                       >
@@ -480,7 +480,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                       <button
                         key={option}
                         onClick={() => handleDropdownSelect('bodyType', option)}
-                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${
+                        className={`block w-full text-left px-4 py-2 text-xs md:text-base uppercase hover:bg-gray-100 transition-colors ${
                           option === currentBodyType ? 'font-medium bg-gray-50' : ''
                         }`}
                       >
@@ -500,12 +500,12 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                   {rankingGender ? 'ALL VIBES' : currentVibe}
                 </button>
                 {openDropdown === 'vibe' && !rankingGender && (
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[180px]">
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[180px] md:min-w-[240px]">
                     {VIBE_OPTIONS.map((option) => (
                       <button
                         key={option}
                         onClick={() => handleDropdownSelect('vibe', option)}
-                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${
+                        className={`block w-full text-left px-4 py-2 text-xs md:text-base uppercase hover:bg-gray-100 transition-colors ${
                           option === currentVibe ? 'font-medium bg-gray-50' : ''
                         }`}
                       >
@@ -518,7 +518,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
             </div>
           </div>
           <div>
-            <div className="flex items-center gap-2 text-sm mb-2">
+            <div className="flex flex-wrap items-center gap-2 text-sm md:text-2xl mb-2 md:mb-4">
               <button
                 onClick={handleBackToNormal}
                 className={`font-light transition-colors ${
@@ -547,7 +547,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               </button>
             </div>
             {!rankingGender && (
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-xs md:text-xl">
                 <button
                   onClick={() => setSortOrder('likes')}
                   className={`font-light transition-colors uppercase ${
@@ -571,7 +571,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto pt-[148px] pb-8">
+      <div className="flex-1 overflow-y-auto pt-[148px] md:pt-0 pb-8">
 
         {(rankingGender ? rankingOutfits : sortedOutfits).length === 0 ? (
           <div className="min-h-[calc(100vh-200px)] flex items-center justify-center">
@@ -636,10 +636,10 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 </div>
 
                 <div className="w-full md:w-[500px] px-6 md:px-0 flex flex-col">
-                  <div className="text-xs font-bold tracking-widest text-black uppercase mb-4">
+                  <div className="text-xs md:text-2xl font-bold tracking-widest text-black uppercase mb-4">
                     AI INSIGHT
                   </div>
-                  <p className="text-sm leading-relaxed font-light text-gray-800">
+                  <p className="text-sm md:text-2xl leading-relaxed font-light text-gray-800">
                     {outfit.insight_text}
                   </p>
                 </div>
