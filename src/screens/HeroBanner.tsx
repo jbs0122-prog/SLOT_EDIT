@@ -106,7 +106,7 @@ export default function HeroBanner({ desktopImages, mobileImages, autoPlayInterv
           <div
             key={index}
             className="w-full flex-shrink-0 bg-gray-200 relative"
-            style={{ aspectRatio: '1.91 / 1' }}
+            style={{ aspectRatio: isMobile ? 'auto' : '1.91 / 1' }}
           >
             <img
               src={image}
