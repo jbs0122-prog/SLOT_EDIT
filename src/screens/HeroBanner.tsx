@@ -2,18 +2,32 @@ import { useState, useEffect, useRef, TouchEvent } from 'react';
 import { ChevronRight } from 'lucide-react';
 
 interface HeroBannerProps {
-  images: string[];
+  desktopImages: string[];
+  mobileImages: string[];
   autoPlayInterval?: number;
 }
 
-export default function HeroBanner({ images, autoPlayInterval = 5000 }: HeroBannerProps) {
+export default function HeroBanner({ desktopImages, mobileImages, autoPlayInterval = 5000 }: HeroBannerProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const minSwipeDistance = 50;
+  const images = isMobile ? mobileImages : desktopImages;
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     if (isPaused || images.length <= 1) return;
@@ -89,7 +103,11 @@ export default function HeroBanner({ images, autoPlayInterval = 5000 }: HeroBann
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
         {images.map((image, index) => (
-          <div key={index} className="w-full flex-shrink-0 bg-gray-200 relative" style={{ aspectRatio: '1.91 / 1' }}>
+          <div
+            key={index}
+            className="w-full flex-shrink-0 bg-gray-200 relative"
+            style={{ aspectRatio: isMobile ? '1 / 1.4' : '1.91 / 1' }}
+          >
             <img
               src={image}
               alt={`Hero banner ${index + 1}`}

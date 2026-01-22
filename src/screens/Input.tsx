@@ -177,10 +177,16 @@ export default function Input({ onGenerate }: InputProps) {
 
   const isComplete = weather !== null;
 
-  const heroBannerImages = [
+  const desktopBannerImages = [
     '/1.png',
     '/2.png',
     '/3.png',
+  ];
+
+  const mobileBannerImages = [
+    '/mo_1.png',
+    '/mo_2.png',
+    '/mo_3.png',
   ];
 
   return (
@@ -192,7 +198,7 @@ export default function Input({ onGenerate }: InputProps) {
       </header>
 
       <div className="max-w-4xl mx-auto w-full px-6 mb-8">
-        <HeroBanner images={heroBannerImages} />
+        <HeroBanner desktopImages={desktopBannerImages} mobileImages={mobileBannerImages} />
       </div>
 
       <main className="flex-1 flex flex-col justify-center px-6 py-8">
