@@ -179,7 +179,7 @@ export default function Input({ onGenerate }: InputProps) {
 
   const heroBannerImages = [
     '/hero-banner-1_(2).png',
-    '/hero-banner-2_(2).png',
+    '/hero-banner-2_(2) copy.png',
     '/hero-banner-2_(3).png',
   ];
 
