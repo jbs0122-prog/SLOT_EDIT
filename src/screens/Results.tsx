@@ -38,35 +38,11 @@ function getOrCreateSessionId(): string {
   return sessionId;
 }
 
-const SORT_CACHE_DURATION = 60 * 60 * 1000;
-
-function shouldUpdateSort(): boolean {
-  const lastSortTime = localStorage.getItem('lastSortTime');
-  if (!lastSortTime) return true;
-
-  const timeSinceLastSort = Date.now() - parseInt(lastSortTime);
-  return timeSinceLastSort >= SORT_CACHE_DURATION;
-}
-
-function getCachedSortOrder(): string[] | null {
-  const cached = localStorage.getItem('cachedSortOrder');
-  if (!cached) return null;
-  try {
-    return JSON.parse(cached);
-  } catch {
-    return null;
-  }
-}
-
-function setCachedSortOrder(outfitIds: string[]): void {
-  localStorage.setItem('cachedSortOrder', JSON.stringify(outfitIds));
-  localStorage.setItem('lastSortTime', Date.now().toString());
-}
-
 export default function Results({ outfits, context, onBack, onGenerate }: ResultsProps) {
   const { gender, bodyType, vibe, weather } = context;
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
   const [sortedOutfits, setSortedOutfits] = useState<Outfit[]>(outfits);
+  const [sortOrder, setSortOrder] = useState<'likes' | 'latest'>('likes');
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -133,36 +109,17 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   };
 
   useEffect(() => {
-    if (shouldUpdateSort()) {
-      const sorted = [...outfits].sort((a, b) => {
+    const sorted = [...outfits].sort((a, b) => {
+      if (sortOrder === 'likes') {
         const aLikes = feedbackCounts[a.id]?.likes || 0;
         const bLikes = feedbackCounts[b.id]?.likes || 0;
         return bLikes - aLikes;
-      });
-      setSortedOutfits(sorted);
-      setCachedSortOrder(sorted.map(o => o.id));
-    } else {
-      const cachedOrder = getCachedSortOrder();
-      if (cachedOrder) {
-        const sorted = [...outfits].sort((a, b) => {
-          const aIndex = cachedOrder.indexOf(a.id);
-          const bIndex = cachedOrder.indexOf(b.id);
-          if (aIndex === -1) return 1;
-          if (bIndex === -1) return -1;
-          return aIndex - bIndex;
-        });
-        setSortedOutfits(sorted);
       } else {
-        const sorted = [...outfits].sort((a, b) => {
-          const aLikes = feedbackCounts[a.id]?.likes || 0;
-          const bLikes = feedbackCounts[b.id]?.likes || 0;
-          return bLikes - aLikes;
-        });
-        setSortedOutfits(sorted);
-        setCachedSortOrder(sorted.map(o => o.id));
+        return 0;
       }
-    }
-  }, [outfits, feedbackCounts]);
+    });
+    setSortedOutfits(sorted);
+  }, [outfits, feedbackCounts, sortOrder]);
 
   const loadFeedbackCounts = async () => {
     const sessionId = getOrCreateSessionId();
@@ -545,33 +502,56 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <button
-              onClick={handleBackToNormal}
-              className={`font-light transition-colors ${
-                !rankingGender ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              HOME
-            </button>
-            <span className="text-gray-300">/</span>
-            <button
-              onClick={handleMensRanking}
-              className={`font-light transition-colors ${
-                rankingGender === 'MALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              Men's Ranking
-            </button>
-            <span className="text-gray-300">/</span>
-            <button
-              onClick={handleWomensRanking}
-              className={`font-light transition-colors ${
-                rankingGender === 'FEMALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              Women's Ranking
-            </button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <button
+                onClick={handleBackToNormal}
+                className={`font-light transition-colors ${
+                  !rankingGender ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                HOME
+              </button>
+              <span className="text-gray-300">/</span>
+              <button
+                onClick={handleMensRanking}
+                className={`font-light transition-colors ${
+                  rankingGender === 'MALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Men's Ranking
+              </button>
+              <span className="text-gray-300">/</span>
+              <button
+                onClick={handleWomensRanking}
+                className={`font-light transition-colors ${
+                  rankingGender === 'FEMALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Women's Ranking
+              </button>
+            </div>
+            {!rankingGender && (
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  onClick={() => setSortOrder('likes')}
+                  className={`font-light transition-colors uppercase ${
+                    sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  Most Liked
+                </button>
+                <span className="text-gray-300">/</span>
+                <button
+                  onClick={() => setSortOrder('latest')}
+                  className={`font-light transition-colors uppercase ${
+                    sortOrder === 'latest' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  Latest
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
