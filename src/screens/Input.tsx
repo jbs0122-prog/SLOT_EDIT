@@ -44,6 +44,9 @@ export default function Input({ onGenerate }: InputProps) {
   };
 
   useEffect(() => {
+    const isMobile = window.innerWidth < 768;
+    if (!isMobile) return;
+
     const setupScrollPicker = (
       containerRef: React.RefObject<HTMLDivElement>,
       options: string[],
@@ -266,21 +269,21 @@ export default function Input({ onGenerate }: InputProps) {
               </div>
 
               <div className="relative">
-                <div className="absolute inset-0 pointer-events-none z-10">
+                <div className="md:hidden absolute inset-0 pointer-events-none z-10">
                   <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
                   <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y border-gray-200" />
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
                 </div>
                 <div
                   ref={genderRef}
-                  className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
+                  className="h-[200px] overflow-y-scroll md:overflow-visible scroll-smooth snap-y snap-mandatory scrollbar-hide md:flex md:flex-col md:gap-3 md:justify-center"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
                   WebkitOverflowScrolling: 'touch'
                 }}
               >
-                <div className="h-[76px]" />
+                <div className="h-[76px] md:hidden" />
                 {GENDER_OPTIONS.map((option) => (
                   <div
                     key={option}
@@ -288,37 +291,38 @@ export default function Input({ onGenerate }: InputProps) {
                     data-value={option}
                     className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                   >
-                    <span
-                      className={`tracking-wider uppercase transition-all duration-200 ${
+                    <button
+                      onClick={() => setGender(option)}
+                      className={`tracking-wider uppercase transition-all duration-200 md:w-full md:py-3 md:px-4 md:border md:border-gray-300 md:hover:border-black ${
                         gender === option
-                          ? 'text-lg md:text-3xl font-bold text-black'
-                          : 'text-base md:text-2xl font-normal text-gray-600'
+                          ? 'text-lg md:text-2xl font-bold text-black md:bg-black md:text-white'
+                          : 'text-base md:text-xl font-normal text-gray-600 md:bg-white'
                       }`}
                     >
                       {option}
-                    </span>
+                    </button>
                   </div>
                 ))}
-                <div className="h-[76px]" />
+                <div className="h-[76px] md:hidden" />
                 </div>
               </div>
 
               <div className="relative">
-                <div className="absolute inset-0 pointer-events-none z-10">
+                <div className="md:hidden absolute inset-0 pointer-events-none z-10">
                   <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
                   <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y border-gray-200" />
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
                 </div>
                 <div
                   ref={bodyTypeRef}
-                  className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
+                  className="h-[200px] overflow-y-scroll md:overflow-visible scroll-smooth snap-y snap-mandatory scrollbar-hide md:flex md:flex-col md:gap-3 md:justify-center"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
                   WebkitOverflowScrolling: 'touch'
                 }}
               >
-                <div className="h-[76px]" />
+                <div className="h-[76px] md:hidden" />
                 {BODY_TYPE_OPTIONS.map((option) => (
                   <div
                     key={option}
@@ -326,37 +330,38 @@ export default function Input({ onGenerate }: InputProps) {
                     data-value={option}
                     className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                   >
-                    <span
-                      className={`tracking-wider uppercase transition-all duration-200 ${
+                    <button
+                      onClick={() => setBodyType(option)}
+                      className={`tracking-wider uppercase transition-all duration-200 md:w-full md:py-3 md:px-4 md:border md:border-gray-300 md:hover:border-black ${
                         bodyType === option
-                          ? 'text-base md:text-2xl font-bold text-black'
-                          : 'text-sm md:text-xl font-normal text-gray-600'
+                          ? 'text-base md:text-xl font-bold text-black md:bg-black md:text-white'
+                          : 'text-sm md:text-lg font-normal text-gray-600 md:bg-white'
                       }`}
                     >
                       {option}
-                    </span>
+                    </button>
                   </div>
                 ))}
-                <div className="h-[76px]" />
+                <div className="h-[76px] md:hidden" />
                 </div>
               </div>
 
               <div className="relative">
-                <div className="absolute inset-0 pointer-events-none z-10">
+                <div className="md:hidden absolute inset-0 pointer-events-none z-10">
                   <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
                   <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y border-gray-200" />
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
                 </div>
                 <div
                   ref={vibeRef}
-                  className="h-[200px] overflow-y-scroll scroll-smooth snap-y snap-mandatory scrollbar-hide"
+                  className="h-[200px] overflow-y-scroll md:overflow-visible scroll-smooth snap-y snap-mandatory scrollbar-hide md:flex md:flex-col md:gap-3 md:justify-center"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
                   WebkitOverflowScrolling: 'touch'
                 }}
               >
-                <div className="h-[76px]" />
+                <div className="h-[76px] md:hidden" />
                 {VIBE_OPTIONS.map((option) => (
                   <div
                     key={option}
@@ -364,18 +369,19 @@ export default function Input({ onGenerate }: InputProps) {
                     data-value={option}
                     className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                   >
-                    <span
-                      className={`tracking-wider uppercase transition-all duration-200 ${
+                    <button
+                      onClick={() => setVibe(option)}
+                      className={`tracking-wider uppercase transition-all duration-200 md:w-full md:py-3 md:px-4 md:border md:border-gray-300 md:hover:border-black text-center ${
                         vibe === option
-                          ? 'text-sm md:text-xl font-bold text-black'
-                          : 'text-xs md:text-lg font-normal text-gray-600'
+                          ? 'text-sm md:text-lg font-bold text-black md:bg-black md:text-white'
+                          : 'text-xs md:text-base font-normal text-gray-600 md:bg-white'
                       }`}
                     >
                       {option}
-                    </span>
+                    </button>
                   </div>
                 ))}
-                <div className="h-[76px]" />
+                <div className="h-[76px] md:hidden" />
                 </div>
               </div>
             </div>

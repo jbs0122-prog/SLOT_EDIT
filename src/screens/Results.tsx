@@ -551,7 +551,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 text-sm md:text-2xl">
+            <div className="flex flex-col md:flex-col items-start gap-2 text-sm md:text-2xl">
               <button
                 onClick={handleMensRanking}
                 className={`font-light transition-colors ${
@@ -560,7 +560,6 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               >
                 Men's Ranking
               </button>
-              <span className="text-gray-300">/</span>
               <button
                 onClick={handleWomensRanking}
                 className={`font-light transition-colors ${
@@ -642,7 +641,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                   <div className="text-xs md:text-2xl font-bold tracking-widest text-black uppercase mb-4">
                     AI INSIGHT
                   </div>
-                  <p className="text-sm md:text-2xl leading-relaxed font-light text-gray-800">
+                  <p className="text-sm md:text-xl leading-relaxed font-light text-gray-800">
                     {outfit.insight_text}
                   </p>
                 </div>
