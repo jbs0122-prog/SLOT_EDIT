@@ -600,7 +600,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               <span className="text-gray-300 md:hidden">/</span>
               <button
                 onClick={handleMensRanking}
-                className={`font-light transition-colors md:text-xl ${
+                className={`font-light transition-colors md:text-xl md:w-full md:text-left ${
                   rankingGender === 'MALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
@@ -609,7 +609,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               <span className="text-gray-300 md:hidden">/</span>
               <button
                 onClick={handleWomensRanking}
-                className={`font-light transition-colors md:text-xl ${
+                className={`font-light transition-colors md:text-xl md:w-full md:text-left ${
                   rankingGender === 'FEMALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
