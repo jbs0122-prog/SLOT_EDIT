@@ -196,8 +196,8 @@ export default function Input({ onGenerate }: InputProps) {
       </div>
 
       <main className="flex-1 flex flex-col justify-center px-6 py-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-center mb-8">
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold text-center mb-4">
             DON'T SEARCH—SELECT.
           </h2>
         </div>
@@ -386,7 +386,7 @@ export default function Input({ onGenerate }: InputProps) {
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {isGenerating ? 'Finding your look...' : 'shop this moment'}
+            {isGenerating ? 'Finding your look...' : 'GET YOUR EDIT'}
           </button>
 
           <div className="mt-6 text-center">
@@ -395,7 +395,7 @@ export default function Input({ onGenerate }: InputProps) {
               className="text-sm text-gray-500 hover:text-black transition-colors inline-flex items-center gap-1"
             >
               <HelpCircle className="w-4 h-4" />
-              Can't find your occasion?
+              Have feedback? Tell us.
             </button>
           </div>
         </div>
@@ -405,8 +405,8 @@ export default function Input({ onGenerate }: InputProps) {
             SLOTS OVER SEARCH
           </h2>
           <p className="text-sm text-gray-600 font-light text-center mb-8">
-            NYC trends, edited weekly.<br />
-            Pick a slot—get 3 editor picks.
+            Your context, refined into a single edit.<br />
+            Pick a slot—get one clean, considered look.
           </p>
           <div className="max-w-4xl mx-auto w-full mb-6">
             <img
@@ -442,22 +442,22 @@ export default function Input({ onGenerate }: InputProps) {
               </div>
             ) : (
               <>
-                <h3 className="text-xl font-light mb-4">Suggest an Occasion</h3>
+                <h3 className="text-xl font-light mb-4">Share Your Feedback</h3>
                 <p className="text-sm text-gray-600 mb-6">
-                  Tell us what occasion you're looking for and we'll consider adding it.
+                  We'd love to hear your thoughts, suggestions, or any feedback to help us improve.
                 </p>
 
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs uppercase tracking-wider text-gray-500 mb-2">
-                      Occasion *
+                      Your Feedback *
                     </label>
-                    <input
-                      type="text"
+                    <textarea
                       value={feedbackOccasion}
                       onChange={(e) => setFeedbackOccasion(e.target.value)}
-                      placeholder="e.g., club rooftop party"
-                      className="w-full px-4 py-3 border border-gray-300 focus:border-black focus:outline-none text-sm"
+                      placeholder="Tell us what you think..."
+                      rows={4}
+                      className="w-full px-4 py-3 border border-gray-300 focus:border-black focus:outline-none text-sm resize-none"
                     />
                   </div>
 
