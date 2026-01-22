@@ -63,6 +63,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   const newGenderRef = useRef<HTMLDivElement>(null);
   const newBodyTypeRef = useRef<HTMLDivElement>(null);
   const newVibeRef = useRef<HTMLDivElement>(null);
+  const wheelTimeoutRef = useRef<{ [key: string]: number }>({});
 
   const minSwipeDistance = 100;
 
@@ -267,6 +268,52 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
 
     if (isRightSwipe) {
       onBack();
+    }
+  };
+
+  const handleWheel = (
+    e: React.WheelEvent<HTMLDivElement>,
+    containerRef: React.RefObject<HTMLDivElement>,
+    options: string[],
+    currentValue: string,
+    setState: (value: string) => void,
+    key: string
+  ) => {
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) return;
+
+    e.preventDefault();
+
+    if (wheelTimeoutRef.current[key]) return;
+
+    wheelTimeoutRef.current[key] = window.setTimeout(() => {
+      delete wheelTimeoutRef.current[key];
+    }, 150);
+
+    const currentIndex = options.indexOf(currentValue);
+    let newIndex = currentIndex;
+
+    if (e.deltaY > 0 && currentIndex < options.length - 1) {
+      newIndex = currentIndex + 1;
+    } else if (e.deltaY < 0 && currentIndex > 0) {
+      newIndex = currentIndex - 1;
+    }
+
+    if (newIndex !== currentIndex) {
+      const newValue = options[newIndex];
+      setState(newValue);
+
+      if (containerRef.current) {
+        const container = containerRef.current;
+        const items = Array.from(container.querySelectorAll('[data-scroll-item]'));
+        const targetItem = items[newIndex] as HTMLElement;
+        if (targetItem) {
+          const containerHeight = container.clientHeight;
+          const itemHeight = targetItem.clientHeight;
+          const targetScrollTop = targetItem.offsetTop - (containerHeight / 2) + (itemHeight / 2);
+          container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+        }
+      }
     }
   };
 
@@ -756,6 +803,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                         msOverflowStyle: 'none',
                         WebkitOverflowScrolling: 'touch'
                       }}
+                      onWheel={(e) => handleWheel(e, newGenderRef, GENDER_OPTIONS, newGender, setNewGender, 'newGender')}
                     >
                       <div className="h-[76px]" />
                       {GENDER_OPTIONS.map((option) => (
@@ -765,15 +813,31 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                           data-value={option}
                           className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                         >
-                          <span
-                            className={`tracking-wider uppercase transition-all duration-200 ${
+                          <button
+                            onClick={() => {
+                              setNewGender(option);
+                              const isMobile = window.innerWidth < 768;
+                              if (!isMobile && newGenderRef.current) {
+                                const container = newGenderRef.current;
+                                const items = Array.from(container.querySelectorAll('[data-scroll-item]'));
+                                const targetIndex = items.findIndex(item => item.getAttribute('data-value') === option);
+                                if (targetIndex !== -1) {
+                                  const targetItem = items[targetIndex] as HTMLElement;
+                                  const containerHeight = container.clientHeight;
+                                  const itemHeight = targetItem.clientHeight;
+                                  const targetScrollTop = targetItem.offsetTop - (containerHeight / 2) + (itemHeight / 2);
+                                  container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+                                }
+                              }
+                            }}
+                            className={`tracking-wider uppercase transition-all duration-200 md:cursor-pointer ${
                               newGender === option
                                 ? 'text-lg md:text-2xl font-bold text-black'
                                 : 'text-base md:text-xl font-normal text-gray-600'
                             }`}
                           >
                             {option}
-                          </span>
+                          </button>
                         </div>
                       ))}
                       <div className="h-[76px]" />
@@ -794,6 +858,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                         msOverflowStyle: 'none',
                         WebkitOverflowScrolling: 'touch'
                       }}
+                      onWheel={(e) => handleWheel(e, newBodyTypeRef, BODY_TYPE_OPTIONS, newBodyType, setNewBodyType, 'newBodyType')}
                     >
                       <div className="h-[76px]" />
                       {BODY_TYPE_OPTIONS.map((option) => (
@@ -803,15 +868,31 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                           data-value={option}
                           className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                         >
-                          <span
-                            className={`tracking-wider uppercase transition-all duration-200 ${
+                          <button
+                            onClick={() => {
+                              setNewBodyType(option);
+                              const isMobile = window.innerWidth < 768;
+                              if (!isMobile && newBodyTypeRef.current) {
+                                const container = newBodyTypeRef.current;
+                                const items = Array.from(container.querySelectorAll('[data-scroll-item]'));
+                                const targetIndex = items.findIndex(item => item.getAttribute('data-value') === option);
+                                if (targetIndex !== -1) {
+                                  const targetItem = items[targetIndex] as HTMLElement;
+                                  const containerHeight = container.clientHeight;
+                                  const itemHeight = targetItem.clientHeight;
+                                  const targetScrollTop = targetItem.offsetTop - (containerHeight / 2) + (itemHeight / 2);
+                                  container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+                                }
+                              }
+                            }}
+                            className={`tracking-wider uppercase transition-all duration-200 md:cursor-pointer ${
                               newBodyType === option
                                 ? 'text-base md:text-xl font-bold text-black'
                                 : 'text-sm md:text-base font-normal text-gray-600'
                             }`}
                           >
                             {option}
-                          </span>
+                          </button>
                         </div>
                       ))}
                       <div className="h-[76px]" />
@@ -832,6 +913,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                         msOverflowStyle: 'none',
                         WebkitOverflowScrolling: 'touch'
                       }}
+                      onWheel={(e) => handleWheel(e, newVibeRef, VIBE_OPTIONS, newVibe, setNewVibe, 'newVibe')}
                     >
                       <div className="h-[76px]" />
                       {VIBE_OPTIONS.map((option) => (
@@ -841,15 +923,31 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                           data-value={option}
                           className="h-12 snap-center flex items-center justify-center transition-all duration-200"
                         >
-                          <span
-                            className={`tracking-wider uppercase transition-all duration-200 text-center px-2 ${
+                          <button
+                            onClick={() => {
+                              setNewVibe(option);
+                              const isMobile = window.innerWidth < 768;
+                              if (!isMobile && newVibeRef.current) {
+                                const container = newVibeRef.current;
+                                const items = Array.from(container.querySelectorAll('[data-scroll-item]'));
+                                const targetIndex = items.findIndex(item => item.getAttribute('data-value') === option);
+                                if (targetIndex !== -1) {
+                                  const targetItem = items[targetIndex] as HTMLElement;
+                                  const containerHeight = container.clientHeight;
+                                  const itemHeight = targetItem.clientHeight;
+                                  const targetScrollTop = targetItem.offsetTop - (containerHeight / 2) + (itemHeight / 2);
+                                  container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+                                }
+                              }
+                            }}
+                            className={`tracking-wider uppercase transition-all duration-200 text-center px-2 md:cursor-pointer ${
                               newVibe === option
                                 ? 'text-sm md:text-base font-bold text-black'
                                 : 'text-xs md:text-sm font-normal text-gray-600'
                             }`}
                           >
                             {option}
-                          </span>
+                          </button>
                         </div>
                       ))}
                       <div className="h-[76px]" />

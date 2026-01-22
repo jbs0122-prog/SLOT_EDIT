@@ -27,6 +27,7 @@ export default function Input({ onGenerate }: InputProps) {
   const genderRef = useRef<HTMLDivElement>(null);
   const bodyTypeRef = useRef<HTMLDivElement>(null);
   const vibeRef = useRef<HTMLDivElement>(null);
+  const wheelTimeoutRef = useRef<{ [key: string]: number }>({});
 
   useEffect(() => {
     loadWeather();
@@ -40,6 +41,52 @@ export default function Input({ onGenerate }: InputProps) {
     } catch (error) {
       setWeatherError(true);
       console.error('Weather fetch failed:', error);
+    }
+  };
+
+  const handleWheel = (
+    e: React.WheelEvent<HTMLDivElement>,
+    containerRef: React.RefObject<HTMLDivElement>,
+    options: string[],
+    currentValue: string,
+    setState: (value: string) => void,
+    key: string
+  ) => {
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) return;
+
+    e.preventDefault();
+
+    if (wheelTimeoutRef.current[key]) return;
+
+    wheelTimeoutRef.current[key] = window.setTimeout(() => {
+      delete wheelTimeoutRef.current[key];
+    }, 150);
+
+    const currentIndex = options.indexOf(currentValue);
+    let newIndex = currentIndex;
+
+    if (e.deltaY > 0 && currentIndex < options.length - 1) {
+      newIndex = currentIndex + 1;
+    } else if (e.deltaY < 0 && currentIndex > 0) {
+      newIndex = currentIndex - 1;
+    }
+
+    if (newIndex !== currentIndex) {
+      const newValue = options[newIndex];
+      setState(newValue);
+
+      if (containerRef.current) {
+        const container = containerRef.current;
+        const items = Array.from(container.querySelectorAll('[data-scroll-item]'));
+        const targetItem = items[newIndex] as HTMLElement;
+        if (targetItem) {
+          const containerHeight = container.clientHeight;
+          const itemHeight = targetItem.clientHeight;
+          const targetScrollTop = targetItem.offsetTop - (containerHeight / 2) + (itemHeight / 2);
+          container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+        }
+      }
     }
   };
 
@@ -282,12 +329,7 @@ export default function Input({ onGenerate }: InputProps) {
                     msOverflowStyle: 'none',
                     WebkitOverflowScrolling: 'touch'
                   }}
-                  onWheel={(e) => {
-                    const isMobile = window.innerWidth < 768;
-                    if (!isMobile) {
-                      e.preventDefault();
-                    }
-                  }}
+                  onWheel={(e) => handleWheel(e, genderRef, GENDER_OPTIONS, gender, setGender, 'gender')}
                 >
                   <div className="h-[76px]" />
                   {GENDER_OPTIONS.map((option) => (
@@ -342,12 +384,7 @@ export default function Input({ onGenerate }: InputProps) {
                     msOverflowStyle: 'none',
                     WebkitOverflowScrolling: 'touch'
                   }}
-                  onWheel={(e) => {
-                    const isMobile = window.innerWidth < 768;
-                    if (!isMobile) {
-                      e.preventDefault();
-                    }
-                  }}
+                  onWheel={(e) => handleWheel(e, bodyTypeRef, BODY_TYPE_OPTIONS, bodyType, setBodyType, 'bodyType')}
                 >
                   <div className="h-[76px]" />
                   {BODY_TYPE_OPTIONS.map((option) => (
@@ -402,12 +439,7 @@ export default function Input({ onGenerate }: InputProps) {
                     msOverflowStyle: 'none',
                     WebkitOverflowScrolling: 'touch'
                   }}
-                  onWheel={(e) => {
-                    const isMobile = window.innerWidth < 768;
-                    if (!isMobile) {
-                      e.preventDefault();
-                    }
-                  }}
+                  onWheel={(e) => handleWheel(e, vibeRef, VIBE_OPTIONS, vibe, setVibe, 'vibe')}
                 >
                   <div className="h-[76px]" />
                   {VIBE_OPTIONS.map((option) => (
