@@ -203,7 +203,7 @@ export default function Input({ onGenerate }: InputProps) {
 
       <main className="flex-1 flex flex-col justify-center px-6 py-4">
         <div className="mb-2">
-          <h2 className="text-2xl font-bold text-center mb-2">
+          <h2 className="text-2xl md:text-4xl font-bold text-center mb-2">
             DON'T SEARCH—SELECT.
           </h2>
         </div>
@@ -211,22 +211,22 @@ export default function Input({ onGenerate }: InputProps) {
         <div className="max-w-4xl mx-auto w-full">
           <div className="grid grid-cols-4 gap-4 mb-6">
             <div className="text-center">
-              <h3 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+              <h3 className="text-xs md:text-lg font-light tracking-widest text-gray-400 uppercase mb-3">
                 Weather
               </h3>
             </div>
             <div className="text-center">
-              <h3 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+              <h3 className="text-xs md:text-lg font-light tracking-widest text-gray-400 uppercase mb-3">
                 Gender
               </h3>
             </div>
             <div className="text-center">
-              <h3 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+              <h3 className="text-xs md:text-lg font-light tracking-widest text-gray-400 uppercase mb-3">
                 Body Type
               </h3>
             </div>
             <div className="text-center">
-              <h3 className="text-xs font-light tracking-widest text-gray-400 uppercase mb-3">
+              <h3 className="text-xs md:text-lg font-light tracking-widest text-gray-400 uppercase mb-3">
                 Vibe
               </h3>
             </div>
@@ -242,24 +242,24 @@ export default function Input({ onGenerate }: InputProps) {
                 <div className="h-[200px] flex flex-col items-center justify-center">
                 {weather ? (
                   <div className="text-center">
-                    <div className="text-xs text-gray-500 mb-1">
+                    <div className="text-xs md:text-lg text-gray-500 mb-1">
                       {weather.location}
                     </div>
-                    <div className="text-xl font-semibold text-black mb-1">
+                    <div className="text-xl md:text-3xl font-semibold text-black mb-1">
                       {weather.temperature}°F
                     </div>
-                    <div className="text-sm text-gray-700">
+                    <div className="text-sm md:text-xl text-gray-700">
                       {getWeatherEmoji(weather.condition)} {weather.condition}
                     </div>
                   </div>
                 ) : weatherError ? (
                   <div className="text-center">
-                    <div className="text-lg text-gray-400 mb-1">--°F</div>
-                    <div className="text-xs text-gray-400">Weather unavailable</div>
+                    <div className="text-lg md:text-3xl text-gray-400 mb-1">--°F</div>
+                    <div className="text-xs md:text-lg text-gray-400">Weather unavailable</div>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-sm text-gray-400">Loading...</div>
+                    <div className="text-sm md:text-xl text-gray-400">Loading...</div>
                   </div>
                 )}
                 </div>
@@ -291,8 +291,8 @@ export default function Input({ onGenerate }: InputProps) {
                     <span
                       className={`tracking-wider uppercase transition-all duration-200 ${
                         gender === option
-                          ? 'text-lg font-bold text-black'
-                          : 'text-base font-normal text-gray-600'
+                          ? 'text-lg md:text-3xl font-bold text-black'
+                          : 'text-base md:text-2xl font-normal text-gray-600'
                       }`}
                     >
                       {option}
@@ -329,8 +329,8 @@ export default function Input({ onGenerate }: InputProps) {
                     <span
                       className={`tracking-wider uppercase transition-all duration-200 ${
                         bodyType === option
-                          ? 'text-base font-bold text-black'
-                          : 'text-sm font-normal text-gray-600'
+                          ? 'text-base md:text-2xl font-bold text-black'
+                          : 'text-sm md:text-xl font-normal text-gray-600'
                       }`}
                     >
                       {option}
@@ -367,8 +367,8 @@ export default function Input({ onGenerate }: InputProps) {
                     <span
                       className={`tracking-wider uppercase transition-all duration-200 ${
                         vibe === option
-                          ? 'text-sm font-bold text-black'
-                          : 'text-xs font-normal text-gray-600'
+                          ? 'text-sm md:text-xl font-bold text-black'
+                          : 'text-xs md:text-lg font-normal text-gray-600'
                       }`}
                     >
                       {option}
@@ -386,7 +386,7 @@ export default function Input({ onGenerate }: InputProps) {
           <button
             onClick={handleGenerate}
             disabled={!isComplete || isGenerating}
-            className={`w-full py-5 px-8 text-base tracking-widest font-normal uppercase transition-all ${
+            className={`w-full py-5 px-8 text-base md:text-2xl tracking-widest font-normal uppercase transition-all ${
               isComplete && !isGenerating
                 ? 'bg-black text-white hover:bg-gray-900 cursor-pointer'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -398,19 +398,19 @@ export default function Input({ onGenerate }: InputProps) {
           <div className="mt-6 text-center">
             <button
               onClick={() => setShowFeedbackModal(true)}
-              className="text-sm text-gray-500 hover:text-black transition-colors inline-flex items-center gap-1"
+              className="text-sm md:text-xl text-gray-500 hover:text-black transition-colors inline-flex items-center gap-1"
             >
-              <HelpCircle className="w-4 h-4" />
+              <HelpCircle className="w-4 md:w-6 h-4 md:h-6" />
               Have feedback? Tell us.
             </button>
           </div>
         </div>
 
         <div className="mt-8 mb-8">
-          <h2 className="text-2xl font-bold text-center mb-2">
+          <h2 className="text-2xl md:text-4xl font-bold text-center mb-2">
             SLOTS OVER SEARCH
           </h2>
-          <p className="text-sm text-gray-600 font-light text-center mb-8">
+          <p className="text-sm md:text-xl text-gray-600 font-light text-center mb-8">
             Your context, refined into a single edit.<br />
             Pick a slot—get one clean, considered look.
           </p>
@@ -425,7 +425,7 @@ export default function Input({ onGenerate }: InputProps) {
       </main>
 
       <footer className="pb-8 text-center">
-        <p className="text-xs text-gray-400 font-light">
+        <p className="text-xs md:text-lg text-gray-400 font-light">
           AI-Powered Fashion Curation for NYC Men
         </p>
       </footer>
