@@ -600,7 +600,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               <span className="text-gray-300 md:hidden">/</span>
               <button
                 onClick={handleMensRanking}
-                className={`font-light transition-colors md:text-xl md:w-full md:text-left ${
+                className={`font-light transition-colors md:text-xl md:w-full md:text-left md:border-t md:border-gray-200 md:pt-6 md:mt-6 ${
                   rankingGender === 'MALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
