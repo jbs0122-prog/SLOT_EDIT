@@ -184,9 +184,9 @@ export default function Input({ onGenerate }: InputProps) {
   ];
 
   const mobileBannerImages = [
-    '/mo_1.png',
-    '/mo_2.png',
-    '/mo_3.png',
+    '/1 copy.png',
+    '/2 copy.png',
+    '/3 copy.png',
   ];
 
   return (
