@@ -618,7 +618,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               <div
                 key={outfit.id}
                 ref={index === 0 ? firstOutfitRef : null}
-                className="mb-12 flex flex-col md:flex-row md:items-start md:justify-center md:gap-8 md:px-12"
+                className={`mb-12 flex flex-col md:flex-row md:items-start md:justify-center md:gap-8 md:px-12 ${index === 0 ? 'md:mt-8' : ''}`}
               >
                 <div className="flex-shrink-0 w-full md:w-[500px] mb-6 md:mb-0">
                   <ImageSlider
