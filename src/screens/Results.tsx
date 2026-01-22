@@ -434,13 +434,13 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               className="h-12 md:h-24"
             />
             {weather && (
-              <div className="text-sm md:text-2xl text-gray-700 font-medium md:mt-6">
+              <div className="text-sm md:text-xl text-gray-700 font-medium md:mt-6">
                 {getWeatherEmoji(weather.condition)} {weather.temperature}°F
               </div>
             )}
           </div>
           <div className="mb-2 md:mb-6 relative">
-            <div className="flex flex-wrap items-center gap-2 text-xs md:text-xl text-gray-600 font-light">
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-base text-gray-600 font-light">
               <div className="relative">
                 <button
                   onClick={() => setOpenDropdown(openDropdown === 'gender' ? null : 'gender')}
@@ -519,7 +519,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
           </div>
           <div>
             <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-4 mb-2 md:mb-4">
-              <div className="flex items-center gap-2 text-sm md:text-2xl">
+              <div className="flex items-center gap-2 text-sm md:text-xl">
                 <button
                   onClick={handleBackToNormal}
                   className={`font-light transition-colors ${
@@ -530,7 +530,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 </button>
               </div>
               {!rankingGender && (
-                <div className="flex flex-wrap items-center gap-2 text-xs md:text-xl">
+                <div className="flex flex-wrap items-center gap-2 text-xs md:text-base">
                   <button
                     onClick={() => setSortOrder('likes')}
                     className={`font-light transition-colors uppercase ${
@@ -551,7 +551,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 </div>
               )}
             </div>
-            <div className="flex flex-col md:flex-col items-start gap-2 text-sm md:text-2xl">
+            <div className="flex md:flex-col items-start gap-2 md:gap-2 text-sm md:text-xl">
               <button
                 onClick={handleMensRanking}
                 className={`font-light transition-colors ${
@@ -560,6 +560,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               >
                 Men's Ranking
               </button>
+              <span className="text-gray-300 md:hidden">/</span>
               <button
                 onClick={handleWomensRanking}
                 className={`font-light transition-colors ${
@@ -638,10 +639,10 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 </div>
 
                 <div className="w-full md:w-[500px] px-6 md:px-0 flex flex-col">
-                  <div className="text-xs md:text-2xl font-bold tracking-widest text-black uppercase mb-4">
+                  <div className="text-xs md:text-xl font-bold tracking-widest text-black uppercase mb-4">
                     AI INSIGHT
                   </div>
-                  <p className="text-sm md:text-xl leading-relaxed font-light text-gray-800">
+                  <p className="text-sm md:text-base leading-relaxed font-light text-gray-800">
                     {outfit.insight_text}
                   </p>
                 </div>
@@ -654,41 +655,41 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
           <div className="mt-16 mb-8 px-6">
             <div className="max-w-4xl mx-auto">
               <div className="w-full border-t border-gray-200 mb-12"></div>
-              <h2 className="text-2xl md:text-4xl font-bold text-center mb-2">
+              <h2 className="text-2xl md:text-3xl font-bold text-center mb-2">
                 COMING SOON
               </h2>
-              <p className="text-sm md:text-xl text-gray-600 font-light text-center mb-6">
+              <p className="text-sm md:text-base text-gray-600 font-light text-center mb-6">
                 Your next curated flatlay is being styled.<br />
                 We're preparing a new look — inspired by New York trends and your selected vibe.<br />
                 Every combination is refined with fit, tone, and texture in mind.
               </p>
 
               <div className="mb-8">
-                <h3 className="text-lg md:text-3xl font-bold text-center mb-6">
+                <h3 className="text-lg md:text-2xl font-bold text-center mb-6">
                   → Explore another slot
                 </h3>
-                <p className="text-sm md:text-xl text-gray-600 font-light text-center mb-6">
+                <p className="text-sm md:text-base text-gray-600 font-light text-center mb-6">
                   Discover fresh directions and new fashion moods.
                 </p>
 
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <div className="text-center">
-                    <h4 className="text-xs md:text-lg font-light tracking-widest text-gray-400 uppercase mb-3">
+                    <h4 className="text-xs md:text-base font-light tracking-widest text-gray-400 uppercase mb-3">
                       Weather
                     </h4>
                   </div>
                   <div className="text-center">
-                    <h4 className="text-xs md:text-lg font-light tracking-widest text-gray-400 uppercase mb-3">
+                    <h4 className="text-xs md:text-base font-light tracking-widest text-gray-400 uppercase mb-3">
                       Gender
                     </h4>
                   </div>
                   <div className="text-center">
-                    <h4 className="text-xs md:text-lg font-light tracking-widest text-gray-400 uppercase mb-3">
+                    <h4 className="text-xs md:text-base font-light tracking-widest text-gray-400 uppercase mb-3">
                       Body Type
                     </h4>
                   </div>
                   <div className="text-center">
-                    <h4 className="text-xs md:text-lg font-light tracking-widest text-gray-400 uppercase mb-3">
+                    <h4 className="text-xs md:text-base font-light tracking-widest text-gray-400 uppercase mb-3">
                       Vibe
                     </h4>
                   </div>
@@ -703,19 +704,19 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                     <div className="h-[200px] flex flex-col items-center justify-center">
                       {weather ? (
                         <div className="text-center">
-                          <div className="text-xs md:text-lg text-gray-500 mb-1">
+                          <div className="text-xs md:text-base text-gray-500 mb-1">
                             {weather.location}
                           </div>
-                          <div className="text-xl md:text-3xl font-semibold text-black mb-1">
+                          <div className="text-xl md:text-2xl font-semibold text-black mb-1">
                             {weather.temperature}°F
                           </div>
-                          <div className="text-sm md:text-xl text-gray-700">
+                          <div className="text-sm md:text-base text-gray-700">
                             {getWeatherEmoji(weather.condition)} {weather.condition}
                           </div>
                         </div>
                       ) : (
                         <div className="text-center">
-                          <div className="text-lg md:text-3xl text-gray-400">--°F</div>
+                          <div className="text-lg md:text-2xl text-gray-400">--°F</div>
                         </div>
                       )}
                     </div>
@@ -747,8 +748,8 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                           <span
                             className={`tracking-wider uppercase transition-all duration-200 ${
                               newGender === option
-                                ? 'text-lg md:text-3xl font-bold text-black'
-                                : 'text-base md:text-2xl font-normal text-gray-600'
+                                ? 'text-lg md:text-2xl font-bold text-black'
+                                : 'text-base md:text-xl font-normal text-gray-600'
                             }`}
                           >
                             {option}
@@ -785,8 +786,8 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                           <span
                             className={`tracking-wider uppercase transition-all duration-200 ${
                               newBodyType === option
-                                ? 'text-base md:text-2xl font-bold text-black'
-                                : 'text-sm md:text-xl font-normal text-gray-600'
+                                ? 'text-base md:text-xl font-bold text-black'
+                                : 'text-sm md:text-base font-normal text-gray-600'
                             }`}
                           >
                             {option}
@@ -823,8 +824,8 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                           <span
                             className={`tracking-wider uppercase transition-all duration-200 text-center px-2 ${
                               newVibe === option
-                                ? 'text-sm md:text-xl font-bold text-black'
-                                : 'text-xs md:text-lg font-normal text-gray-600'
+                                ? 'text-sm md:text-base font-bold text-black'
+                                : 'text-xs md:text-sm font-normal text-gray-600'
                             }`}
                           >
                             {option}
@@ -840,7 +841,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               <button
                 onClick={handleNewGenerate}
                 disabled={!weather || isGenerating}
-                className={`w-full py-5 px-8 text-base md:text-2xl tracking-widest font-normal uppercase transition-all ${
+                className={`w-full py-5 px-8 text-base md:text-xl tracking-widest font-normal uppercase transition-all ${
                   weather && !isGenerating
                     ? 'bg-black text-white hover:bg-gray-900 cursor-pointer'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
