@@ -191,19 +191,19 @@ export default function Input({ onGenerate }: InputProps) {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <header className="pt-8 pb-3 md:pb-6 px-6">
+      <header className="pt-4 pb-1.5 md:pb-3 px-6">
         <div className="flex justify-center">
           <img src="/logo.png" alt="SLOT EDIT" className="h-24" />
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto w-full px-6 mb-2 md:mb-8">
+      <div className="max-w-4xl mx-auto w-full px-6 mb-1 md:mb-4">
         <HeroBanner desktopImages={desktopBannerImages} mobileImages={mobileBannerImages} />
       </div>
 
-      <main className="flex-1 flex flex-col justify-center px-6 py-8">
-        <div className="mb-4">
-          <h2 className="text-2xl font-bold text-center mb-4">
+      <main className="flex-1 flex flex-col justify-center px-6 py-4">
+        <div className="mb-2">
+          <h2 className="text-2xl font-bold text-center mb-2">
             DON'T SEARCH—SELECT.
           </h2>
         </div>
