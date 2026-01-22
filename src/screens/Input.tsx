@@ -178,9 +178,9 @@ export default function Input({ onGenerate }: InputProps) {
   const isComplete = weather !== null;
 
   const heroBannerImages = [
-    '/hero-banner-1.png',
-    '/hero-banner-2.png',
-    '/hero-banner-3.png',
+    '/hero-banner-1_(2).png',
+    '/hero-banner-2_(2).png',
+    '/hero-banner-2_(3).png',
   ];
 
   return (
