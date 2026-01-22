@@ -68,6 +68,12 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
 
   useEffect(() => {
     loadFeedbackCounts();
+    if (containerRef.current) {
+      const scrollableDiv = containerRef.current.querySelector('.overflow-y-auto');
+      if (scrollableDiv) {
+        scrollableDiv.scrollTop = 0;
+      }
+    }
   }, [outfits]);
 
   useEffect(() => {
@@ -201,8 +207,11 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
       setRankingGender('MALE');
 
       setTimeout(() => {
-        if (firstOutfitRef.current) {
-          firstOutfitRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (containerRef.current) {
+          const scrollableDiv = containerRef.current.querySelector('.overflow-y-auto');
+          if (scrollableDiv) {
+            scrollableDiv.scrollTo({ top: 0, behavior: 'smooth' });
+          }
         }
       }, 100);
     } catch (error) {
@@ -217,8 +226,11 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
       setRankingGender('FEMALE');
 
       setTimeout(() => {
-        if (firstOutfitRef.current) {
-          firstOutfitRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (containerRef.current) {
+          const scrollableDiv = containerRef.current.querySelector('.overflow-y-auto');
+          if (scrollableDiv) {
+            scrollableDiv.scrollTo({ top: 0, behavior: 'smooth' });
+          }
         }
       }, 100);
     } catch (error) {
@@ -229,8 +241,11 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   const handleBackToNormal = () => {
     setRankingGender(null);
     setTimeout(() => {
-      if (firstOutfitRef.current) {
-        firstOutfitRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (containerRef.current) {
+        const scrollableDiv = containerRef.current.querySelector('.overflow-y-auto');
+        if (scrollableDiv) {
+          scrollableDiv.scrollTo({ top: 0, behavior: 'smooth' });
+        }
       }
     }, 100);
   };
@@ -532,7 +547,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               </button>
             </div>
             {!rankingGender && (
-              <div className="flex items-center justify-end gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs">
                 <button
                   onClick={() => setSortOrder('likes')}
                   className={`font-light transition-colors uppercase ${
