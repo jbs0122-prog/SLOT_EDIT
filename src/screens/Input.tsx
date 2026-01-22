@@ -191,13 +191,13 @@ export default function Input({ onGenerate }: InputProps) {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <header className="pt-8 pb-6 px-6">
+      <header className="pt-8 pb-3 md:pb-6 px-6">
         <div className="flex justify-center">
           <img src="/logo.png" alt="SLOT EDIT" className="h-24" />
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto w-full px-6 mb-4 md:mb-8">
+      <div className="max-w-4xl mx-auto w-full px-6 mb-2 md:mb-8">
         <HeroBanner desktopImages={desktopBannerImages} mobileImages={mobileBannerImages} />
       </div>
 
