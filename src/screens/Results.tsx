@@ -518,8 +518,8 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
             </div>
           </div>
           <div>
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-4 mb-2 md:mb-4">
-              <div className="flex items-center gap-2 text-sm md:text-xl">
+            <div className="flex flex-wrap items-center gap-2 text-sm md:flex-col md:gap-4 mb-2 md:mb-4">
+              <div className="flex items-center gap-2 md:flex-row md:justify-between md:w-full md:text-xl">
                 <button
                   onClick={handleBackToNormal}
                   className={`font-light transition-colors ${
@@ -528,33 +528,32 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                 >
                   HOME
                 </button>
+                {!rankingGender && (
+                  <div className="hidden md:flex flex-wrap items-center gap-2 text-xs md:text-base">
+                    <button
+                      onClick={() => setSortOrder('likes')}
+                      className={`font-light transition-colors uppercase ${
+                        sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      Most Liked
+                    </button>
+                    <span className="text-gray-300">/</span>
+                    <button
+                      onClick={() => setSortOrder('latest')}
+                      className={`font-light transition-colors uppercase ${
+                        sortOrder === 'latest' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      Latest
+                    </button>
+                  </div>
+                )}
               </div>
-              {!rankingGender && (
-                <div className="flex flex-wrap items-center gap-2 text-xs md:text-base">
-                  <button
-                    onClick={() => setSortOrder('likes')}
-                    className={`font-light transition-colors uppercase ${
-                      sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    Most Liked
-                  </button>
-                  <span className="text-gray-300">/</span>
-                  <button
-                    onClick={() => setSortOrder('latest')}
-                    className={`font-light transition-colors uppercase ${
-                      sortOrder === 'latest' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    Latest
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="flex md:flex-col items-start gap-2 md:gap-2 text-sm md:text-xl">
+              <span className="text-gray-300 md:hidden">/</span>
               <button
                 onClick={handleMensRanking}
-                className={`font-light transition-colors ${
+                className={`font-light transition-colors md:text-xl ${
                   rankingGender === 'MALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
@@ -563,13 +562,34 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               <span className="text-gray-300 md:hidden">/</span>
               <button
                 onClick={handleWomensRanking}
-                className={`font-light transition-colors ${
+                className={`font-light transition-colors md:text-xl ${
                   rankingGender === 'FEMALE' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 Women's Ranking
               </button>
             </div>
+            {!rankingGender && (
+              <div className="flex md:hidden flex-wrap items-center gap-2 text-xs">
+                <button
+                  onClick={() => setSortOrder('likes')}
+                  className={`font-light transition-colors uppercase ${
+                    sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  Most Liked
+                </button>
+                <span className="text-gray-300">/</span>
+                <button
+                  onClick={() => setSortOrder('latest')}
+                  className={`font-light transition-colors uppercase ${
+                    sortOrder === 'latest' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  Latest
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
