@@ -197,7 +197,7 @@ export default function Input({ onGenerate }: InputProps) {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto w-full px-6 mb-8">
+      <div className="max-w-4xl mx-auto w-full px-6 mb-4 md:mb-8">
         <HeroBanner desktopImages={desktopBannerImages} mobileImages={mobileBannerImages} />
       </div>
 
