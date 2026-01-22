@@ -502,8 +502,8 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm">
+          <div>
+            <div className="flex items-center gap-2 text-sm mb-2">
               <button
                 onClick={handleBackToNormal}
                 className={`font-light transition-colors ${
@@ -532,7 +532,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
               </button>
             </div>
             {!rankingGender && (
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center justify-end gap-2 text-xs">
                 <button
                   onClick={() => setSortOrder('likes')}
                   className={`font-light transition-colors uppercase ${
