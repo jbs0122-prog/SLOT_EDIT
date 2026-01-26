@@ -10,8 +10,7 @@ export interface Outfit {
   gender: string;
   body_type: string;
   vibe: string;
-  image_url_flatlay1: string;
-  image_url_flatlay2: string;
+  image_url_flatlay: string;
   image_url_on_model: string;
   insight_text: string;
   outer_name: string;
@@ -32,9 +31,9 @@ export interface Outfit {
   accessory_name: string;
   accessory_image: string;
   accessory_link: string;
-  flatlay1_pins?: ImagePin[];
-  flatlay2_pins?: ImagePin[];
+  flatlay_pins?: ImagePin[];
   on_model_pins?: ImagePin[];
+  tpo?: string;
 }
 
 export const outfits: Outfit[] = [];

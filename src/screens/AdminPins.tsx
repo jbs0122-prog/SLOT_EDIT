@@ -4,12 +4,12 @@ import { fetchOutfits } from '../utils/outfitService';
 import { supabase } from '../utils/supabase';
 import { X, Save, ArrowLeft } from 'lucide-react';
 
-type ImageType = 'flatlay1' | 'flatlay2' | 'on_model';
+type ImageType = 'flatlay' | 'on_model';
 
 export default function AdminPins() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
-  const [selectedImage, setSelectedImage] = useState<ImageType>('flatlay1');
+  const [selectedImage, setSelectedImage] = useState<ImageType>('flatlay');
   const [pins, setPins] = useState<ImagePin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,8 +33,8 @@ export default function AdminPins() {
 
   const handleOutfitSelect = (outfit: Outfit) => {
     setSelectedOutfit(outfit);
-    setSelectedImage('flatlay1');
-    setPins(outfit.flatlay1_pins || []);
+    setSelectedImage('flatlay');
+    setPins(outfit.flatlay_pins || []);
     setSelectedPinIndex(null);
   };
 
@@ -132,8 +132,7 @@ export default function AdminPins() {
 
   const getCurrentImageUrl = () => {
     if (!selectedOutfit) return '';
-    if (selectedImage === 'flatlay1') return selectedOutfit.image_url_flatlay1;
-    if (selectedImage === 'flatlay2') return selectedOutfit.image_url_flatlay2;
+    if (selectedImage === 'flatlay') return selectedOutfit.image_url_flatlay;
     return selectedOutfit.image_url_on_model;
   };
 
@@ -174,7 +173,7 @@ export default function AdminPins() {
                 className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 text-left"
               >
                 <img
-                  src={outfit.image_url_flatlay1}
+                  src={outfit.image_url_flatlay}
                   alt={`${outfit.gender} - ${outfit.vibe}`}
                   className="w-full h-48 object-cover rounded-lg mb-3"
                 />
@@ -210,24 +209,14 @@ export default function AdminPins() {
             <div className="mb-6">
               <div className="flex gap-2 mb-4">
                 <button
-                  onClick={() => handleImageTypeChange('flatlay1')}
+                  onClick={() => handleImageTypeChange('flatlay')}
                   className={`px-4 py-2 rounded-lg ${
-                    selectedImage === 'flatlay1'
+                    selectedImage === 'flatlay'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 text-gray-700'
                   }`}
                 >
-                  플랫레이 1
-                </button>
-                <button
-                  onClick={() => handleImageTypeChange('flatlay2')}
-                  className={`px-4 py-2 rounded-lg ${
-                    selectedImage === 'flatlay2'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700'
-                  }`}
-                >
-                  플랫레이 2
+                  플랫레이
                 </button>
                 <button
                   onClick={() => handleImageTypeChange('on_model')}

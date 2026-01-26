@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Outfit, ImagePin } from '../data/outfits';
 
 interface ImageSliderProps {
-  images: { url: string; label: string }[];
+  images: { url: string; label: string; tpo?: string }[];
   alt: string;
   outfitNumber: number;
   outfitId: string;
@@ -37,8 +37,7 @@ export default function ImageSlider({
   const getPinsForImage = (imageLabel: string): ImagePin[] => {
     if (!outfit) return [];
 
-    if (imageLabel === 'Flatlay 1') return outfit.flatlay1_pins || [];
-    if (imageLabel === 'Flatlay 2') return outfit.flatlay2_pins || [];
+    if (imageLabel === 'Flatlay') return outfit.flatlay_pins || [];
     if (imageLabel === 'On Model') return outfit.on_model_pins || [];
 
     return [];
@@ -121,6 +120,14 @@ export default function ImageSlider({
             e.currentTarget.style.display = 'none';
           }}
         />
+
+        {images[0].tpo && (
+          <div className="absolute top-4 right-4 z-10">
+            <div className="bg-gray-500/60 text-white px-3 py-1 rounded-full text-xs font-light">
+              #{images[0].tpo}
+            </div>
+          </div>
+        )}
 
         {showOutfitInfo && outfit && (
           <div className="absolute bottom-20 left-0 right-0 flex justify-center z-10 px-4">
@@ -223,6 +230,14 @@ export default function ImageSlider({
                   e.currentTarget.style.display = 'none';
                 }}
               />
+
+              {image.tpo && (
+                <div className="absolute top-4 right-4 z-10">
+                  <div className="bg-gray-500/60 text-white px-3 py-1 rounded-full text-xs font-light">
+                    #{image.tpo}
+                  </div>
+                </div>
+              )}
 
               {showOutfitInfo && outfit && (
                 <div className="absolute bottom-20 left-0 right-0 flex justify-center z-10 px-4">

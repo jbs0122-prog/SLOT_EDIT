@@ -670,16 +670,12 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
           (rankingGender ? rankingOutfits : sortedOutfits).map((outfit, index) => {
             const images = [];
 
-            if (outfit.image_url_flatlay1) {
-              images.push({ url: outfit.image_url_flatlay1, label: 'Flatlay 1' });
-            }
-
-            if (outfit.image_url_flatlay2) {
-              images.push({ url: outfit.image_url_flatlay2, label: 'Flatlay 2' });
+            if (outfit.image_url_flatlay) {
+              images.push({ url: outfit.image_url_flatlay, label: 'Flatlay', tpo: outfit.tpo });
             }
 
             if (outfit.image_url_on_model) {
-              images.push({ url: outfit.image_url_on_model, label: 'On Model' });
+              images.push({ url: outfit.image_url_on_model, label: 'On Model', tpo: outfit.tpo });
             }
 
             const feedback = feedbackCounts[outfit.id] || { likes: 0, dislikes: 0, userFeedback: null };

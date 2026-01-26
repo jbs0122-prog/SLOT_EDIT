@@ -20,8 +20,7 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
         gender: row.gender,
         body_type: row.body_type,
         vibe: row.vibe,
-        image_url_flatlay1: row.image_url_flatlay1 || '',
-        image_url_flatlay2: row.image_url_flatlay2 || '',
+        image_url_flatlay: row.image_url_flatlay || '',
         image_url_on_model: row.image_url_on_model || '',
         insight_text: row['AI insight'] || '',
         outer_name: row.outer_name || '',
@@ -42,9 +41,9 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
         accessory_name: row.accessory_name || '',
         accessory_image: row.accessory_image || '',
         accessory_link: row.accessory_link || '',
-        flatlay1_pins: row.flatlay1_pins || [],
-        flatlay2_pins: row.flatlay2_pins || [],
+        flatlay_pins: row.flatlay1_pins || [],
         on_model_pins: row.on_model_pins || [],
+        tpo: row.tpo || '',
       }));
     }
 
@@ -88,8 +87,7 @@ export const fetchRankingOutfits = async (gender: 'MALE' | 'FEMALE'): Promise<Ou
       gender: row.gender,
       body_type: row.body_type,
       vibe: row.vibe,
-      image_url_flatlay1: row.image_url_flatlay1 || '',
-      image_url_flatlay2: row.image_url_flatlay2 || '',
+      image_url_flatlay: row.image_url_flatlay || '',
       image_url_on_model: row.image_url_on_model || '',
       insight_text: row['AI insight'] || '',
       outer_name: row.outer_name || '',
@@ -110,9 +108,9 @@ export const fetchRankingOutfits = async (gender: 'MALE' | 'FEMALE'): Promise<Ou
       accessory_name: row.accessory_name || '',
       accessory_image: row.accessory_image || '',
       accessory_link: row.accessory_link || '',
-      flatlay1_pins: row.flatlay1_pins || [],
-      flatlay2_pins: row.flatlay2_pins || [],
+      flatlay_pins: row.flatlay1_pins || [],
       on_model_pins: row.on_model_pins || [],
+      tpo: row.tpo || '',
       likeCount: likeCounts[row.id] || 0
     }));
 
