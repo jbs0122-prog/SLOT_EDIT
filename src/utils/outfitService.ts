@@ -47,6 +47,7 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
         flatlay_pins: row.flatlay1_pins || [],
         on_model_pins: row.on_model_pins || [],
         tpo: row.tpo || '',
+        created_at: row.created_at || '',
       }));
     }
 
@@ -114,6 +115,7 @@ export const fetchRankingOutfits = async (gender: 'MALE' | 'FEMALE'): Promise<Ou
       flatlay_pins: row.flatlay1_pins || [],
       on_model_pins: row.on_model_pins || [],
       tpo: row.tpo || '',
+      created_at: row.created_at || '',
       likeCount: likeCounts[row.id] || 0
     }));
 

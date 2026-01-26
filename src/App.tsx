@@ -90,13 +90,9 @@ function App() {
 
     console.log('Matches found:', matches.length);
 
-    const results = matches.length > 0
-      ? matches.slice(0, 3)
-      : [];
-
-    setSelectedOutfits(results);
+    setSelectedOutfits(matches);
     setContext({ gender, bodyType, vibe, weather });
-    console.log('Switching to results screen with', results.length, 'outfits');
+    console.log('Switching to results screen with', matches.length, 'outfits');
 
     window.history.pushState({ screen: 'results' }, '', window.location.href);
     setCurrentScreen('results');

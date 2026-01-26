@@ -122,7 +122,9 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
         const bLikes = feedbackCounts[b.id]?.likes || 0;
         return bLikes - aLikes;
       } else {
-        return 0;
+        const aDate = new Date(a.created_at || 0).getTime();
+        const bDate = new Date(b.created_at || 0).getTime();
+        return bDate - aDate;
       }
     });
     setSortedOutfits(sorted);

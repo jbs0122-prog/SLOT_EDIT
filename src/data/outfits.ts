@@ -34,6 +34,7 @@ export interface Outfit {
   flatlay_pins?: ImagePin[];
   on_model_pins?: ImagePin[];
   tpo?: string;
+  created_at?: string;
 }
 
 export const outfits: Outfit[] = [];
