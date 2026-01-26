@@ -60,7 +60,7 @@ function App() {
   }, []);
 
   const normalizeString = (str: string): string => {
-    return str.trim().toLowerCase();
+    return str.trim().toLowerCase().replace(/_/g, ' ');
   };
 
   const handleGenerate = (gender: string, bodyType: string, vibe: string, weather: WeatherData) => {
