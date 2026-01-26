@@ -9,7 +9,10 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
   try {
     const { data, error } = await supabase
       .from('outfits')
-      .select('*');
+      .select('*')
+      .eq('status', 'DONE_FLAT')
+      .not('image_url_flatlay', 'is', null)
+      .neq('image_url_flatlay', '');
 
     if (error) throw error;
 
