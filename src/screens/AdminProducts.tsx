@@ -6,7 +6,7 @@ import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
-import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles } from 'lucide-react';
+import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2 } from 'lucide-react';
 
 type ViewMode = 'products' | 'outfits';
 
@@ -147,6 +147,35 @@ export default function AdminProducts() {
 
   const handleLinksUpdated = () => {
     loadOutfits();
+  };
+
+  const handleDeleteOutfit = async (outfitId: string) => {
+    if (!confirm('이 코디를 삭제하시겠습니까? 연결된 제품 정보도 함께 삭제됩니다.')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await supabase
+        .from('outfit_items')
+        .delete()
+        .eq('outfit_id', outfitId);
+
+      const { error } = await supabase
+        .from('outfits')
+        .delete()
+        .eq('id', outfitId);
+
+      if (error) throw error;
+
+      await loadOutfits();
+      alert('코디가 삭제되었습니다.');
+    } catch (error) {
+      console.error('Failed to delete outfit:', error);
+      alert('코디 삭제 실패: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredProducts = products.filter(product => {
@@ -320,8 +349,15 @@ export default function AdminProducts() {
                 {outfits.map((outfit) => (
                   <div
                     key={outfit.id}
-                    className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden"
+                    className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden relative"
                   >
+                    <button
+                      onClick={() => handleDeleteOutfit(outfit.id)}
+                      className="absolute top-2 right-2 z-10 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors shadow-md"
+                      title="코디 삭제"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                     {outfit.image_url_flatlay ? (
                       <img
                         src={outfit.image_url_flatlay}
