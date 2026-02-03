@@ -1,5 +1,5 @@
 import { useState, useRef, TouchEvent } from 'react';
-import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown, ShoppingBag } from 'lucide-react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import ProductDetailModal from './ProductDetailModal';
 
@@ -34,6 +34,7 @@ export default function ImageSlider({
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [hoveredPin, setHoveredPin] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const minSwipeDistance = 50;
@@ -51,7 +52,12 @@ export default function ImageSlider({
     if (pin.product_id) {
       const product = products.find(p => p.id === pin.product_id);
       if (product) {
-        setSelectedProduct(product);
+        const link = product.affiliate_link || product.product_link;
+        if (link) {
+          window.open(link, '_blank', 'noopener,noreferrer');
+        } else {
+          setSelectedProduct(product);
+        }
         return;
       }
     }
@@ -149,23 +155,47 @@ export default function ImageSlider({
           </div>
         )}
 
-        {pins.map((pin, index) => (
-          <button
-            key={index}
-            onClick={(e) => {
-              e.stopPropagation();
-              handlePinClick(pin);
-            }}
-            className="absolute w-7 h-7 rounded-full bg-white/95 hover:bg-white flex items-center justify-center text-black text-sm font-bold transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-20 border-2 border-black"
-            style={{
-              left: `${pin.x}%`,
-              top: `${pin.y}%`,
-            }}
-            aria-label={`Shop ${pin.item}`}
-          >
-            +
-          </button>
-        ))}
+        {pins.map((pin, index) => {
+          const product = pin.product_id ? products.find(p => p.id === pin.product_id) : null;
+          const pinId = `single-${pin.x}-${pin.y}-${index}`;
+          const isHovered = hoveredPin === pinId;
+
+          return (
+            <div
+              key={index}
+              className="absolute z-20"
+              style={{
+                left: `${pin.x}%`,
+                top: `${pin.y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePinClick(pin);
+                }}
+                onMouseEnter={() => setHoveredPin(pinId)}
+                onMouseLeave={() => setHoveredPin(null)}
+                className="w-10 h-10 rounded-full bg-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center border-2 border-gray-200 hover:border-blue-500 hover:scale-110"
+                aria-label={`Shop ${pin.item}`}
+              >
+                <ShoppingBag size={18} className="text-gray-700 hover:text-blue-600" />
+              </button>
+
+              {isHovered && product && (
+                <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl p-3 w-48 border border-gray-200 pointer-events-none">
+                  <p className="font-semibold text-gray-900 text-sm mb-1">{product.brand}</p>
+                  <p className="text-xs text-gray-600 mb-2 line-clamp-2">{product.name}</p>
+                  {product.price && (
+                    <p className="text-sm font-bold text-blue-600">${product.price}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-2">클릭하여 구매하기</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         {onFeedback && (
           <div className="absolute bottom-6 right-6 flex gap-2 z-10">
@@ -259,23 +289,47 @@ export default function ImageSlider({
                 </div>
               )}
 
-              {pins.map((pin, pinIndex) => (
-                <button
-                  key={pinIndex}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePinClick(pin);
-                  }}
-                  className="absolute w-7 h-7 rounded-full bg-white/95 hover:bg-white flex items-center justify-center text-black text-sm font-bold transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-20 border-2 border-black"
-                  style={{
-                    left: `${pin.x}%`,
-                    top: `${pin.y}%`,
-                  }}
-                  aria-label={`Shop ${pin.item}`}
-                >
-                  +
-                </button>
-              ))}
+              {pins.map((pin, pinIndex) => {
+                const product = pin.product_id ? products.find(p => p.id === pin.product_id) : null;
+                const pinId = `slider-${index}-${pin.x}-${pin.y}-${pinIndex}`;
+                const isHovered = hoveredPin === pinId;
+
+                return (
+                  <div
+                    key={pinIndex}
+                    className="absolute z-20"
+                    style={{
+                      left: `${pin.x}%`,
+                      top: `${pin.y}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePinClick(pin);
+                      }}
+                      onMouseEnter={() => setHoveredPin(pinId)}
+                      onMouseLeave={() => setHoveredPin(null)}
+                      className="w-10 h-10 rounded-full bg-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center border-2 border-gray-200 hover:border-blue-500 hover:scale-110"
+                      aria-label={`Shop ${pin.item}`}
+                    >
+                      <ShoppingBag size={18} className="text-gray-700 hover:text-blue-600" />
+                    </button>
+
+                    {isHovered && product && (
+                      <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl p-3 w-48 border border-gray-200 pointer-events-none">
+                        <p className="font-semibold text-gray-900 text-sm mb-1">{product.brand}</p>
+                        <p className="text-xs text-gray-600 mb-2 line-clamp-2">{product.name}</p>
+                        {product.price && (
+                          <p className="text-sm font-bold text-blue-600">${product.price}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2">클릭하여 구매하기</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           );
         })}

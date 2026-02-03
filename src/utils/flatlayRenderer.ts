@@ -20,10 +20,10 @@ export interface RenderOptions {
 }
 
 const DEFAULT_OPTIONS: Required<RenderOptions> = {
-  canvasWidth: 800,
-  canvasHeight: 1000,
-  backgroundColor: '#f8f9fa',
-  padding: 40,
+  canvasWidth: 1200,
+  canvasHeight: 1400,
+  backgroundColor: '#e8e0d5',
+  padding: 100,
   useProxy: true,
 };
 
@@ -52,38 +52,100 @@ function calculateLayout(
 ): ProductPosition[] {
   const positions: ProductPosition[] = [];
 
-  const slotOrder = ['outer', 'top', 'bottom', 'shoes', 'bag', 'accessory'];
-  const sortedItems = items.sort((a, b) => {
-    return slotOrder.indexOf(a.slot_type) - slotOrder.indexOf(b.slot_type);
-  });
+  const centerX = canvasWidth / 2;
+  const centerY = canvasHeight / 2;
 
   const availableWidth = canvasWidth - padding * 2;
   const availableHeight = canvasHeight - padding * 2;
 
-  const cols = sortedItems.length <= 3 ? sortedItems.length : 3;
-  const rows = Math.ceil(sortedItems.length / cols);
+  const slotConfigs: {
+    [key: string]: {
+      size: number;
+      offsetX: number;
+      offsetY: number;
+      rotation: number;
+      zIndex: number;
+    };
+  } = {
+    outer: {
+      size: Math.min(availableWidth, availableHeight) * 0.35,
+      offsetX: -availableWidth * 0.2,
+      offsetY: -availableHeight * 0.15,
+      rotation: -8,
+      zIndex: 1,
+    },
+    top: {
+      size: Math.min(availableWidth, availableHeight) * 0.32,
+      offsetX: availableWidth * 0.05,
+      offsetY: -availableHeight * 0.1,
+      rotation: 3,
+      zIndex: 2,
+    },
+    bottom: {
+      size: Math.min(availableWidth, availableHeight) * 0.3,
+      offsetX: availableWidth * 0.15,
+      offsetY: availableHeight * 0.15,
+      rotation: -5,
+      zIndex: 3,
+    },
+    shoes: {
+      size: Math.min(availableWidth, availableHeight) * 0.25,
+      offsetX: -availableWidth * 0.18,
+      offsetY: availableHeight * 0.25,
+      rotation: 12,
+      zIndex: 4,
+    },
+    bag: {
+      size: Math.min(availableWidth, availableHeight) * 0.22,
+      offsetX: availableWidth * 0.25,
+      offsetY: -availableHeight * 0.22,
+      rotation: -10,
+      zIndex: 5,
+    },
+    accessory: {
+      size: Math.min(availableWidth, availableHeight) * 0.15,
+      offsetX: -availableWidth * 0.28,
+      offsetY: -availableHeight * 0.28,
+      rotation: 15,
+      zIndex: 6,
+    },
+  };
 
-  const cellWidth = availableWidth / cols;
-  const cellHeight = availableHeight / rows;
+  const sortedItems = items.sort((a, b) => {
+    const aConfig = slotConfigs[a.slot_type] || { zIndex: 999 };
+    const bConfig = slotConfigs[b.slot_type] || { zIndex: 999 };
+    return aConfig.zIndex - bConfig.zIndex;
+  });
 
-  const itemSize = Math.min(cellWidth, cellHeight) * 0.8;
+  sortedItems.forEach((item) => {
+    const config = slotConfigs[item.slot_type];
+    if (!config) {
+      const fallbackSize = Math.min(availableWidth, availableHeight) * 0.2;
+      positions.push({
+        product_id: item.product_id,
+        image_url: item.image_url,
+        slot_type: item.slot_type,
+        x: centerX - fallbackSize / 2,
+        y: centerY - fallbackSize / 2,
+        width: fallbackSize,
+        height: fallbackSize,
+        rotation: 0,
+      });
+      return;
+    }
 
-  sortedItems.forEach((item, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-
-    const cellCenterX = padding + col * cellWidth + cellWidth / 2;
-    const cellCenterY = padding + row * cellHeight + cellHeight / 2;
+    const x = centerX + config.offsetX - config.size / 2;
+    const y = centerY + config.offsetY - config.size / 2;
 
     positions.push({
       product_id: item.product_id,
       image_url: item.image_url,
       slot_type: item.slot_type,
-      x: cellCenterX - itemSize / 2,
-      y: cellCenterY - itemSize / 2,
-      width: itemSize,
-      height: itemSize,
-      rotation: 0,
+      x,
+      y,
+      width: config.size,
+      height: config.size,
+      rotation: config.rotation,
     });
   });
 
@@ -121,6 +183,11 @@ export async function renderFlatlay(
         ctx.rotate((position.rotation * Math.PI) / 180);
         ctx.translate(-centerX, -centerY);
       }
+
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 8;
 
       ctx.drawImage(img, position.x, position.y, position.width, position.height);
 
@@ -189,6 +256,11 @@ export async function renderFlatlayWithCustomPositions(
         ctx.rotate((position.rotation * Math.PI) / 180);
         ctx.translate(-centerX, -centerY);
       }
+
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 8;
 
       ctx.drawImage(img, position.x, position.y, position.width, position.height);
 

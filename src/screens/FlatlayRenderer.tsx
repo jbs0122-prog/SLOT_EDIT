@@ -202,9 +202,10 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                       <div className="text-sm text-blue-800">
                         <p className="font-medium mb-1">렌더링 안내</p>
                         <ul className="list-disc list-inside space-y-1 text-xs">
-                          <li>연결된 제품 이미지들을 800x1000px 캔버스에 배치합니다</li>
+                          <li>세련된 플랫레이 스타일로 제품 이미지를 배치합니다</li>
+                          <li>뉴트럴 톤 배경과 자연스러운 레이어링 효과를 적용합니다</li>
                           <li>생성된 이미지는 Supabase Storage에 자동 저장됩니다</li>
-                          <li>코디 상태가 'completed'로 업데이트됩니다</li>
+                          <li>각 제품에 쇼핑 버튼이 자동으로 추가됩니다</li>
                         </ul>
                       </div>
                     </div>
