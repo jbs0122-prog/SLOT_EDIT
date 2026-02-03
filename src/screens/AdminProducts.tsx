@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Product, Outfit } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { fetchOutfits } from '../utils/outfitService';
 import ProductForm from './ProductForm';
 import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
@@ -69,8 +68,32 @@ export default function AdminProducts() {
 
   const loadOutfits = async () => {
     try {
-      const data = await fetchOutfits();
-      setOutfits(data);
+      const { data, error } = await supabase
+        .from('outfits')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const outfitsData: Outfit[] = data?.map(row => ({
+        id: row.id,
+        gender: row.gender,
+        body_type: row.body_type,
+        vibe: row.vibe,
+        image_url_flatlay: row.image_url_flatlay || '',
+        image_url_on_model: row.image_url_on_model || '',
+        insight_text: row['AI insight'] || '',
+        flatlay_pins: row.flatlay_pins || [],
+        on_model_pins: row.on_model_pins || [],
+        tpo: row.tpo || '',
+        status: row.status || '',
+        prompt_flatlay: row.prompt_flatlay || '',
+        created_at: row.created_at || '',
+        updated_at: row.updated_at || '',
+        items: [],
+      })) || [];
+
+      setOutfits(outfitsData);
     } catch (error) {
       console.error('Failed to load outfits:', error);
     }
@@ -254,35 +277,50 @@ export default function AdminProducts() {
                 코디를 선택하여 제품을 연결하세요
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {outfits.map((outfit) => (
-                <div
-                  key={outfit.id}
-                  className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden"
-                >
-                  <img
-                    src={outfit.image_url_flatlay}
-                    alt={`${outfit.gender} - ${outfit.vibe}`}
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="p-4">
-                    <div className="text-sm text-gray-600 mb-2">
-                      {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+            {outfits.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                등록된 코디가 없습니다
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {outfits.map((outfit) => (
+                  <div
+                    key={outfit.id}
+                    className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden"
+                  >
+                    {outfit.image_url_flatlay ? (
+                      <img
+                        src={outfit.image_url_flatlay}
+                        alt={`${outfit.gender} - ${outfit.vibe}`}
+                        className="w-full h-48 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://via.placeholder.com/400x300?text=No+Image';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                        <span className="text-gray-400">이미지 없음</span>
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <div className="text-sm text-gray-600 mb-2">
+                        {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+                      </div>
+                      <div className="text-xs text-gray-400 mb-3">
+                        연결된 제품: {outfit.items?.length || 0}개 · {outfit.status}
+                      </div>
+                      <button
+                        onClick={() => handleLinkOutfit(outfit)}
+                        className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                      >
+                        <LinkIcon size={16} />
+                        제품 연결
+                      </button>
                     </div>
-                    <div className="text-xs text-gray-400 mb-3">
-                      연결된 제품: {outfit.items?.length || 0}개
-                    </div>
-                    <button
-                      onClick={() => handleLinkOutfit(outfit)}
-                      className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                    >
-                      <LinkIcon size={16} />
-                      제품 연결
-                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

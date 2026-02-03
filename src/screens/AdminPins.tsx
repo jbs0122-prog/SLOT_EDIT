@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
-import { fetchOutfits } from '../utils/outfitService';
 import { supabase } from '../utils/supabase';
 import { X, Save, ArrowLeft, Package } from 'lucide-react';
 
@@ -25,8 +24,32 @@ export default function AdminPins() {
 
   const loadOutfits = async () => {
     try {
-      const data = await fetchOutfits();
-      setOutfits(data);
+      const { data, error } = await supabase
+        .from('outfits')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const outfitsData: Outfit[] = data?.map(row => ({
+        id: row.id,
+        gender: row.gender,
+        body_type: row.body_type,
+        vibe: row.vibe,
+        image_url_flatlay: row.image_url_flatlay || '',
+        image_url_on_model: row.image_url_on_model || '',
+        insight_text: row['AI insight'] || '',
+        flatlay_pins: row.flatlay_pins || [],
+        on_model_pins: row.on_model_pins || [],
+        tpo: row.tpo || '',
+        status: row.status || '',
+        prompt_flatlay: row.prompt_flatlay || '',
+        created_at: row.created_at || '',
+        updated_at: row.updated_at || '',
+        items: [],
+      })) || [];
+
+      setOutfits(outfitsData);
     } catch (error) {
       console.error('Failed to load outfits:', error);
     } finally {
@@ -210,27 +233,57 @@ export default function AdminPins() {
         </div>
 
         {!selectedOutfit ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {outfits.map((outfit) => (
-              <button
-                key={outfit.id}
-                onClick={() => handleOutfitSelect(outfit)}
-                className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 text-left"
+          <>
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-gray-600">
+                총 {outfits.length}개의 코디
+              </p>
+              <a
+                href="#admin-products"
+                className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
               >
-                <img
-                  src={outfit.image_url_flatlay}
-                  alt={`${outfit.gender} - ${outfit.vibe}`}
-                  className="w-full h-48 object-cover rounded-lg mb-3"
-                />
-                <div className="text-sm text-gray-600">
-                  {outfit.gender} · {outfit.body_type} · {outfit.vibe}
-                </div>
-                <div className="text-xs text-gray-400 mt-1">
-                  ID: {outfit.id.slice(0, 8)}
-                </div>
-              </button>
-            ))}
-          </div>
+                <Package size={18} />
+                제품 관리
+              </a>
+            </div>
+            {outfits.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <p className="text-gray-500 mb-4">등록된 코디가 없습니다</p>
+                <p className="text-sm text-gray-400">데이터베이스에 코디를 추가해주세요</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {outfits.map((outfit) => (
+                  <button
+                    key={outfit.id}
+                    onClick={() => handleOutfitSelect(outfit)}
+                    className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 text-left"
+                  >
+                    {outfit.image_url_flatlay ? (
+                      <img
+                        src={outfit.image_url_flatlay}
+                        alt={`${outfit.gender} - ${outfit.vibe}`}
+                        className="w-full h-48 object-cover rounded-lg mb-3"
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://via.placeholder.com/400x300?text=No+Image';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-48 bg-gray-200 rounded-lg mb-3 flex items-center justify-center">
+                        <span className="text-gray-400">이미지 없음</span>
+                      </div>
+                    )}
+                    <div className="text-sm text-gray-600">
+                      {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      ID: {outfit.id.slice(0, 8)} · {outfit.status}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between mb-6">
