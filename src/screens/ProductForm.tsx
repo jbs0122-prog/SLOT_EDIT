@@ -34,6 +34,95 @@ const STOCK_STATUS = [
   { value: 'coming_soon', label: '출시 예정' }
 ];
 
+const COLOR_FAMILIES = [
+  { value: '', label: '선택 안함' },
+  { value: 'black', label: 'Black (검정)' },
+  { value: 'white', label: 'White (흰색)' },
+  { value: 'grey', label: 'Grey (회색)' },
+  { value: 'navy', label: 'Navy (네이비)' },
+  { value: 'beige', label: 'Beige (베이지)' },
+  { value: 'brown', label: 'Brown (갈색)' },
+  { value: 'blue', label: 'Blue (파랑)' },
+  { value: 'green', label: 'Green (초록)' },
+  { value: 'red', label: 'Red (빨강)' },
+  { value: 'yellow', label: 'Yellow (노랑)' },
+  { value: 'purple', label: 'Purple (보라)' },
+  { value: 'pink', label: 'Pink (핑크)' },
+  { value: 'orange', label: 'Orange (주황)' },
+  { value: 'metallic', label: 'Metallic (메탈릭)' },
+  { value: 'multi', label: 'Multi (멀티컬러)' }
+];
+
+const COLOR_TONES = [
+  { value: '', label: '선택 안함' },
+  { value: 'warm', label: 'Warm (따뜻한 톤)' },
+  { value: 'cool', label: 'Cool (차가운 톤)' },
+  { value: 'neutral', label: 'Neutral (중성 톤)' }
+];
+
+const PATTERNS = [
+  { value: '', label: '선택 안함' },
+  { value: 'solid', label: 'Solid (무지)' },
+  { value: 'stripe', label: 'Stripe (스트라이프)' },
+  { value: 'check', label: 'Check (체크)' },
+  { value: 'graphic', label: 'Graphic (그래픽)' },
+  { value: 'print', label: 'Print (프린트)' },
+  { value: 'other', label: 'Other (기타)' }
+];
+
+const SUB_CATEGORIES: Record<string, { value: string; label: string }[]> = {
+  outer: [
+    { value: '', label: '선택 안함' },
+    { value: 'puffer', label: 'Puffer (패딩)' },
+    { value: 'coat', label: 'Coat (코트)' },
+    { value: 'blazer', label: 'Blazer (블레이저)' },
+    { value: 'jacket', label: 'Jacket (재킷)' },
+    { value: 'cardigan', label: 'Cardigan (가디건)' },
+    { value: 'trench', label: 'Trench (트렌치)' }
+  ],
+  top: [
+    { value: '', label: '선택 안함' },
+    { value: 'tshirt', label: 'T-shirt (티셔츠)' },
+    { value: 'shirt', label: 'Shirt (셔츠)' },
+    { value: 'knit', label: 'Knit (니트)' },
+    { value: 'hoodie', label: 'Hoodie (후드)' },
+    { value: 'sweatshirt', label: 'Sweatshirt (맨투맨)' },
+    { value: 'turtleneck', label: 'Turtleneck (터틀넥)' }
+  ],
+  bottom: [
+    { value: '', label: '선택 안함' },
+    { value: 'denim', label: 'Denim (데님)' },
+    { value: 'slacks', label: 'Slacks (슬랙스)' },
+    { value: 'chinos', label: 'Chinos (치노)' },
+    { value: 'jogger', label: 'Jogger (조거)' },
+    { value: 'cargo', label: 'Cargo (카고)' },
+    { value: 'shorts', label: 'Shorts (반바지)' }
+  ],
+  shoes: [
+    { value: '', label: '선택 안함' },
+    { value: 'sneaker', label: 'Sneaker (스니커즈)' },
+    { value: 'derby', label: 'Derby (더비)' },
+    { value: 'loafer', label: 'Loafer (로퍼)' },
+    { value: 'boot', label: 'Boot (부츠)' },
+    { value: 'runner', label: 'Runner (러닝화)' }
+  ],
+  bag: [
+    { value: '', label: '선택 안함' },
+    { value: 'tote', label: 'Tote (토트백)' },
+    { value: 'backpack', label: 'Backpack (백팩)' },
+    { value: 'crossbody', label: 'Crossbody (크로스백)' },
+    { value: 'duffle', label: 'Duffle (더플백)' }
+  ],
+  accessory: [
+    { value: '', label: '선택 안함' },
+    { value: 'belt', label: 'Belt (벨트)' },
+    { value: 'cap', label: 'Cap (모자)' },
+    { value: 'scarf', label: 'Scarf (스카프)' },
+    { value: 'glove', label: 'Glove (장갑)' },
+    { value: 'watch', label: 'Watch (시계)' }
+  ]
+};
+
 export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
   const [formData, setFormData] = useState({
     brand: '',
@@ -50,7 +139,13 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     affiliate_link: '',
     price: null as number | null,
     stock_status: 'in_stock' as Product['stock_status'],
-    material: ''
+    material: '',
+    color_family: '',
+    color_tone: '',
+    sub_category: '',
+    pattern: '',
+    formality: null as number | null,
+    warmth: null as number | null
   });
 
   const [saving, setSaving] = useState(false);
@@ -74,7 +169,13 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         affiliate_link: (product as any).affiliate_link || '',
         price: product.price,
         stock_status: product.stock_status,
-        material: (product as any).material || ''
+        material: (product as any).material || '',
+        color_family: (product as any).color_family || '',
+        color_tone: (product as any).color_tone || '',
+        sub_category: (product as any).sub_category || '',
+        pattern: (product as any).pattern || '',
+        formality: (product as any).formality || null,
+        warmth: (product as any).warmth || null
       });
     }
   }, [product]);
@@ -384,6 +485,131 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="예: cotton, wool, leather"
             />
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">매칭 최적화 정보</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              아래 정보를 입력하면 자동 코디 생성 시 더욱 정확한 매칭이 가능합니다
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  컬러 패밀리 (Color Family)
+                </label>
+                <select
+                  value={formData.color_family}
+                  onChange={(e) => handleChange('color_family', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {COLOR_FAMILIES.map(cf => (
+                    <option key={cf.value} value={cf.value}>{cf.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">컬러 매칭에 사용됨</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  컬러 톤 (Color Tone)
+                </label>
+                <select
+                  value={formData.color_tone}
+                  onChange={(e) => handleChange('color_tone', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {COLOR_TONES.map(ct => (
+                    <option key={ct.value} value={ct.value}>{ct.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">톤온톤 매칭에 사용됨</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  상세 카테고리 (Sub Category)
+                </label>
+                <select
+                  value={formData.sub_category}
+                  onChange={(e) => handleChange('sub_category', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {(SUB_CATEGORIES[formData.category] || []).map(sc => (
+                    <option key={sc.value} value={sc.value}>{sc.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">스타일 일관성에 사용됨</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  패턴 (Pattern)
+                </label>
+                <select
+                  value={formData.pattern}
+                  onChange={(e) => handleChange('pattern', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {PATTERNS.map(p => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">패턴 밸런스에 사용됨</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  격식도 (Formality): {formData.formality || 'N/A'}
+                </label>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-gray-500">캐주얼</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    value={formData.formality || 3}
+                    onChange={(e) => handleChange('formality', parseInt(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-gray-500">포멀</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>1</span>
+                  <span>2</span>
+                  <span>3</span>
+                  <span>4</span>
+                  <span>5</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">1=매우 캐주얼 / 3=스마트캐주얼 / 5=포멀</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  보온감 (Warmth): {formData.warmth || 'N/A'}
+                </label>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-gray-500">여름</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    value={formData.warmth || 3}
+                    onChange={(e) => handleChange('warmth', parseInt(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-gray-500">겨울</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>1</span>
+                  <span>2</span>
+                  <span>3</span>
+                  <span>4</span>
+                  <span>5</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">1=여름용 / 3=봄가을 / 5=한겨울</p>
+              </div>
+            </div>
           </div>
 
           <div className="mt-6">
