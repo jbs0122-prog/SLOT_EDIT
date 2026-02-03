@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outfit, ImagePin } from '../data/outfits';
+import { Outfit, ImagePin, Product, OutfitItem } from '../data/outfits';
 import { fetchOutfits } from '../utils/outfitService';
 import { supabase } from '../utils/supabase';
-import { X, Save, ArrowLeft } from 'lucide-react';
+import { X, Save, ArrowLeft, Package, Plus } from 'lucide-react';
 
 type ImageType = 'flatlay' | 'on_model';
 
@@ -14,10 +14,13 @@ export default function AdminPins() {
   const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [showProductsPanel, setShowProductsPanel] = useState(false);
   const imageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadOutfits();
+    loadProducts();
   }, []);
 
   const loadOutfits = async () => {
@@ -28,6 +31,38 @@ export default function AdminPins() {
       console.error('Failed to load outfits:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setAllProducts(data?.map(p => ({
+        id: p.id,
+        brand: p.brand,
+        name: p.name,
+        category: p.category,
+        gender: p.gender,
+        body_type: p.body_type || [],
+        vibe: p.vibe || [],
+        color: p.color || '',
+        season: p.season || [],
+        silhouette: p.silhouette || '',
+        image_url: p.image_url,
+        product_link: p.product_link || '',
+        price: p.price,
+        stock_status: p.stock_status || 'in_stock',
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+      })) || []);
+    } catch (error) {
+      console.error('Failed to load products:', error);
     }
   };
 
@@ -148,6 +183,16 @@ export default function AdminPins() {
     return labels[item] || item;
   };
 
+  const getProductForSlot = (slotType: string): Product | undefined => {
+    if (!selectedOutfit?.items) return undefined;
+    const item = selectedOutfit.items.find(i => i.slot_type === slotType);
+    return item?.product;
+  };
+
+  const handleProductSelect = (index: number, product: Product) => {
+    handlePinUrlChange(index, product.product_link);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -196,15 +241,80 @@ export default function AdminPins() {
                 <ArrowLeft size={20} />
                 뒤로 가기
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Save size={18} />
-                {saving ? '저장 중...' : '저장'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowProductsPanel(!showProductsPanel)}
+                  className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                >
+                  <Package size={18} />
+                  Products ({selectedOutfit.items?.length || 0})
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Save size={18} />
+                  {saving ? '저장 중...' : '저장'}
+                </button>
+              </div>
             </div>
+
+            {showProductsPanel && (
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <h3 className="font-semibold text-gray-900 mb-4">Outfit Products</h3>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">현재 연결된 제품</h4>
+                    {!selectedOutfit.items || selectedOutfit.items.length === 0 ? (
+                      <p className="text-sm text-gray-500">연결된 제품이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedOutfit.items.map((item) => (
+                          <div key={item.id} className="bg-white rounded p-3 flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">
+                                {getItemLabel(item.slot_type)}: {item.product?.brand} - {item.product?.name}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {item.product?.color} · ${item.product?.price}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">모든 제품 ({allProducts.length})</h4>
+                    <div className="max-h-96 overflow-y-auto space-y-2">
+                      {allProducts
+                        .filter(p => p.gender === selectedOutfit.gender)
+                        .map((product) => (
+                          <div key={product.id} className="bg-white rounded p-3 border border-gray-200">
+                            <div className="flex items-start gap-3">
+                              <img
+                                src={product.image_url}
+                                alt={product.name}
+                                className="w-16 h-16 object-cover rounded"
+                              />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">
+                                  {getItemLabel(product.category)}: {product.brand}
+                                </p>
+                                <p className="text-xs text-gray-600">{product.name}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {product.color} · ${product.price}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="mb-6">
               <div className="flex gap-2 mb-4">
@@ -306,9 +416,22 @@ export default function AdminPins() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-2">
-                      쇼핑 링크 URL
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm text-gray-600">
+                        쇼핑 링크 URL
+                      </label>
+                      {(() => {
+                        const product = getProductForSlot(pins[selectedPinIndex].item);
+                        return product ? (
+                          <button
+                            onClick={() => handleProductSelect(selectedPinIndex, product)}
+                            className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                          >
+                            {product.brand} {product.name} 링크 사용
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
                     <input
                       type="url"
                       value={pins[selectedPinIndex].url || ''}
@@ -316,9 +439,23 @@ export default function AdminPins() {
                       placeholder="https://example.com/product"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      이 URL이 설정되면 outfit의 기본 아이템 링크 대신 이 링크가 사용됩니다.
-                    </p>
+                    {(() => {
+                      const product = getProductForSlot(pins[selectedPinIndex].item);
+                      return product ? (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                          <p className="text-green-800 font-medium">
+                            연결된 제품: {product.brand} - {product.name}
+                          </p>
+                          <p className="text-green-600 mt-1">
+                            {product.color} · ${product.price}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-orange-600 mt-1">
+                          ⚠ 이 슬롯에 연결된 제품이 없습니다. Products 패널에서 제품을 추가하세요.
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
