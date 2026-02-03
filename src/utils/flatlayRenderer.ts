@@ -28,7 +28,7 @@ export interface RenderOptions {
 const DEFAULT_OPTIONS: Required<RenderOptions> = {
   canvasWidth: 1200,
   canvasHeight: 1400,
-  backgroundColor: 'transparent',
+  backgroundColor: '#e8e0d5',
   padding: 100,
   useProxy: true,
 };

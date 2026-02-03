@@ -309,6 +309,20 @@ export function scoreOutfit(outfit: OutfitCandidate, context?: { targetWarmth?: 
   };
 }
 
+function shouldIncludeOuter(targetSeason?: string, targetWarmth?: number): boolean {
+  if (targetSeason === 'summer' || targetSeason === '여름') {
+    return false;
+  }
+
+  if (targetWarmth !== undefined) {
+    if (targetWarmth <= 2) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function generateOutfitCombinations(
   products: Product[],
   filters: {
@@ -329,7 +343,9 @@ export function generateOutfitCombinations(
     });
   };
 
-  const outers = filterProducts('outer');
+  const needsOuter = shouldIncludeOuter(filters.targetSeason, filters.targetWarmth);
+
+  const outers = needsOuter ? filterProducts('outer') : [];
   const tops = filterProducts('top');
   const bottoms = filterProducts('bottom');
   const shoes = filterProducts('shoes');
