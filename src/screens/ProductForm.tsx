@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Save } from 'lucide-react';
+import { uploadProductImage, validateImageFile } from '../utils/imageUpload';
+import { X, Save, Upload, Loader2 } from 'lucide-react';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -52,6 +53,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   });
 
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -90,6 +92,31 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         : [...array, value];
       return { ...prev, [field]: newArray };
     });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setErrors(prev => ({ ...prev, image_url: validationError }));
+      return;
+    }
+
+    setUploading(true);
+    setErrors(prev => ({ ...prev, image_url: '' }));
+
+    const result = await uploadProductImage(file);
+
+    if (result.success && result.url) {
+      handleChange('image_url', result.url);
+    } else {
+      setErrors(prev => ({ ...prev, image_url: result.error || '업로드 실패' }));
+    }
+
+    setUploading(false);
+    e.target.value = '';
   };
 
   const validate = () => {
@@ -359,31 +386,70 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
           <div className="mt-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              이미지 URL <span className="text-red-500">*</span>
+              제품 이미지 <span className="text-red-500">*</span>
             </label>
-            <input
-              type="url"
-              value={formData.image_url}
-              onChange={(e) => handleChange('image_url', e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.image_url ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="https://example.com/image.jpg"
-            />
+
+            <div className="space-y-4">
+              <div>
+                <label className="flex items-center justify-center w-full px-4 py-3 bg-blue-50 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer hover:bg-blue-100 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleImageUpload}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                  {uploading ? (
+                    <div className="flex items-center gap-2 text-blue-600">
+                      <Loader2 size={20} className="animate-spin" />
+                      <span>업로드 중...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-blue-600">
+                      <Upload size={20} />
+                      <span className="font-medium">이미지 파일 업로드</span>
+                      <span className="text-xs text-gray-500">(최대 5MB, JPEG/PNG/WebP/GIF)</span>
+                    </div>
+                  )}
+                </label>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">또는</span>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="url"
+                  value={formData.image_url}
+                  onChange={(e) => handleChange('image_url', e.target.value)}
+                  disabled={uploading}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.image_url ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="이미지 URL 직접 입력: https://example.com/image.jpg"
+                />
+              </div>
+            </div>
+
             {errors.image_url && (
               <p className="text-red-500 text-xs mt-1">{errors.image_url}</p>
             )}
-            <p className="text-xs text-gray-500 mt-1">
-              이미지 업로드 옵션은 아래 참조
-            </p>
+
             {formData.image_url && (
-              <div className="mt-2">
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">미리보기:</p>
                 <img
                   src={formData.image_url}
                   alt="Preview"
-                  className="w-32 h-32 object-cover rounded border"
+                  className="w-48 h-48 object-cover rounded-lg border-2 border-gray-200"
                   onError={(e) => {
-                    e.currentTarget.src = 'https://via.placeholder.com/128?text=Invalid+URL';
+                    e.currentTarget.src = 'https://via.placeholder.com/192?text=Invalid+URL';
                   }}
                 />
               </div>
