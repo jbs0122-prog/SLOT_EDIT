@@ -11,6 +11,12 @@ export interface ProductPosition {
   slot_type: string;
 }
 
+interface ImageDimensions {
+  width: number;
+  height: number;
+  aspectRatio: number;
+}
+
 export interface RenderOptions {
   canvasWidth?: number;
   canvasHeight?: number;
@@ -22,7 +28,7 @@ export interface RenderOptions {
 const DEFAULT_OPTIONS: Required<RenderOptions> = {
   canvasWidth: 1200,
   canvasHeight: 1400,
-  backgroundColor: '#e8e0d5',
+  backgroundColor: 'transparent',
   padding: 100,
   useProxy: true,
 };
@@ -44,12 +50,13 @@ async function loadImageWithProxy(url: string, useProxy: boolean): Promise<HTMLI
   });
 }
 
-function calculateLayout(
+async function calculateLayoutWithImages(
   items: Array<{ slot_type: string; image_url: string; product_id: string }>,
   canvasWidth: number,
   canvasHeight: number,
-  padding: number
-): ProductPosition[] {
+  padding: number,
+  useProxy: boolean
+): Promise<ProductPosition[]> {
   const positions: ProductPosition[] = [];
 
   const centerX = canvasWidth / 2;
@@ -60,7 +67,7 @@ function calculateLayout(
 
   const slotConfigs: {
     [key: string]: {
-      size: number;
+      maxSize: number;
       offsetX: number;
       offsetY: number;
       rotation: number;
@@ -68,42 +75,42 @@ function calculateLayout(
     };
   } = {
     outer: {
-      size: Math.min(availableWidth, availableHeight) * 0.35,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.35,
       offsetX: -availableWidth * 0.2,
       offsetY: -availableHeight * 0.15,
       rotation: -8,
       zIndex: 1,
     },
     top: {
-      size: Math.min(availableWidth, availableHeight) * 0.32,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.32,
       offsetX: availableWidth * 0.05,
       offsetY: -availableHeight * 0.1,
       rotation: 3,
       zIndex: 2,
     },
     bottom: {
-      size: Math.min(availableWidth, availableHeight) * 0.3,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.3,
       offsetX: availableWidth * 0.15,
       offsetY: availableHeight * 0.15,
       rotation: -5,
       zIndex: 3,
     },
     shoes: {
-      size: Math.min(availableWidth, availableHeight) * 0.25,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.25,
       offsetX: -availableWidth * 0.18,
       offsetY: availableHeight * 0.25,
       rotation: 12,
       zIndex: 4,
     },
     bag: {
-      size: Math.min(availableWidth, availableHeight) * 0.22,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.22,
       offsetX: availableWidth * 0.25,
       offsetY: -availableHeight * 0.22,
       rotation: -10,
       zIndex: 5,
     },
     accessory: {
-      size: Math.min(availableWidth, availableHeight) * 0.15,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.15,
       offsetX: -availableWidth * 0.28,
       offsetY: -availableHeight * 0.28,
       rotation: 15,
@@ -117,37 +124,78 @@ function calculateLayout(
     return aConfig.zIndex - bConfig.zIndex;
   });
 
-  sortedItems.forEach((item) => {
+  for (const item of sortedItems) {
     const config = slotConfigs[item.slot_type];
-    if (!config) {
-      const fallbackSize = Math.min(availableWidth, availableHeight) * 0.2;
+
+    try {
+      const img = await loadImageWithProxy(item.image_url, useProxy);
+      const aspectRatio = img.width / img.height;
+
+      let width: number;
+      let height: number;
+
+      if (!config) {
+        const fallbackMaxSize = Math.min(availableWidth, availableHeight) * 0.2;
+        if (aspectRatio > 1) {
+          width = fallbackMaxSize;
+          height = fallbackMaxSize / aspectRatio;
+        } else {
+          height = fallbackMaxSize;
+          width = fallbackMaxSize * aspectRatio;
+        }
+
+        positions.push({
+          product_id: item.product_id,
+          image_url: item.image_url,
+          slot_type: item.slot_type,
+          x: centerX - width / 2,
+          y: centerY - height / 2,
+          width,
+          height,
+          rotation: 0,
+        });
+        continue;
+      }
+
+      if (aspectRatio > 1) {
+        width = config.maxSize;
+        height = config.maxSize / aspectRatio;
+      } else {
+        height = config.maxSize;
+        width = config.maxSize * aspectRatio;
+      }
+
+      const x = centerX + config.offsetX - width / 2;
+      const y = centerY + config.offsetY - height / 2;
+
       positions.push({
         product_id: item.product_id,
         image_url: item.image_url,
         slot_type: item.slot_type,
-        x: centerX - fallbackSize / 2,
-        y: centerY - fallbackSize / 2,
+        x,
+        y,
+        width,
+        height,
+        rotation: config.rotation,
+      });
+    } catch (error) {
+      console.error(`Failed to load image for ${item.slot_type}:`, error);
+      const fallbackSize = config ? config.maxSize : Math.min(availableWidth, availableHeight) * 0.2;
+      const x = centerX + (config?.offsetX || 0) - fallbackSize / 2;
+      const y = centerY + (config?.offsetY || 0) - fallbackSize / 2;
+
+      positions.push({
+        product_id: item.product_id,
+        image_url: item.image_url,
+        slot_type: item.slot_type,
+        x,
+        y,
         width: fallbackSize,
         height: fallbackSize,
-        rotation: 0,
+        rotation: config?.rotation || 0,
       });
-      return;
     }
-
-    const x = centerX + config.offsetX - config.size / 2;
-    const y = centerY + config.offsetY - config.size / 2;
-
-    positions.push({
-      product_id: item.product_id,
-      image_url: item.image_url,
-      slot_type: item.slot_type,
-      x,
-      y,
-      width: config.size,
-      height: config.size,
-      rotation: config.rotation,
-    });
-  });
+  }
 
   return positions;
 }
@@ -162,13 +210,21 @@ export async function renderFlatlay(
   canvas.width = opts.canvasWidth;
   canvas.height = opts.canvasHeight;
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: true });
   if (!ctx) throw new Error('Canvas context not available');
 
-  ctx.fillStyle = opts.backgroundColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (opts.backgroundColor !== 'transparent') {
+    ctx.fillStyle = opts.backgroundColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
-  const positions = calculateLayout(items, opts.canvasWidth, opts.canvasHeight, opts.padding);
+  const positions = await calculateLayoutWithImages(
+    items,
+    opts.canvasWidth,
+    opts.canvasHeight,
+    opts.padding,
+    opts.useProxy
+  );
 
   for (const position of positions) {
     try {
@@ -212,11 +268,17 @@ export async function renderFlatlay(
     }
   }
 
+  const pinsWithPercentages = positions.map(pos => ({
+    ...pos,
+    x: ((pos.x + pos.width / 2) / opts.canvasWidth) * 100,
+    y: ((pos.y + pos.height / 2) / opts.canvasHeight) * 100,
+  }));
+
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
         if (blob) {
-          resolve({ imageBlob: blob, positions });
+          resolve({ imageBlob: blob, positions: pinsWithPercentages });
         } else {
           reject(new Error('Failed to create image blob'));
         }
@@ -237,11 +299,13 @@ export async function renderFlatlayWithCustomPositions(
   canvas.width = opts.canvasWidth;
   canvas.height = opts.canvasHeight;
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: true });
   if (!ctx) throw new Error('Canvas context not available');
 
-  ctx.fillStyle = opts.backgroundColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (opts.backgroundColor !== 'transparent') {
+    ctx.fillStyle = opts.backgroundColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   for (const position of positions) {
     try {

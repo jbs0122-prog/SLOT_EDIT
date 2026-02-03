@@ -339,31 +339,36 @@ export function generateOutfitCombinations(
   const combinations: OutfitCandidate[] = [];
   const maxCombinations = 500;
 
-  for (const top of tops) {
-    for (const bottom of bottoms) {
-      for (const shoe of shoes) {
-        const baseOutfit: OutfitCandidate = {
-          top,
-          bottom,
-          shoes: shoe,
-        };
+  if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) {
+    return combinations;
+  }
 
-        combinations.push(baseOutfit);
+  for (const outer of outers.length > 0 ? outers : [undefined]) {
+    for (const top of tops) {
+      for (const bottom of bottoms) {
+        for (const shoe of shoes) {
+          for (const bag of bags.length > 0 ? bags : [undefined]) {
+            for (const accessory of accessories.length > 0 ? accessories : [undefined]) {
+              const outfit: OutfitCandidate = {
+                top,
+                bottom,
+                shoes: shoe,
+              };
 
-        if (outers.length > 0) {
-          for (const outer of outers.slice(0, 3)) {
-            combinations.push({
-              ...baseOutfit,
-              outer,
-            });
+              if (outer) outfit.outer = outer;
+              if (bag) outfit.bag = bag;
+              if (accessory) outfit.accessory = accessory;
+
+              combinations.push(outfit);
+
+              if (combinations.length >= maxCombinations) {
+                return combinations;
+              }
+            }
           }
         }
-
-        if (combinations.length >= maxCombinations) break;
       }
-      if (combinations.length >= maxCombinations) break;
     }
-    if (combinations.length >= maxCombinations) break;
   }
 
   return combinations;
