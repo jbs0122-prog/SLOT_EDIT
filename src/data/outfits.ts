@@ -5,6 +5,34 @@ export interface ImagePin {
   url?: string;
 }
 
+export interface Product {
+  id: string;
+  brand: string;
+  name: string;
+  category: 'outer' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
+  gender: string;
+  body_type: string[];
+  vibe: string[];
+  color: string;
+  season: string[];
+  silhouette: string;
+  image_url: string;
+  product_link: string;
+  price: number | null;
+  stock_status: 'in_stock' | 'out_of_stock' | 'coming_soon';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OutfitItem {
+  id: string;
+  outfit_id: string;
+  product_id: string;
+  slot_type: 'outer' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
+  created_at: string;
+  product?: Product;
+}
+
 export interface Outfit {
   id: string;
   gender: string;
@@ -13,28 +41,25 @@ export interface Outfit {
   image_url_flatlay: string;
   image_url_on_model: string;
   insight_text: string;
-  outer_name: string;
-  outer_image: string;
-  outer_link: string;
-  top_name: string;
-  top_image: string;
-  top_link: string;
-  bottom_name: string;
-  bottom_image: string;
-  bottom_link: string;
-  shoes_name: string;
-  shoes_image: string;
-  shoes_link: string;
-  bag_name: string;
-  bag_image: string;
-  bag_link: string;
-  accessory_name: string;
-  accessory_image: string;
-  accessory_link: string;
   flatlay_pins?: ImagePin[];
   on_model_pins?: ImagePin[];
   tpo?: string;
+  status?: string;
+  prompt_flatlay?: string;
   created_at?: string;
+  updated_at?: string;
+  items?: OutfitItem[];
+}
+
+export interface RenderJob {
+  id: string;
+  outfit_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  render_type: 'flatlay' | 'on_model';
+  result_image_url: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export const outfits: Outfit[] = [];
