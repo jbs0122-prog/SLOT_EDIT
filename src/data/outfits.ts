@@ -22,6 +22,13 @@ export interface Product {
   affiliate_link?: string;
   price: number | null;
   stock_status: 'in_stock' | 'out_of_stock' | 'coming_soon';
+  material?: string;
+  color_family?: string;
+  color_tone?: string;
+  sub_category?: string;
+  pattern?: string;
+  formality?: number;
+  warmth?: number;
   created_at: string;
   updated_at: string;
 }

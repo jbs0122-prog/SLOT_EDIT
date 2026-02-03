@@ -56,12 +56,19 @@ export default function AdminProducts() {
         silhouette: p.silhouette || '',
         image_url: p.image_url,
         product_link: p.product_link || '',
+        affiliate_link: p.affiliate_link || '',
         price: p.price,
         stock_status: p.stock_status || 'in_stock',
         material: p.material || '',
+        color_family: p.color_family || '',
+        color_tone: p.color_tone || '',
+        sub_category: p.sub_category || '',
+        pattern: p.pattern || '',
+        formality: p.formality,
+        warmth: p.warmth,
         created_at: p.created_at,
         updated_at: p.updated_at,
-      })) || []);
+      } as Product)) || []);
     } catch (error) {
       console.error('Failed to load products:', error);
       alert('제품 로드 실패: ' + (error as Error).message);
