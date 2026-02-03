@@ -5,7 +5,8 @@ import ProductForm from './ProductForm';
 import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import OutfitProductLinker from './OutfitProductLinker';
-import { Plus, Upload, Link as LinkIcon, Package, Pin } from 'lucide-react';
+import AutoOutfitGenerator from './AutoOutfitGenerator';
+import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles } from 'lucide-react';
 
 type ViewMode = 'products' | 'outfits';
 
@@ -18,6 +19,7 @@ export default function AdminProducts() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [showOutfitLinker, setShowOutfitLinker] = useState(false);
+  const [showAutoGenerator, setShowAutoGenerator] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
 
@@ -285,13 +287,22 @@ export default function AdminProducts() {
           </>
         ) : (
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="mb-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
-                코디 목록 ({outfits.length})
-              </h2>
-              <p className="text-sm text-gray-600">
-                코디를 선택하여 제품을 연결하세요
-              </p>
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">
+                  코디 목록 ({outfits.length})
+                </h2>
+                <p className="text-sm text-gray-600">
+                  코디를 선택하여 제품을 연결하세요
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAutoGenerator(true)}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md"
+              >
+                <Sparkles size={18} />
+                자동 생성
+              </button>
             </div>
             {outfits.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
@@ -361,6 +372,16 @@ export default function AdminProducts() {
           outfit={selectedOutfit}
           onClose={handleLinkerClose}
           onLinksUpdated={handleLinksUpdated}
+        />
+      )}
+
+      {showAutoGenerator && (
+        <AutoOutfitGenerator
+          onClose={() => setShowAutoGenerator(false)}
+          onGenerated={() => {
+            loadOutfits();
+            setShowAutoGenerator(false);
+          }}
         />
       )}
     </div>
