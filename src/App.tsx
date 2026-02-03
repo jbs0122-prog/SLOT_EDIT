@@ -4,12 +4,11 @@ import Results from './screens/Results';
 import Loading from './screens/Loading';
 import AdminPins from './screens/AdminPins';
 import AdminProducts from './screens/AdminProducts';
-import MatchingTest from './screens/MatchingTest';
 import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
 import { WeatherData } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'matching-test';
+type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('loading');
@@ -29,10 +28,6 @@ function App() {
     }
     if (window.location.hash === '#admin-products') {
       setCurrentScreen('admin-products');
-      return;
-    }
-    if (window.location.hash === '#matching-test') {
-      setCurrentScreen('matching-test');
       return;
     }
 
@@ -132,7 +127,6 @@ function App() {
       )}
       {currentScreen === 'admin' && <AdminPins />}
       {currentScreen === 'admin-products' && <AdminProducts />}
-      {currentScreen === 'matching-test' && <MatchingTest />}
     </>
   );
 }

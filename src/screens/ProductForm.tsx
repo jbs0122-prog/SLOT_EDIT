@@ -144,8 +144,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     color_tone: '',
     sub_category: '',
     pattern: '',
-    formality: null as number | null,
-    warmth: null as number | null
+    formality: 3,
+    warmth: 3
   });
 
   const [saving, setSaving] = useState(false);
@@ -174,8 +174,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         color_tone: (product as any).color_tone || '',
         sub_category: (product as any).sub_category || '',
         pattern: (product as any).pattern || '',
-        formality: (product as any).formality || null,
-        warmth: (product as any).warmth || null
+        formality: (product as any).formality ?? 3,
+        warmth: (product as any).warmth ?? 3
       });
     }
   }, [product]);
@@ -560,7 +560,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  격식도 (Formality): {formData.formality || 'N/A'}
+                  격식도 (Formality): {formData.formality}
                 </label>
                 <div className="flex items-center gap-4">
                   <span className="text-xs text-gray-500">캐주얼</span>
@@ -568,7 +568,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     type="range"
                     min="1"
                     max="5"
-                    value={formData.formality || 3}
+                    value={formData.formality}
                     onChange={(e) => handleChange('formality', parseInt(e.target.value))}
                     className="flex-1"
                   />
@@ -586,7 +586,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  보온감 (Warmth): {formData.warmth || 'N/A'}
+                  보온감 (Warmth): {formData.warmth}
                 </label>
                 <div className="flex items-center gap-4">
                   <span className="text-xs text-gray-500">여름</span>
@@ -594,7 +594,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     type="range"
                     min="1"
                     max="5"
-                    value={formData.warmth || 3}
+                    value={formData.warmth}
                     onChange={(e) => handleChange('warmth', parseInt(e.target.value))}
                     className="flex-1"
                   />

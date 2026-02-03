@@ -13,11 +13,9 @@ const GENDER_OPTIONS = [
 ];
 
 const BODY_TYPE_OPTIONS = [
-  { value: 'rectangle', label: '사각형' },
-  { value: 'inverted triangle', label: '역삼각형' },
-  { value: 'triangle', label: '삼각형' },
-  { value: 'oval', label: '타원형' },
-  { value: 'hourglass', label: '모래시계' },
+  { value: 'slim', label: 'Slim' },
+  { value: 'regular', label: 'Regular' },
+  { value: 'plus-size', label: 'Plus-size' },
 ];
 
 const VIBE_OPTIONS = [
@@ -38,7 +36,7 @@ const SEASON_OPTIONS = [
 
 export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfitGeneratorProps) {
   const [gender, setGender] = useState('MALE');
-  const [bodyType, setBodyType] = useState('rectangle');
+  const [bodyType, setBodyType] = useState('slim');
   const [vibe, setVibe] = useState('ELEVATED_COOL');
   const [count, setCount] = useState(5);
   const [season, setSeason] = useState('');
