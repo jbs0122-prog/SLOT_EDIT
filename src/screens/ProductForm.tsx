@@ -24,8 +24,8 @@ const GENDERS = [
   { value: 'UNISEX', label: '유니섹스' }
 ];
 
-const BODY_TYPES = ['slim', 'athletic', 'average', 'heavy'];
-const VIBES = ['casual', 'street', 'formal', 'sporty', 'minimal', 'vintage'];
+const BODY_TYPES = ['slim', 'regular', 'plus-size'];
+const VIBES = ['ELEVATED_COOL', 'EFFORTLESS_NATURAL', 'ARTISTIC_MINIMAL', 'RETRO_LUXE', 'SPORT_MODERN', 'CREATIVE_LAYERED'];
 const SEASONS = ['spring', 'summer', 'fall', 'winter'];
 const STOCK_STATUS = [
   { value: 'in_stock', label: '재고 있음' },
@@ -47,7 +47,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     image_url: '',
     product_link: '',
     price: null as number | null,
-    stock_status: 'in_stock' as Product['stock_status']
+    stock_status: 'in_stock' as Product['stock_status'],
+    material: ''
   });
 
   const [saving, setSaving] = useState(false);
@@ -68,7 +69,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         image_url: product.image_url,
         product_link: product.product_link,
         price: product.price,
-        stock_status: product.stock_status
+        stock_status: product.stock_status,
+        material: (product as any).material || ''
       });
     }
   }, [product]);
@@ -248,14 +250,15 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                가격 (원)
+                가격 ($)
               </label>
               <input
                 type="number"
                 value={formData.price || ''}
                 onChange={(e) => handleChange('price', e.target.value ? parseInt(e.target.value) : null)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="예: 50000"
+                placeholder="예: 50"
+                step="0.01"
               />
             </div>
 
@@ -343,6 +346,19 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
           <div className="mt-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
+              소재
+            </label>
+            <input
+              type="text"
+              value={formData.material}
+              onChange={(e) => handleChange('material', e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="예: cotton, wool, leather"
+            />
+          </div>
+
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               이미지 URL <span className="text-red-500">*</span>
             </label>
             <input
@@ -357,6 +373,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             {errors.image_url && (
               <p className="text-red-500 text-xs mt-1">{errors.image_url}</p>
             )}
+            <p className="text-xs text-gray-500 mt-1">
+              이미지 업로드 옵션은 아래 참조
+            </p>
             {formData.image_url && (
               <div className="mt-2">
                 <img
