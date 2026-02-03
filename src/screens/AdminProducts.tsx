@@ -56,6 +56,7 @@ export default function AdminProducts() {
         product_link: p.product_link || '',
         price: p.price,
         stock_status: p.stock_status || 'in_stock',
+        material: p.material || '',
         created_at: p.created_at,
         updated_at: p.updated_at,
       })) || []);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { Edit2, Trash2, ExternalLink } from 'lucide-react';
+import { Edit2, Trash2, ExternalLink, Copy } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -11,6 +11,7 @@ interface ProductListProps {
 
 export default function ProductList({ products, onProductsChange, onEditProduct }: ProductListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
 
   const handleDelete = async (product: Product) => {
     if (!confirm(`"${product.brand} ${product.name}"를 삭제하시겠습니까?`)) {
@@ -33,6 +34,38 @@ export default function ProductList({ products, onProductsChange, onEditProduct 
       alert('삭제 실패: ' + (error as Error).message);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleCopy = async (product: Product) => {
+    if (!confirm(`"${product.brand} ${product.name}"를 복사하시겠습니까?`)) {
+      return;
+    }
+
+    setCopyingId(product.id);
+    try {
+      const { id, created_at, updated_at, ...productData } = product as any;
+
+      const newProduct = {
+        ...productData,
+        name: `${product.name} (복사본)`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('products')
+        .insert([newProduct]);
+
+      if (error) throw error;
+
+      alert('제품이 복사되었습니다!');
+      onProductsChange();
+    } catch (error) {
+      console.error('Copy error:', error);
+      alert('복사 실패: ' + (error as Error).message);
+    } finally {
+      setCopyingId(null);
     }
   };
 
@@ -113,7 +146,7 @@ export default function ProductList({ products, onProductsChange, onEditProduct 
 
             {product.price && (
               <div className="text-lg font-bold text-gray-900 mb-2">
-                ₩{product.price.toLocaleString()}
+                ${product.price}
               </div>
             )}
 
@@ -142,6 +175,15 @@ export default function ProductList({ products, onProductsChange, onEditProduct 
                   쇼핑
                 </a>
               )}
+              <button
+                onClick={() => handleCopy(product)}
+                disabled={copyingId === product.id}
+                className="flex items-center justify-center gap-1 px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
+                title="제품 복사"
+              >
+                <Copy size={14} />
+                {copyingId === product.id ? '...' : '복사'}
+              </button>
               <button
                 onClick={() => onEditProduct(product)}
                 className="flex items-center justify-center gap-1 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
