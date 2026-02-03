@@ -1,6 +1,7 @@
 import { useState, useRef, TouchEvent } from 'react';
 import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { Outfit, ImagePin } from '../data/outfits';
+import { Outfit, ImagePin, Product } from '../data/outfits';
+import ProductDetailModal from './ProductDetailModal';
 
 interface ImageSliderProps {
   images: { url: string; label: string; tpo?: string }[];
@@ -13,6 +14,7 @@ interface ImageSliderProps {
   userFeedback?: 'like' | 'dislike' | null;
   outfit?: Outfit;
   showOutfitInfo?: boolean;
+  products?: Product[];
 }
 
 export default function ImageSlider({
@@ -25,11 +27,13 @@ export default function ImageSlider({
   dislikeCount = 0,
   userFeedback = null,
   outfit,
-  showOutfitInfo = false
+  showOutfitInfo = false,
+  products = []
 }: ImageSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const minSwipeDistance = 50;
@@ -44,6 +48,14 @@ export default function ImageSlider({
   };
 
   const handlePinClick = (pin: ImagePin) => {
+    if (pin.product_id) {
+      const product = products.find(p => p.id === pin.product_id);
+      if (product) {
+        setSelectedProduct(product);
+        return;
+      }
+    }
+
     if (pin.url) {
       window.open(pin.url, '_blank', 'noopener,noreferrer');
     }
@@ -335,6 +347,14 @@ export default function ImageSlider({
             )}
           </button>
         </div>
+      )}
+
+      {selectedProduct && (
+        <ProductDetailModal
+          product={selectedProduct}
+          affiliateLink={selectedProduct.affiliate_link}
+          onClose={() => setSelectedProduct(null)}
+        />
       )}
     </div>
   );

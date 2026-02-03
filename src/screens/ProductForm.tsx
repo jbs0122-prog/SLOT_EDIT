@@ -47,6 +47,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     silhouette: '',
     image_url: '',
     product_link: '',
+    affiliate_link: '',
     price: null as number | null,
     stock_status: 'in_stock' as Product['stock_status'],
     material: ''
@@ -70,6 +71,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         silhouette: product.silhouette,
         image_url: product.image_url,
         product_link: product.product_link,
+        affiliate_link: (product as any).affiliate_link || '',
         price: product.price,
         stock_status: product.stock_status,
         material: (product as any).material || ''
@@ -467,6 +469,22 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="https://example.com/product"
             />
+          </div>
+
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Amazon 어필리에이트 링크
+            </label>
+            <input
+              type="url"
+              value={formData.affiliate_link}
+              onChange={(e) => handleChange('affiliate_link', e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="https://www.amazon.com/dp/XXXXX?tag=your-tag-20"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Amazon Associates에서 생성한 어필리에이트 링크를 입력하세요
+            </p>
           </div>
 
           <div className="mt-8 flex justify-end gap-3">

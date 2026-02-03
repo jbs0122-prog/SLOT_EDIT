@@ -3,6 +3,7 @@ export interface ImagePin {
   y: number;
   item: 'outer' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
   url?: string;
+  product_id?: string;
 }
 
 export interface Product {
@@ -18,6 +19,7 @@ export interface Product {
   silhouette: string;
   image_url: string;
   product_link: string;
+  affiliate_link?: string;
   price: number | null;
   stock_status: 'in_stock' | 'out_of_stock' | 'coming_soon';
   created_at: string;

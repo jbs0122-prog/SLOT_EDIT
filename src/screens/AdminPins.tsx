@@ -79,6 +79,7 @@ export default function AdminPins() {
         silhouette: p.silhouette || '',
         image_url: p.image_url,
         product_link: p.product_link || '',
+        affiliate_link: p.affiliate_link || '',
         price: p.price,
         stock_status: p.stock_status || 'in_stock',
         created_at: p.created_at,
@@ -213,7 +214,17 @@ export default function AdminPins() {
   };
 
   const handleProductSelect = (index: number, product: Product) => {
-    handlePinUrlChange(index, product.product_link);
+    const newPins = [...pins];
+    newPins[index].product_id = product.id;
+    newPins[index].url = product.affiliate_link || product.product_link;
+    setPins(newPins);
+    setShowProductsPanel(false);
+  };
+
+  const handlePinProductIdChange = (index: number, productId: string) => {
+    const newPins = [...pins];
+    newPins[index].product_id = productId;
+    setPins(newPins);
   };
 
   if (loading) {
@@ -469,22 +480,54 @@ export default function AdminPins() {
                     </select>
                   </div>
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm text-gray-600">
-                        쇼핑 링크 URL
-                      </label>
-                      {(() => {
-                        const product = getProductForSlot(pins[selectedPinIndex].item);
-                        return product ? (
-                          <button
-                            onClick={() => handleProductSelect(selectedPinIndex, product)}
-                            className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                          >
-                            {product.brand} {product.name} 링크 사용
-                          </button>
-                        ) : null;
-                      })()}
-                    </div>
+                    <label className="block text-sm text-gray-600 mb-2">
+                      연결할 제품
+                    </label>
+                    <select
+                      value={pins[selectedPinIndex].product_id || ''}
+                      onChange={(e) => {
+                        const productId = e.target.value;
+                        const product = allProducts.find(p => p.id === productId);
+                        if (product) {
+                          handleProductSelect(selectedPinIndex, product);
+                        } else {
+                          handlePinProductIdChange(selectedPinIndex, '');
+                        }
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
+                    >
+                      <option value="">제품 선택...</option>
+                      {allProducts
+                        .filter(p => p.gender === selectedOutfit.gender && p.category === pins[selectedPinIndex].item)
+                        .map(product => (
+                          <option key={product.id} value={product.id}>
+                            {product.brand} - {product.name} {product.affiliate_link ? '(Affiliate)' : ''}
+                          </option>
+                        ))}
+                    </select>
+                    {pins[selectedPinIndex].product_id && (() => {
+                      const product = allProducts.find(p => p.id === pins[selectedPinIndex].product_id);
+                      return product ? (
+                        <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                          <p className="text-green-800 font-medium">
+                            {product.brand} - {product.name}
+                          </p>
+                          <p className="text-green-600 mt-1">
+                            {product.color} · ${product.price}
+                          </p>
+                          {product.affiliate_link && (
+                            <p className="text-green-700 mt-1 font-medium">
+                              Amazon Affiliate Link
+                            </p>
+                          )}
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">
+                      쇼핑 링크 URL (수동 입력)
+                    </label>
                     <input
                       type="url"
                       value={pins[selectedPinIndex].url || ''}
@@ -492,23 +535,9 @@ export default function AdminPins() {
                       placeholder="https://example.com/product"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    {(() => {
-                      const product = getProductForSlot(pins[selectedPinIndex].item);
-                      return product ? (
-                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
-                          <p className="text-green-800 font-medium">
-                            연결된 제품: {product.brand} - {product.name}
-                          </p>
-                          <p className="text-green-600 mt-1">
-                            {product.color} · ${product.price}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-orange-600 mt-1">
-                          ⚠ 이 슬롯에 연결된 제품이 없습니다. Products 패널에서 제품을 추가하세요.
-                        </p>
-                      );
-                    })()}
+                    <p className="text-xs text-gray-500 mt-1">
+                      제품을 선택하면 자동으로 채워집니다
+                    </p>
                   </div>
                 </div>
               </div>

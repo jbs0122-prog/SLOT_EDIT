@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, TouchEvent } from 'react';
-import { Outfit } from '../data/outfits';
+import { Outfit, Product } from '../data/outfits';
 import { WeatherData, getWeatherEmoji } from '../utils/weather';
 import ImageSlider from './ImageSlider';
 import { supabase } from '../utils/supabase';
@@ -45,6 +45,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   const [sortOrder, setSortOrder] = useState<'likes' | 'latest'>('likes');
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
+  const [outfitProducts, setOutfitProducts] = useState<{ [outfitId: string]: Product[] }>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const firstOutfitRef = useRef<HTMLDivElement>(null);
 
@@ -69,6 +70,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
 
   useEffect(() => {
     loadFeedbackCounts();
+    loadOutfitProducts();
     if (containerRef.current) {
       const scrollableDiv = containerRef.current.querySelector('.overflow-y-auto');
       if (scrollableDiv) {
@@ -80,8 +82,127 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   useEffect(() => {
     if (rankingGender && rankingOutfits.length > 0) {
       loadRankingFeedbackCounts();
+      loadRankingProducts();
     }
   }, [rankingOutfits, rankingGender]);
+
+  const loadOutfitProducts = async () => {
+    const outfitIds = outfits.map(o => o.id);
+    if (outfitIds.length === 0) return;
+
+    try {
+      const { data: outfitItemsData, error: itemsError } = await supabase
+        .from('outfit_items')
+        .select('outfit_id, product_id')
+        .in('outfit_id', outfitIds);
+
+      if (itemsError) throw itemsError;
+
+      const productIds = [...new Set(outfitItemsData?.map(item => item.product_id) || [])];
+
+      if (productIds.length === 0) return;
+
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .in('id', productIds);
+
+      if (productsError) throw productsError;
+
+      const productMap: { [outfitId: string]: Product[] } = {};
+
+      outfitItemsData?.forEach(item => {
+        const product = productsData?.find(p => p.id === item.product_id);
+        if (product) {
+          if (!productMap[item.outfit_id]) {
+            productMap[item.outfit_id] = [];
+          }
+          productMap[item.outfit_id].push({
+            id: product.id,
+            brand: product.brand || '',
+            name: product.name,
+            category: product.category,
+            gender: product.gender,
+            body_type: product.body_type || [],
+            vibe: product.vibe || [],
+            color: product.color || '',
+            season: product.season || [],
+            silhouette: product.silhouette || '',
+            image_url: product.image_url,
+            product_link: product.product_link || '',
+            affiliate_link: product.affiliate_link || '',
+            price: product.price,
+            stock_status: product.stock_status || 'in_stock',
+            created_at: product.created_at,
+            updated_at: product.updated_at,
+          });
+        }
+      });
+
+      setOutfitProducts(productMap);
+    } catch (error) {
+      console.error('Failed to load outfit products:', error);
+    }
+  };
+
+  const loadRankingProducts = async () => {
+    const outfitIds = rankingOutfits.map(o => o.id);
+    if (outfitIds.length === 0) return;
+
+    try {
+      const { data: outfitItemsData, error: itemsError } = await supabase
+        .from('outfit_items')
+        .select('outfit_id, product_id')
+        .in('outfit_id', outfitIds);
+
+      if (itemsError) throw itemsError;
+
+      const productIds = [...new Set(outfitItemsData?.map(item => item.product_id) || [])];
+
+      if (productIds.length === 0) return;
+
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .in('id', productIds);
+
+      if (productsError) throw productsError;
+
+      const productMap: { [outfitId: string]: Product[] } = {};
+
+      outfitItemsData?.forEach(item => {
+        const product = productsData?.find(p => p.id === item.product_id);
+        if (product) {
+          if (!productMap[item.outfit_id]) {
+            productMap[item.outfit_id] = [];
+          }
+          productMap[item.outfit_id].push({
+            id: product.id,
+            brand: product.brand || '',
+            name: product.name,
+            category: product.category,
+            gender: product.gender,
+            body_type: product.body_type || [],
+            vibe: product.vibe || [],
+            color: product.color || '',
+            season: product.season || [],
+            silhouette: product.silhouette || '',
+            image_url: product.image_url,
+            product_link: product.product_link || '',
+            affiliate_link: product.affiliate_link || '',
+            price: product.price,
+            stock_status: product.stock_status || 'in_stock',
+            created_at: product.created_at,
+            updated_at: product.updated_at,
+          });
+        }
+      });
+
+      setOutfitProducts(productMap);
+    } catch (error) {
+      console.error('Failed to load ranking products:', error);
+    }
+  };
 
   const loadRankingFeedbackCounts = async () => {
     const sessionId = getOrCreateSessionId();
@@ -700,6 +821,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                     userFeedback={feedback.userFeedback}
                     outfit={outfit}
                     showOutfitInfo={!!rankingGender}
+                    products={outfitProducts[outfit.id] || []}
                   />
                 </div>
 
