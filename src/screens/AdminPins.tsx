@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outfit, ImagePin, Product, OutfitItem } from '../data/outfits';
+import { Outfit, ImagePin, Product } from '../data/outfits';
 import { fetchOutfits } from '../utils/outfitService';
 import { supabase } from '../utils/supabase';
-import { X, Save, ArrowLeft, Package, Plus } from 'lucide-react';
+import { X, Save, ArrowLeft, Package } from 'lucide-react';
 
 type ImageType = 'flatlay' | 'on_model';
 

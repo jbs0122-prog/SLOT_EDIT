@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Outfit, OutfitItem, Product } from '../data/outfits';
+import { Outfit, OutfitItem } from '../data/outfits';
 
 interface RankingOutfit extends Outfit {
   likeCount: number;

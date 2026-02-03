@@ -3,11 +3,12 @@ import Input from './screens/Input';
 import Results from './screens/Results';
 import Loading from './screens/Loading';
 import AdminPins from './screens/AdminPins';
+import AdminProducts from './screens/AdminProducts';
 import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
 import { WeatherData } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'results' | 'admin';
+type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('loading');
@@ -23,6 +24,10 @@ function App() {
   useEffect(() => {
     if (window.location.hash === '#admin') {
       setCurrentScreen('admin');
+      return;
+    }
+    if (window.location.hash === '#admin-products') {
+      setCurrentScreen('admin-products');
       return;
     }
 
@@ -121,6 +126,7 @@ function App() {
         />
       )}
       {currentScreen === 'admin' && <AdminPins />}
+      {currentScreen === 'admin-products' && <AdminProducts />}
     </>
   );
 }
