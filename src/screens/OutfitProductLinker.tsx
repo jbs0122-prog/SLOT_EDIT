@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Outfit, Product, OutfitItem } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
+import FlatlayRenderer from './FlatlayRenderer';
 
 interface OutfitProductLinkerProps {
   outfit: Outfit;
@@ -26,6 +27,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const [draggedProduct, setDraggedProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [showRenderer, setShowRenderer] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -368,7 +370,15 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t flex justify-end">
+          <div className="mt-6 pt-6 border-t flex justify-between items-center">
+            <button
+              onClick={() => setShowRenderer(true)}
+              disabled={linkedItems.length === 0}
+              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+            >
+              <ImageIcon size={18} />
+              플랫레이 렌더링
+            </button>
             <button
               onClick={onClose}
               className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
@@ -378,6 +388,17 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
           </div>
         </div>
       </div>
+
+      {showRenderer && (
+        <FlatlayRenderer
+          outfitId={outfit.id}
+          onClose={() => setShowRenderer(false)}
+          onRendered={() => {
+            setShowRenderer(false);
+            onLinksUpdated();
+          }}
+        />
+      )}
     </div>
   );
 }
