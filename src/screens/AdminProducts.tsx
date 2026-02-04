@@ -346,8 +346,8 @@ export default function AdminProducts() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">전체</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
                   </select>
                 </div>
 
@@ -377,11 +377,11 @@ export default function AdminProducts() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">전체</option>
-                    <option value="elevated cool">Elevated Cool</option>
-                    <option value="effortless natural">Effortless Natural</option>
-                    <option value="RETRO LUXE">Retro Luxe</option>
+                    <option value="ELEVATED_COOL">Elevated Cool</option>
+                    <option value="EFFORTLESS_NATURAL">Effortless Natural</option>
+                    <option value="RETRO_LUXE">Retro Luxe</option>
                     <option value="SPORT-MODERN">Sport Modern</option>
-                    <option value="CREATIVE LAYERED">Creative Layered</option>
+                    <option value="CREATIVE_LAYERED">Creative Layered</option>
                   </select>
                 </div>
               </div>
