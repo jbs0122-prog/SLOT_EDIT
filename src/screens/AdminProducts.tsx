@@ -346,9 +346,8 @@ export default function AdminProducts() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">전체</option>
-                    <option value="남성">남성</option>
-                    <option value="여성">여성</option>
-                    <option value="유니섹스">유니섹스</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
                   </select>
                 </div>
 
@@ -362,9 +361,9 @@ export default function AdminProducts() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">전체</option>
-                    <option value="마른">마른</option>
-                    <option value="표준">표준</option>
-                    <option value="통통">통통</option>
+                    <option value="slim">Slim</option>
+                    <option value="regular">Regular</option>
+                    <option value="plus-size">Plus-size</option>
                   </select>
                 </div>
 
@@ -378,12 +377,11 @@ export default function AdminProducts() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">전체</option>
-                    <option value="캐주얼">캐주얼</option>
-                    <option value="포멀">포멀</option>
-                    <option value="스트릿">스트릿</option>
-                    <option value="빈티지">빈티지</option>
-                    <option value="미니멀">미니멀</option>
-                    <option value="모던">모던</option>
+                    <option value="elevated cool">Elevated Cool</option>
+                    <option value="effortless natural">Effortless Natural</option>
+                    <option value="RETRO LUXE">Retro Luxe</option>
+                    <option value="SPORT-MODERN">Sport Modern</option>
+                    <option value="CREATIVE LAYERED">Creative Layered</option>
                   </select>
                 </div>
               </div>
