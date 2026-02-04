@@ -530,7 +530,17 @@ export default function AdminPins() {
                     </label>
                     <input
                       type="url"
-                      value={pins[selectedPinIndex].url || ''}
+                      value={(() => {
+                        const pin = pins[selectedPinIndex];
+                        if (pin.url) return pin.url;
+                        if (pin.product_id) {
+                          const product = allProducts.find(p => p.id === pin.product_id);
+                          if (product) {
+                            return product.affiliate_link || product.product_link || '';
+                          }
+                        }
+                        return '';
+                      })()}
                       onChange={(e) => handlePinUrlChange(selectedPinIndex, e.target.value)}
                       placeholder="https://example.com/product"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -551,26 +561,33 @@ export default function AdminPins() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {pins.map((pin, index) => (
-                    <div
-                      key={index}
-                      className="bg-white rounded p-2"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-700">
-                          핀 #{index + 1}: {getItemLabel(pin.item)}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          ({pin.x.toFixed(1)}%, {pin.y.toFixed(1)}%)
-                        </span>
-                      </div>
-                      {pin.url && (
-                        <div className="text-xs text-blue-600 truncate">
-                          URL: {pin.url}
+                  {pins.map((pin, index) => {
+                    const displayUrl = pin.url || (pin.product_id ? (() => {
+                      const product = allProducts.find(p => p.id === pin.product_id);
+                      return product ? (product.affiliate_link || product.product_link || '') : '';
+                    })() : '');
+
+                    return (
+                      <div
+                        key={index}
+                        className="bg-white rounded p-2"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm text-gray-700">
+                            핀 #{index + 1}: {getItemLabel(pin.item)}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            ({pin.x.toFixed(1)}%, {pin.y.toFixed(1)}%)
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        {displayUrl && (
+                          <div className="text-xs text-blue-600 truncate">
+                            URL: {displayUrl}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

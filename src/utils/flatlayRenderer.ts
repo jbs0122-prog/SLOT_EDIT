@@ -75,42 +75,42 @@ async function calculateLayoutWithImages(
     };
   } = {
     outer: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.35,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.55,
       offsetX: -availableWidth * 0.2,
       offsetY: -availableHeight * 0.15,
       rotation: -8,
       zIndex: 1,
     },
     top: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.32,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.48,
       offsetX: availableWidth * 0.05,
       offsetY: -availableHeight * 0.1,
       rotation: 3,
       zIndex: 2,
     },
     bottom: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.3,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.45,
       offsetX: availableWidth * 0.15,
       offsetY: availableHeight * 0.15,
       rotation: -5,
       zIndex: 3,
     },
     shoes: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.25,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.38,
       offsetX: -availableWidth * 0.18,
       offsetY: availableHeight * 0.25,
       rotation: 12,
       zIndex: 4,
     },
     bag: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.22,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.35,
       offsetX: availableWidth * 0.25,
       offsetY: -availableHeight * 0.22,
       rotation: -10,
       zIndex: 5,
     },
     accessory: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.15,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.25,
       offsetX: -availableWidth * 0.28,
       offsetY: -availableHeight * 0.28,
       rotation: 15,
@@ -268,6 +268,21 @@ export async function renderFlatlay(
     }
   }
 
+  try {
+    const logoImg = await loadImageWithProxy('/logo-watermark.png', false);
+    const logoWidth = 300;
+    const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
+    const logoX = (canvas.width - logoWidth) / 2;
+    const logoY = (canvas.height - logoHeight) / 2;
+
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
+    ctx.restore();
+  } catch (error) {
+    console.error('Failed to load logo:', error);
+  }
+
   const pinsWithPercentages = positions.map(pos => ({
     ...pos,
     x: ((pos.x + pos.width / 2) / opts.canvasWidth) * 100,
@@ -337,6 +352,21 @@ export async function renderFlatlayWithCustomPositions(
       ctx.strokeStyle = '#9ca3af';
       ctx.strokeRect(position.x, position.y, position.width, position.height);
     }
+  }
+
+  try {
+    const logoImg = await loadImageWithProxy('/logo-watermark.png', false);
+    const logoWidth = 300;
+    const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
+    const logoX = (canvas.width - logoWidth) / 2;
+    const logoY = (canvas.height - logoHeight) / 2;
+
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
+    ctx.restore();
+  } catch (error) {
+    console.error('Failed to load logo:', error);
   }
 
   return new Promise((resolve, reject) => {
