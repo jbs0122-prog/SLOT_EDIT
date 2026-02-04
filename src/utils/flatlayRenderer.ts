@@ -75,45 +75,45 @@ async function calculateLayoutWithImages(
     };
   } = {
     outer: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.55,
-      offsetX: -availableWidth * 0.2,
-      offsetY: -availableHeight * 0.15,
-      rotation: -8,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.35,
+      offsetX: -availableWidth * 0.28,
+      offsetY: -availableHeight * 0.18,
+      rotation: -12,
       zIndex: 1,
     },
     top: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.48,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.32,
       offsetX: availableWidth * 0.05,
-      offsetY: -availableHeight * 0.1,
-      rotation: 3,
+      offsetY: -availableHeight * 0.22,
+      rotation: 5,
       zIndex: 2,
     },
     bottom: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.45,
-      offsetX: availableWidth * 0.15,
-      offsetY: availableHeight * 0.15,
-      rotation: -5,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.30,
+      offsetX: availableWidth * 0.22,
+      offsetY: availableHeight * 0.18,
+      rotation: -8,
       zIndex: 3,
     },
     shoes: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.38,
-      offsetX: -availableWidth * 0.18,
-      offsetY: availableHeight * 0.25,
-      rotation: 12,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.28,
+      offsetX: -availableWidth * 0.25,
+      offsetY: availableHeight * 0.28,
+      rotation: 15,
       zIndex: 4,
     },
     bag: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.35,
-      offsetX: availableWidth * 0.25,
-      offsetY: -availableHeight * 0.22,
-      rotation: -10,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.26,
+      offsetX: availableWidth * 0.32,
+      offsetY: -availableHeight * 0.05,
+      rotation: -15,
       zIndex: 5,
     },
     accessory: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.25,
-      offsetX: -availableWidth * 0.28,
-      offsetY: -availableHeight * 0.28,
-      rotation: 15,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.18,
+      offsetX: -availableWidth * 0.05,
+      offsetY: availableHeight * 0.32,
+      rotation: 20,
       zIndex: 6,
     },
   };
@@ -270,13 +270,16 @@ export async function renderFlatlay(
 
   try {
     const logoImg = await loadImageWithProxy('/logo-watermark.png', false);
-    const logoWidth = 300;
+    const logoWidth = 280;
     const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
     const logoX = (canvas.width - logoWidth) / 2;
     const logoY = (canvas.height - logoHeight) / 2;
 
     ctx.save();
-    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    const padding = 20;
+    ctx.fillRect(logoX - padding, logoY - padding, logoWidth + padding * 2, logoHeight + padding * 2);
+    ctx.globalAlpha = 1.0;
     ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
     ctx.restore();
   } catch (error) {
@@ -356,13 +359,16 @@ export async function renderFlatlayWithCustomPositions(
 
   try {
     const logoImg = await loadImageWithProxy('/logo-watermark.png', false);
-    const logoWidth = 300;
+    const logoWidth = 280;
     const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
     const logoX = (canvas.width - logoWidth) / 2;
     const logoY = (canvas.height - logoHeight) / 2;
 
     ctx.save();
-    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    const padding = 20;
+    ctx.fillRect(logoX - padding, logoY - padding, logoWidth + padding * 2, logoHeight + padding * 2);
+    ctx.globalAlpha = 1.0;
     ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
     ctx.restore();
   } catch (error) {

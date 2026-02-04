@@ -16,6 +16,9 @@ export default function AdminPins() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [showProductsPanel, setShowProductsPanel] = useState(false);
   const imageRef = useRef<HTMLDivElement>(null);
+  const [filterGender, setFilterGender] = useState<string>('');
+  const [filterBodyType, setFilterBodyType] = useState<string>('');
+  const [filterVibe, setFilterVibe] = useState<string>('');
 
   useEffect(() => {
     loadOutfits();
@@ -227,6 +230,13 @@ export default function AdminPins() {
     setPins(newPins);
   };
 
+  const filteredOutfits = outfits.filter(outfit => {
+    if (filterGender && outfit.gender !== filterGender) return false;
+    if (filterBodyType && outfit.body_type !== filterBodyType) return false;
+    if (filterVibe && outfit.vibe !== filterVibe) return false;
+    return true;
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -245,26 +255,85 @@ export default function AdminPins() {
 
         {!selectedOutfit ? (
           <>
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-gray-600">
-                총 {outfits.length}개의 코디
-              </p>
-              <a
-                href="#admin-products"
-                className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-              >
-                <Package size={18} />
-                제품 관리
-              </a>
+            <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-gray-600 font-semibold">
+                  총 {filteredOutfits.length}개의 코디 (전체: {outfits.length}개)
+                </p>
+                <a
+                  href="#admin-products"
+                  className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                >
+                  <Package size={18} />
+                  제품 관리
+                </a>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    성별
+                  </label>
+                  <select
+                    value={filterGender}
+                    onChange={(e) => setFilterGender(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="남성">남성</option>
+                    <option value="여성">여성</option>
+                    <option value="유니섹스">유니섹스</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    체형
+                  </label>
+                  <select
+                    value={filterBodyType}
+                    onChange={(e) => setFilterBodyType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="마른">마른</option>
+                    <option value="표준">표준</option>
+                    <option value="통통">통통</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    분위기
+                  </label>
+                  <select
+                    value={filterVibe}
+                    onChange={(e) => setFilterVibe(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="캐주얼">캐주얼</option>
+                    <option value="포멀">포멀</option>
+                    <option value="스트릿">스트릿</option>
+                    <option value="빈티지">빈티지</option>
+                    <option value="미니멀">미니멀</option>
+                    <option value="모던">모던</option>
+                  </select>
+                </div>
+              </div>
             </div>
-            {outfits.length === 0 ? (
+            {filteredOutfits.length === 0 ? (
               <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-                <p className="text-gray-500 mb-4">등록된 코디가 없습니다</p>
-                <p className="text-sm text-gray-400">데이터베이스에 코디를 추가해주세요</p>
+                <p className="text-gray-500 mb-4">
+                  {outfits.length === 0 ? '등록된 코디가 없습니다' : '검색 결과가 없습니다'}
+                </p>
+                <p className="text-sm text-gray-400">
+                  {outfits.length === 0 ? '데이터베이스에 코디를 추가해주세요' : '필터 조건을 변경해보세요'}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {outfits.map((outfit) => (
+                {filteredOutfits.map((outfit) => (
                   <button
                     key={outfit.id}
                     onClick={() => handleOutfitSelect(outfit)}

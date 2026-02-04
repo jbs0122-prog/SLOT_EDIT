@@ -28,6 +28,10 @@ export default function AdminProducts() {
   const [filterGender, setFilterGender] = useState('all');
   const [filterVibe, setFilterVibe] = useState('all');
 
+  const [outfitFilterGender, setOutfitFilterGender] = useState('');
+  const [outfitFilterBodyType, setOutfitFilterBodyType] = useState('');
+  const [outfitFilterVibe, setOutfitFilterVibe] = useState('');
+
   useEffect(() => {
     loadProducts();
     loadOutfits();
@@ -187,6 +191,13 @@ export default function AdminProducts() {
     return matchesSearch && matchesCategory && matchesGender && matchesVibe;
   });
 
+  const filteredOutfits = outfits.filter(outfit => {
+    if (outfitFilterGender && outfit.gender !== outfitFilterGender) return false;
+    if (outfitFilterBodyType && outfit.body_type !== outfitFilterBodyType) return false;
+    if (outfitFilterVibe && outfit.vibe !== outfitFilterVibe) return false;
+    return true;
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -322,31 +333,87 @@ export default function AdminProducts() {
             </div>
           </>
         ) : (
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-2">
-                  코디 목록 ({outfits.length})
-                </h2>
-                <p className="text-sm text-gray-600">
-                  코디를 선택하여 제품을 연결하세요
-                </p>
+          <>
+            <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    성별
+                  </label>
+                  <select
+                    value={outfitFilterGender}
+                    onChange={(e) => setOutfitFilterGender(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="남성">남성</option>
+                    <option value="여성">여성</option>
+                    <option value="유니섹스">유니섹스</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    체형
+                  </label>
+                  <select
+                    value={outfitFilterBodyType}
+                    onChange={(e) => setOutfitFilterBodyType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="마른">마른</option>
+                    <option value="표준">표준</option>
+                    <option value="통통">통통</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    분위기
+                  </label>
+                  <select
+                    value={outfitFilterVibe}
+                    onChange={(e) => setOutfitFilterVibe(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="캐주얼">캐주얼</option>
+                    <option value="포멀">포멀</option>
+                    <option value="스트릿">스트릿</option>
+                    <option value="빈티지">빈티지</option>
+                    <option value="미니멀">미니멀</option>
+                    <option value="모던">모던</option>
+                  </select>
+                </div>
               </div>
-              <button
-                onClick={() => setShowAutoGenerator(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md"
-              >
-                <Sparkles size={18} />
-                자동 생성
-              </button>
             </div>
-            {outfits.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                등록된 코디가 없습니다
+
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">
+                    코디 목록 ({filteredOutfits.length}개 / 전체 {outfits.length}개)
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    코디를 선택하여 제품을 연결하세요
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAutoGenerator(true)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md"
+                >
+                  <Sparkles size={18} />
+                  자동 생성
+                </button>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {outfits.map((outfit) => (
+              {filteredOutfits.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  {outfits.length === 0 ? '등록된 코디가 없습니다' : '검색 결과가 없습니다'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredOutfits.map((outfit) => (
                   <div
                     key={outfit.id}
                     className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden relative"
@@ -391,7 +458,8 @@ export default function AdminProducts() {
                 ))}
               </div>
             )}
-          </div>
+            </div>
+          </>
         )}
       </div>
 
