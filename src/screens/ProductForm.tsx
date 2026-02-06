@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { uploadProductImage, validateImageFile } from '../utils/imageUpload';
-import { X, Save, Upload, Loader2 } from 'lucide-react';
+import { analyzeFashionImage } from '../utils/fashionAnalyzer';
+import { X, Save, Upload, Loader2, Sparkles } from 'lucide-react';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -150,6 +151,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -220,6 +222,86 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
     setUploading(false);
     e.target.value = '';
+  };
+
+  const handleAIAnalysis = async () => {
+    if (!formData.image_url.trim()) {
+      alert('먼저 이미지를 업로드하거나 URL을 입력해주세요');
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const analysis = await analyzeFashionImage(formData.image_url);
+
+      const categoryMap: Record<string, string> = {
+        '상의': 'top',
+        '하의': 'bottom',
+        '아우터': 'outer',
+        '신발': 'shoes',
+        '가방': 'bag',
+        '액세서리': 'accessory'
+      };
+
+      const genderMap: Record<string, string> = {
+        '남성': 'MALE',
+        '여성': 'FEMALE',
+        '공용': 'UNISEX'
+      };
+
+      const seasonMap: Record<string, string> = {
+        '봄': 'spring',
+        '여름': 'summer',
+        '가을': 'fall',
+        '겨울': 'winter'
+      };
+
+      const colorFamilyMap: Record<string, string> = {
+        '무채색': 'neutral',
+        '난색': 'warm',
+        '한색': 'cool'
+      };
+
+      const colorToneMap: Record<string, string> = {
+        '밝음': 'light',
+        '중간': 'medium',
+        '어두움': 'dark'
+      };
+
+      const patternMap: Record<string, string> = {
+        '무지': 'solid',
+        '스트라이프': 'stripe',
+        '체크': 'check',
+        '도트': 'dot',
+        '프린트': 'print',
+        '기타': 'other'
+      };
+
+      setFormData(prev => ({
+        ...prev,
+        name: analysis.description || prev.name,
+        category: categoryMap[analysis.category] as Product['category'] || prev.category,
+        gender: genderMap[analysis.gender] || prev.gender,
+        color: analysis.color || prev.color,
+        material: analysis.material || prev.material,
+        silhouette: analysis.silhouette || prev.silhouette,
+        vibe: analysis.vibe || prev.vibe,
+        season: analysis.season.map(s => seasonMap[s] || s).filter(Boolean) || prev.season,
+        color_family: colorFamilyMap[analysis.color_family] || analysis.color_family || prev.color_family,
+        color_tone: colorToneMap[analysis.color_tone] || analysis.color_tone || prev.color_tone,
+        sub_category: analysis.sub_category || prev.sub_category,
+        pattern: patternMap[analysis.pattern] || analysis.pattern || prev.pattern,
+        formality: analysis.formality || prev.formality,
+        warmth: analysis.warmth || prev.warmth
+      }));
+
+      alert('AI 분석이 완료되었습니다! 필요한 부분은 수정해주세요.');
+    } catch (error) {
+      console.error('AI analysis error:', error);
+      alert('AI 분석에 실패했습니다: ' + (error as Error).message);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const validate = () => {
@@ -671,7 +753,27 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
             {formData.image_url && (
               <div className="mt-4">
-                <p className="text-sm text-gray-600 mb-2">미리보기:</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-600">미리보기:</p>
+                  <button
+                    type="button"
+                    onClick={handleAIAnalysis}
+                    disabled={analyzing || uploading}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium shadow-md transition-all"
+                  >
+                    {analyzing ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>AI 분석 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} />
+                        <span>AI 자동 분석</span>
+                      </>
+                    )}
+                  </button>
+                </div>
                 <img
                   src={formData.image_url}
                   alt="Preview"
@@ -680,6 +782,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     e.currentTarget.src = 'https://via.placeholder.com/192?text=Invalid+URL';
                   }}
                 />
+                <p className="text-xs text-gray-500 mt-2">
+                  AI 자동 분석: Gemini 2.5 Flash Image가 제품 정보를 자동으로 채워줍니다
+                </p>
               </div>
             )}
           </div>
