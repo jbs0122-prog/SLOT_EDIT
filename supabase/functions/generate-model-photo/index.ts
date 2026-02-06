@@ -130,7 +130,7 @@ The photo should look like a high-end fashion catalog or editorial spread.`;
             },
           ],
           generationConfig: {
-            responseModalities: ["Text", "Image"],
+            responseModalities: ["TEXT", "IMAGE"],
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
