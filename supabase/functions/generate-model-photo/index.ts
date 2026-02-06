@@ -107,7 +107,7 @@ ${occasion ? `- Context: outfit for ${occasion}` : ""}
 The photo should look like a high-end fashion catalog or editorial spread.`;
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${geminiApiKey}`,
       {
         method: "POST",
         headers: {
