@@ -110,6 +110,19 @@ export default function ImageSlider({
     setCurrentIndex((prev) => Math.min(images.length - 1, prev + 1));
   };
 
+  const affiliateBar = (
+    <div className="w-full bg-orange-500 overflow-hidden">
+      <div className="inline-flex animate-marquee">
+        <span className="whitespace-nowrap py-2 px-8 text-[11px] text-black font-medium tracking-wide">
+          As an Amazon Associate I earn from qualifying purchases.
+        </span>
+        <span className="whitespace-nowrap py-2 px-8 text-[11px] text-black font-medium tracking-wide">
+          As an Amazon Associate I earn from qualifying purchases.
+        </span>
+      </div>
+    </div>
+  );
+
   if (images.length === 0) {
     return null;
   }
@@ -118,8 +131,9 @@ export default function ImageSlider({
     const pins = getPinsForImage(images[0].label);
 
     return (
+      <div>
       <div
-        className="relative bg-gray-100 h-full"
+        className="relative bg-gray-100"
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
@@ -238,13 +252,16 @@ export default function ImageSlider({
           </div>
         )}
       </div>
+      {affiliateBar}
+      </div>
     );
   }
 
   return (
+    <div>
     <div
       ref={containerRef}
-      className="relative overflow-hidden h-full"
+      className="relative overflow-hidden"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -418,6 +435,8 @@ export default function ImageSlider({
           onClose={() => setSelectedProduct(null)}
         />
       )}
+    </div>
+    {affiliateBar}
     </div>
   );
 }
