@@ -7,7 +7,7 @@ import AdminProducts from './screens/AdminProducts';
 import AdminLayout from './screens/AdminLayout';
 import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
-import { WeatherData } from './utils/weather';
+import { WeatherData, getSeasonsFromTemperature } from './utils/weather';
 
 type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products';
 
@@ -70,31 +70,36 @@ function App() {
   };
 
   const handleGenerate = (gender: string, bodyType: string, vibe: string, weather: WeatherData) => {
-    console.log('=== GENERATE BUTTON CLICKED ===');
-    console.log('Total outfits loaded:', outfits.length);
-    console.log('Generating outfits for:', { gender, bodyType, vibe });
-
     const normalizedGender = normalizeString(gender);
     const normalizedBodyType = normalizeString(bodyType);
     const normalizedVibe = normalizeString(vibe);
+    const weatherSeasons = getSeasonsFromTemperature(weather.temperature);
 
     const matches = outfits.filter(outfit => {
       const matchesGender = normalizeString(outfit.gender) === normalizedGender;
       const matchesBodyType = normalizeString(outfit.body_type) === normalizedBodyType;
       const matchesVibe = normalizeString(outfit.vibe) === normalizedVibe;
-      console.log('Checking outfit:', {
-        outfit: `${outfit.gender} - ${outfit.body_type} - ${outfit.vibe}`,
-        matchesGender,
-        matchesBodyType,
-        matchesVibe,
-        normalizedGender,
-        normalizedBodyType,
-        normalizedVibe
-      });
-      return matchesGender && matchesBodyType && matchesVibe;
-    });
 
-    console.log('Matches found:', matches.length);
+      if (!matchesGender || !matchesBodyType || !matchesVibe) return false;
+
+      if (outfit.items && outfit.items.length > 0) {
+        const productsWithSeasons = outfit.items.filter(
+          item => item.product?.season && item.product.season.length > 0
+        );
+        if (productsWithSeasons.length > 0) {
+          const commonSeasons = productsWithSeasons.reduce<string[]>((acc, item) => {
+            const productSeasons = item.product!.season;
+            return acc.filter(s => productSeasons.includes(s));
+          }, [...productsWithSeasons[0].product!.season]);
+
+          if (commonSeasons.length > 0) {
+            return weatherSeasons.some(s => commonSeasons.includes(s));
+          }
+        }
+      }
+
+      return true;
+    });
 
     setSelectedOutfits(matches);
     setContext({ gender, bodyType, vibe, weather });

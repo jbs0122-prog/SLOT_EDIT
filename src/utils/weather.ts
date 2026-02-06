@@ -105,6 +105,13 @@ export async function fetchNYCWeather(daysAhead: 0 | 1 = 0): Promise<WeatherData
   }
 }
 
+export function getSeasonsFromTemperature(tempF: number): string[] {
+  if (tempF < 45) return ['winter'];
+  if (tempF < 60) return ['winter', 'fall', 'spring'];
+  if (tempF < 75) return ['spring', 'fall'];
+  return ['summer', 'spring'];
+}
+
 export function getWeatherEmoji(condition: WeatherCondition): string {
   switch (condition) {
     case 'Sunny': return '☀️';
