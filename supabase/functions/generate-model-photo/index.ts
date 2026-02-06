@@ -4,7 +4,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
 interface RequestBody {
@@ -12,6 +13,18 @@ interface RequestBody {
   gender: string;
   bodyType: string;
   occasion?: string;
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+  }
+  return btoa(binary);
 }
 
 Deno.serve(async (req: Request) => {
@@ -34,7 +47,8 @@ Deno.serve(async (req: Request) => {
       throw new Error("Supabase credentials not found");
     }
 
-    const { flatlayImageUrl, gender, bodyType, occasion }: RequestBody = await req.json();
+    const { flatlayImageUrl, gender, bodyType, occasion }: RequestBody =
+      await req.json();
 
     if (!flatlayImageUrl || !gender || !bodyType) {
       return new Response(
@@ -46,22 +60,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const ethnicityOptions = ["Black", "White", "Caucasian", "African American"];
-    const randomEthnicity = ethnicityOptions[Math.floor(Math.random() * ethnicityOptions.length)];
+    const ethnicityOptions = [
+      "Black",
+      "White",
+      "Caucasian",
+      "African American",
+    ];
+    const randomEthnicity =
+      ethnicityOptions[Math.floor(Math.random() * ethnicityOptions.length)];
 
     const genderText = gender === "남성" ? "male" : "female";
-    const bodyTypeText = bodyType === "슬림"
-      ? "slim, fit"
-      : bodyType === "오버핏"
-      ? "relaxed fit, comfortable style"
-      : "regular fit";
+    const bodyTypeText =
+      bodyType === "슬림"
+        ? "slim, fit"
+        : bodyType === "오버핏"
+          ? "relaxed fit, comfortable style"
+          : "regular fit";
 
     const fetchImageResponse = await fetch(flatlayImageUrl);
     if (!fetchImageResponse.ok) {
-      throw new Error(`Failed to fetch flatlay image: ${fetchImageResponse.statusText}`);
+      throw new Error(
+        `Failed to fetch flatlay image: ${fetchImageResponse.statusText}`
+      );
     }
     const imageBuffer = await fetchImageResponse.arrayBuffer();
-    const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+    const base64Image = uint8ArrayToBase64(new Uint8Array(imageBuffer));
 
     const prompt = `Create a professional fashion editorial photo of a ${randomEthnicity} ${genderText} model wearing the exact outfit shown in the flatlay image.
 
@@ -84,7 +107,7 @@ ${occasion ? `- Context: outfit for ${occasion}` : ""}
 The photo should look like a high-end fashion catalog or editorial spread.`;
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${geminiApiKey}`,
       {
         method: "POST",
         headers: {
@@ -107,10 +130,10 @@ The photo should look like a high-end fashion catalog or editorial spread.`;
             },
           ],
           generationConfig: {
+            responseModalities: ["Text", "Image"],
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 8192,
           },
         }),
       }
@@ -119,36 +142,71 @@ The photo should look like a high-end fashion catalog or editorial spread.`;
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text();
       console.error("Gemini API error:", errorText);
-      throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
+      throw new Error(
+        `Gemini API error: ${geminiResponse.status} - ${errorText}`
+      );
     }
 
     const geminiResult = await geminiResponse.json();
+    console.log(
+      "Gemini response structure:",
+      JSON.stringify(
+        {
+          hasCandidates: !!geminiResult.candidates,
+          candidateCount: geminiResult.candidates?.length,
+          parts: geminiResult.candidates?.[0]?.content?.parts?.map(
+            (p: Record<string, unknown>) => ({
+              hasText: !!p.text,
+              hasInlineData: !!p.inline_data,
+              mimeType: (p.inline_data as Record<string, unknown>)?.mime_type,
+            })
+          ),
+        },
+        null,
+        2
+      )
+    );
 
     if (!geminiResult.candidates?.[0]?.content?.parts) {
-      throw new Error("No image generated from Gemini");
+      const blockReason = geminiResult.candidates?.[0]?.finishReason;
+      const promptFeedback = geminiResult.promptFeedback;
+      throw new Error(
+        `No content generated. Finish reason: ${blockReason || "unknown"}, Feedback: ${JSON.stringify(promptFeedback)}`
+      );
     }
 
     let generatedImageData = null;
+    let generatedMimeType = "image/png";
     for (const part of geminiResult.candidates[0].content.parts) {
       if (part.inline_data?.data) {
         generatedImageData = part.inline_data.data;
+        generatedMimeType = part.inline_data.mime_type || "image/png";
         break;
       }
     }
 
     if (!generatedImageData) {
-      throw new Error("No image data found in Gemini response");
+      const textParts = geminiResult.candidates[0].content.parts
+        .filter((p: Record<string, unknown>) => p.text)
+        .map((p: Record<string, unknown>) => p.text)
+        .join(" ");
+      throw new Error(
+        `No image data in Gemini response. Text response: ${textParts.substring(0, 200)}`
+      );
     }
 
-    const imageBytes = Uint8Array.from(atob(generatedImageData), c => c.charCodeAt(0));
+    const imageBytes = Uint8Array.from(atob(generatedImageData), (c) =>
+      c.charCodeAt(0)
+    );
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const fileName = `model-photo-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const ext = generatedMimeType.includes("jpeg") ? "jpg" : "png";
+    const fileName = `model-photo-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+    const { error: uploadError } = await supabase.storage
       .from("product-images")
       .upload(fileName, imageBytes, {
-        contentType: "image/png",
+        contentType: generatedMimeType,
         upsert: false,
       });
 
@@ -176,7 +234,8 @@ The photo should look like a high-end fashion catalog or editorial spread.`;
     console.error("Error generating model photo:", error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error occurred",
+        error:
+          error instanceof Error ? error.message : "Unknown error occurred",
       }),
       {
         status: 500,

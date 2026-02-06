@@ -28,6 +28,8 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [renderedImageUrl, setRenderedImageUrl] = useState('');
+  const [modelImageUrl, setModelImageUrl] = useState('');
+  const [modelPhotoError, setModelPhotoError] = useState('');
   const [renderingStep, setRenderingStep] = useState('');
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
 
     setRendering(true);
     setError('');
+    setModelPhotoError('');
     setSuccess(false);
     setRenderingStep('플랫레이 이미지 생성 중...');
 
@@ -93,21 +96,18 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
       const { imageUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
 
       setRenderedImageUrl(imageUrl);
-      setRenderingStep('AI 모델컷 생성 중...');
+      setRenderingStep('AI 모델컷 생성 중... (최대 30초 소요)');
 
       try {
-        await generateAndSaveModelPhoto(outfitId, imageUrl);
+        const modelUrl = await generateAndSaveModelPhoto(outfitId, imageUrl);
+        setModelImageUrl(modelUrl);
       } catch (modelError) {
         console.error('Model photo generation error:', modelError);
+        setModelPhotoError((modelError as Error).message);
       }
 
       setSuccess(true);
       setRenderingStep('');
-
-      setTimeout(() => {
-        onRendered();
-        onClose();
-      }, 2000);
     } catch (err) {
       console.error('Render error:', err);
       setError((err as Error).message);
@@ -158,16 +158,31 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
               )}
 
               {success && (
-                <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex gap-3">
-                    <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-green-900">렌더링 완료!</p>
-                      <p className="text-sm text-green-700">
-                        플랫레이 이미지와 AI 모델컷이 성공적으로 생성되고 저장되었습니다.
-                      </p>
+                <div className="mb-4 space-y-3">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex gap-3">
+                      <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-green-900">플랫레이 생성 완료!</p>
+                        <p className="text-sm text-green-700">
+                          {modelImageUrl
+                            ? '플랫레이 이미지와 AI 모델컷이 모두 성공적으로 생성되었습니다.'
+                            : '플랫레이 이미지가 생성되었습니다.'}
+                        </p>
+                      </div>
                     </div>
                   </div>
+                  {modelPhotoError && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <div className="flex gap-3">
+                        <AlertCircle size={20} className="text-amber-600 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-amber-900">모델컷 생성 실패</p>
+                          <p className="text-sm text-amber-700">{modelPhotoError}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -246,18 +261,46 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
 
               {success && renderedImageUrl && (
                 <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                      생성된 플랫레이
-                    </h3>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <img
-                        src={renderedImageUrl}
-                        alt="Rendered flatlay"
-                        className="w-full max-w-md mx-auto rounded-lg shadow-md"
-                      />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                        플랫레이
+                      </h3>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <img
+                          src={renderedImageUrl}
+                          alt="Rendered flatlay"
+                          className="w-full rounded-lg shadow-md"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                        AI 모델컷
+                      </h3>
+                      {modelImageUrl ? (
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <img
+                            src={modelImageUrl}
+                            alt="AI model photo"
+                            className="w-full rounded-lg shadow-md"
+                          />
+                        </div>
+                      ) : (
+                        <div className="bg-gray-100 rounded-lg p-6 flex items-center justify-center h-full min-h-[200px]">
+                          <p className="text-sm text-gray-500 text-center">
+                            {modelPhotoError ? '생성 실패' : '생성되지 않음'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
+                  <button
+                    onClick={() => { onRendered(); onClose(); }}
+                    className="w-full bg-gray-900 text-white px-6 py-3 rounded-lg hover:bg-gray-800 font-medium"
+                  >
+                    확인
+                  </button>
                 </div>
               )}
             </>
