@@ -56,6 +56,7 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
   const [rankingGender, setRankingGender] = useState<'MALE' | 'FEMALE' | null>(null);
   const [rankingOutfits, setRankingOutfits] = useState<Outfit[]>([]);
 
+  const [outfitDescriptions, setOutfitDescriptions] = useState<{ [outfitId: string]: string }>({});
   const [openDropdown, setOpenDropdown] = useState<'gender' | 'bodyType' | 'vibe' | null>(null);
   const [currentGender, setCurrentGender] = useState<string>(gender);
   const [currentBodyType, setCurrentBodyType] = useState<string>(bodyType);
@@ -223,6 +224,63 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
     } catch (error) {
       console.error('Failed to load ranking products:', error);
     }
+  };
+
+  const generateOutfitDescription = (products: Product[], outfit: Outfit): string => {
+    if (products.length === 0) return '';
+
+    const slotOrder: Record<string, number> = { outer: 0, top: 1, bottom: 2, shoes: 3, bag: 4, accessory: 5 };
+    const sorted = [...products].sort((a, b) => (slotOrder[a.category] ?? 99) - (slotOrder[b.category] ?? 99));
+
+    const brandSet = new Set(sorted.map(p => p.brand).filter(Boolean));
+    const brands = Array.from(brandSet);
+
+    const vibeLabel = (outfit.vibe || '').replace(/_/g, ' ').toLowerCase();
+
+    const itemDescriptions = sorted.map(p => {
+      const brand = p.brand ? `${p.brand} ` : '';
+      return `${brand}${p.name}`;
+    });
+
+    let desc = '';
+
+    if (vibeLabel) {
+      desc += `A ${vibeLabel} look`;
+    } else {
+      desc += 'A curated look';
+    }
+
+    if (brands.length > 0) {
+      const brandStr = brands.length <= 2 ? brands.join(' and ') : `${brands.slice(0, 2).join(', ')} and more`;
+      desc += ` featuring ${brandStr}`;
+    }
+
+    desc += '. ';
+
+    if (itemDescriptions.length <= 3) {
+      desc += `Styled with ${itemDescriptions.join(', ')}.`;
+    } else {
+      desc += `Styled with ${itemDescriptions.slice(0, 3).join(', ')}, and ${itemDescriptions.length - 3} more piece${itemDescriptions.length - 3 > 1 ? 's' : ''}.`;
+    }
+
+    return desc;
+  };
+
+  useEffect(() => {
+    const allOutfits = rankingGender ? rankingOutfits : outfits;
+    const descriptions: { [id: string]: string } = {};
+    allOutfits.forEach(outfit => {
+      const products = outfitProducts[outfit.id] || [];
+      if (products.length > 0) {
+        descriptions[outfit.id] = generateOutfitDescription(products, outfit);
+      }
+    });
+    setOutfitDescriptions(descriptions);
+  }, [outfitProducts, outfits, rankingOutfits, rankingGender]);
+
+  const getOutfitTotalPrice = (outfitId: string): number => {
+    const products = outfitProducts[outfitId] || [];
+    return products.reduce((sum, p) => sum + (p.price || 0), 0);
   };
 
   const loadRankingFeedbackCounts = async () => {
@@ -850,8 +908,16 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
                   <div className="text-xs md:text-xl font-bold tracking-widest text-black uppercase mb-4">
                     AI INSIGHT
                   </div>
+                  {getOutfitTotalPrice(outfit.id) > 0 && (
+                    <div className="mb-3">
+                      <span className="text-xs md:text-sm uppercase tracking-wider text-gray-500">Total Price</span>
+                      <p className="text-lg md:text-2xl font-semibold text-black">
+                        ${getOutfitTotalPrice(outfit.id).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
                   <p className="text-sm md:text-base leading-relaxed font-light text-gray-800">
-                    {outfit.insight_text}
+                    {outfitDescriptions[outfit.id] || outfit.insight_text}
                   </p>
                 </div>
               </div>

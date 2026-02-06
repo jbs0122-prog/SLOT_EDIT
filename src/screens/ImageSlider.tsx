@@ -1,5 +1,5 @@
-import { useState, useRef, TouchEvent } from 'react';
-import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown, ShoppingBag } from 'lucide-react';
+import { useState, useRef, useEffect, TouchEvent } from 'react';
+import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown, Plus } from 'lucide-react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import ProductDetailModal from './ProductDetailModal';
 
@@ -35,7 +35,15 @@ export default function ImageSlider({
   const [touchEnd, setTouchEnd] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [hoveredPin, setHoveredPin] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const minSwipeDistance = 50;
 
@@ -158,7 +166,7 @@ export default function ImageSlider({
         {pins.map((pin, index) => {
           const product = pin.product_id ? products.find(p => p.id === pin.product_id) : null;
           const pinId = `single-${pin.x}-${pin.y}-${index}`;
-          const isHovered = hoveredPin === pinId;
+          const isHovered = !isMobile && hoveredPin === pinId;
 
           return (
             <div
@@ -175,12 +183,12 @@ export default function ImageSlider({
                   e.stopPropagation();
                   handlePinClick(pin);
                 }}
-                onMouseEnter={() => setHoveredPin(pinId)}
-                onMouseLeave={() => setHoveredPin(null)}
-                className="w-10 h-10 rounded-full bg-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center border-2 border-gray-200 hover:border-blue-500 hover:scale-110"
+                onMouseEnter={() => { if (!isMobile) setHoveredPin(pinId); }}
+                onMouseLeave={() => { if (!isMobile) setHoveredPin(null); }}
+                className="w-5 h-5 rounded-full bg-white/90 shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center hover:scale-110"
                 aria-label={`Shop ${pin.item}`}
               >
-                <ShoppingBag size={18} className="text-gray-700 hover:text-blue-600" />
+                <Plus size={12} className="text-gray-700" strokeWidth={2.5} />
               </button>
 
               {isHovered && product && (
@@ -190,7 +198,7 @@ export default function ImageSlider({
                   {product.price && (
                     <p className="text-sm font-bold text-blue-600">${product.price}</p>
                   )}
-                  <p className="text-xs text-gray-500 mt-2">클릭하여 구매하기</p>
+                  <p className="text-xs text-gray-500 mt-2">Click to shop</p>
                 </div>
               )}
             </div>
@@ -292,7 +300,7 @@ export default function ImageSlider({
               {pins.map((pin, pinIndex) => {
                 const product = pin.product_id ? products.find(p => p.id === pin.product_id) : null;
                 const pinId = `slider-${index}-${pin.x}-${pin.y}-${pinIndex}`;
-                const isHovered = hoveredPin === pinId;
+                const isHovered = !isMobile && hoveredPin === pinId;
 
                 return (
                   <div
@@ -309,12 +317,12 @@ export default function ImageSlider({
                         e.stopPropagation();
                         handlePinClick(pin);
                       }}
-                      onMouseEnter={() => setHoveredPin(pinId)}
-                      onMouseLeave={() => setHoveredPin(null)}
-                      className="w-10 h-10 rounded-full bg-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center border-2 border-gray-200 hover:border-blue-500 hover:scale-110"
+                      onMouseEnter={() => { if (!isMobile) setHoveredPin(pinId); }}
+                      onMouseLeave={() => { if (!isMobile) setHoveredPin(null); }}
+                      className="w-5 h-5 rounded-full bg-white/90 shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center hover:scale-110"
                       aria-label={`Shop ${pin.item}`}
                     >
-                      <ShoppingBag size={18} className="text-gray-700 hover:text-blue-600" />
+                      <Plus size={12} className="text-gray-700" strokeWidth={2.5} />
                     </button>
 
                     {isHovered && product && (
@@ -324,7 +332,7 @@ export default function ImageSlider({
                         {product.price && (
                           <p className="text-sm font-bold text-blue-600">${product.price}</p>
                         )}
-                        <p className="text-xs text-gray-500 mt-2">클릭하여 구매하기</p>
+                        <p className="text-xs text-gray-500 mt-2">Click to shop</p>
                       </div>
                     )}
                   </div>
