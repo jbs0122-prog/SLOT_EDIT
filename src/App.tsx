@@ -8,6 +8,7 @@ import AdminUsers from './screens/AdminUsers';
 import AdminLayout from './screens/AdminLayout';
 import GeminiKeyTest from './screens/GeminiKeyTest';
 import BottomNav, { NavTab } from './screens/BottomNav';
+import DesktopSidebar from './screens/DesktopSidebar';
 import RankingPage from './screens/RankingPage';
 import MyAccountPage from './screens/MyAccountPage';
 import LoginModal from './screens/LoginModal';
@@ -216,35 +217,42 @@ function App() {
       {currentScreen === 'loading' && <Loading />}
       {currentScreen === 'input' && <Input onGenerate={handleGenerate} />}
       {currentScreen === 'results' && (
-        <div className="relative">
-          {activeTab === 'home' && (
-            <Results
-              outfits={selectedOutfits}
-              context={context}
-              onBack={handleBack}
-              onGenerate={handleGenerate}
-              onRequestLogin={() => setShowLoginModal(true)}
-            />
-          )}
-          {activeTab === 'mens-ranking' && (
-            <div className="min-h-screen bg-white">
-              <RankingPage gender="MALE" onRequestLogin={() => setShowLoginModal(true)} />
-            </div>
-          )}
-          {activeTab === 'womens-ranking' && (
-            <div className="min-h-screen bg-white">
-              <RankingPage gender="FEMALE" onRequestLogin={() => setShowLoginModal(true)} />
-            </div>
-          )}
-          {activeTab === 'account' && (
-            <div className="min-h-screen bg-white">
-              <MyAccountPage
+        <div className="relative flex">
+          <DesktopSidebar
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            onRequestLogin={() => setShowLoginModal(true)}
+          />
+          <div className="flex-1 min-w-0">
+            {activeTab === 'home' && (
+              <Results
+                outfits={selectedOutfits}
+                context={context}
+                onBack={handleBack}
+                onGenerate={handleGenerate}
                 onRequestLogin={() => setShowLoginModal(true)}
-                view={accountView}
-                onNavigate={handleAccountNavigate}
               />
-            </div>
-          )}
+            )}
+            {activeTab === 'mens-ranking' && (
+              <div className="min-h-screen bg-white">
+                <RankingPage gender="MALE" onRequestLogin={() => setShowLoginModal(true)} />
+              </div>
+            )}
+            {activeTab === 'womens-ranking' && (
+              <div className="min-h-screen bg-white">
+                <RankingPage gender="FEMALE" onRequestLogin={() => setShowLoginModal(true)} />
+              </div>
+            )}
+            {activeTab === 'account' && (
+              <div className="min-h-screen bg-white">
+                <MyAccountPage
+                  onRequestLogin={() => setShowLoginModal(true)}
+                  view={accountView}
+                  onNavigate={handleAccountNavigate}
+                />
+              </div>
+            )}
+          </div>
           {showBottomNav && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
         </div>
       )}

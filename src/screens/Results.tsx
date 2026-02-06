@@ -367,7 +367,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   return (
     <div
       ref={containerRef}
-      className="h-screen flex flex-col md:flex-row bg-white relative"
+      className="h-screen flex flex-col bg-white relative"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -378,19 +378,19 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
         </div>
       )}
 
-      <header className="fixed md:sticky top-0 left-0 right-0 md:left-auto md:right-auto bg-white z-40 border-b md:border-b-0 md:border-r border-gray-200 md:h-screen md:w-[400px] flex-shrink-0">
-        <div className="px-6 py-4 md:py-8">
-          <div className="flex md:flex-col items-center md:items-start justify-between md:justify-start mb-3 md:mb-8">
-            <img src="/logo.png" alt="SLOT EDIT" className="h-12 md:h-24" />
+      <header className="fixed top-0 left-0 right-0 bg-white z-40 border-b border-gray-200 md:hidden">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <img src="/logo.png" alt="SLOT EDIT" className="h-12" />
             {weather && (
-              <div className="text-sm md:text-xl text-gray-700 font-medium md:mt-6">
+              <div className="text-sm text-gray-700 font-medium">
                 {getWeatherEmoji(weather.condition)} {weather.temperature}°F
               </div>
             )}
           </div>
 
-          <div className="mb-2 md:mb-6 relative">
-            <div className="flex flex-wrap items-center gap-2 text-xs md:text-base text-gray-600 font-light">
+          <div className="mb-2 relative">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 font-light">
               <div className="relative">
                 <button onClick={() => setOpenDropdown(openDropdown === 'gender' ? null : 'gender')} className="hover:text-black transition-colors cursor-pointer uppercase">
                   {currentGender}
@@ -399,7 +399,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                   <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[120px]">
                     {GENDER_OPTIONS.map(o => (
                       <button key={o} onClick={() => handleDropdownSelect('gender', o)}
-                        className={`block w-full text-left px-4 py-2 text-xs md:text-base uppercase hover:bg-gray-100 transition-colors ${o === currentGender ? 'font-medium bg-gray-50' : ''}`}>
+                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${o === currentGender ? 'font-medium bg-gray-50' : ''}`}>
                         {o}
                       </button>
                     ))}
@@ -415,7 +415,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                   <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[120px]">
                     {BODY_TYPE_OPTIONS.map(o => (
                       <button key={o} onClick={() => handleDropdownSelect('bodyType', o)}
-                        className={`block w-full text-left px-4 py-2 text-xs md:text-base uppercase hover:bg-gray-100 transition-colors ${o === currentBodyType ? 'font-medium bg-gray-50' : ''}`}>
+                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${o === currentBodyType ? 'font-medium bg-gray-50' : ''}`}>
                         {o}
                       </button>
                     ))}
@@ -428,10 +428,10 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                   {currentVibe}
                 </button>
                 {openDropdown === 'vibe' && (
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[180px] md:min-w-[240px]">
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[180px]">
                     {VIBE_OPTIONS.map(o => (
                       <button key={o} onClick={() => handleDropdownSelect('vibe', o)}
-                        className={`block w-full text-left px-4 py-2 text-xs md:text-base uppercase hover:bg-gray-100 transition-colors ${o === currentVibe ? 'font-medium bg-gray-50' : ''}`}>
+                        className={`block w-full text-left px-4 py-2 text-xs uppercase hover:bg-gray-100 transition-colors ${o === currentVibe ? 'font-medium bg-gray-50' : ''}`}>
                         {o}
                       </button>
                     ))}
@@ -441,7 +441,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs md:text-base">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <button onClick={() => setSortOrder('likes')}
               className={`font-light transition-colors uppercase ${sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
               Most Liked
@@ -454,6 +454,76 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
           </div>
         </div>
       </header>
+
+      <div className="hidden md:flex items-center justify-between px-8 py-5 border-b border-gray-100 sticky top-0 bg-white z-20">
+        <div className="flex items-center gap-6">
+          {weather && (
+            <div className="text-sm text-gray-600 font-medium">
+              {getWeatherEmoji(weather.condition)} {weather.temperature}°F · {weather.location}
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-sm text-gray-600 font-light">
+            <div className="relative">
+              <button onClick={() => setOpenDropdown(openDropdown === 'gender' ? null : 'gender')} className="hover:text-black transition-colors cursor-pointer uppercase">
+                {currentGender}
+              </button>
+              {openDropdown === 'gender' && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[140px]">
+                  {GENDER_OPTIONS.map(o => (
+                    <button key={o} onClick={() => handleDropdownSelect('gender', o)}
+                      className={`block w-full text-left px-4 py-2.5 text-sm uppercase hover:bg-gray-50 transition-colors ${o === currentGender ? 'font-medium bg-gray-50' : ''}`}>
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <span className="text-gray-300">·</span>
+            <div className="relative">
+              <button onClick={() => setOpenDropdown(openDropdown === 'bodyType' ? null : 'bodyType')} className="hover:text-black transition-colors cursor-pointer uppercase">
+                {currentBodyType}
+              </button>
+              {openDropdown === 'bodyType' && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[140px]">
+                  {BODY_TYPE_OPTIONS.map(o => (
+                    <button key={o} onClick={() => handleDropdownSelect('bodyType', o)}
+                      className={`block w-full text-left px-4 py-2.5 text-sm uppercase hover:bg-gray-50 transition-colors ${o === currentBodyType ? 'font-medium bg-gray-50' : ''}`}>
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <span className="text-gray-300">·</span>
+            <div className="relative">
+              <button onClick={() => setOpenDropdown(openDropdown === 'vibe' ? null : 'vibe')} className="hover:text-black transition-colors cursor-pointer uppercase">
+                {currentVibe}
+              </button>
+              {openDropdown === 'vibe' && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-50 min-w-[240px]">
+                  {VIBE_OPTIONS.map(o => (
+                    <button key={o} onClick={() => handleDropdownSelect('vibe', o)}
+                      className={`block w-full text-left px-4 py-2.5 text-sm uppercase hover:bg-gray-50 transition-colors ${o === currentVibe ? 'font-medium bg-gray-50' : ''}`}>
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <button onClick={() => setSortOrder('likes')}
+            className={`font-light transition-colors uppercase ${sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
+            Most Liked
+          </button>
+          <span className="text-gray-300">/</span>
+          <button onClick={() => setSortOrder('latest')}
+            className={`font-light transition-colors uppercase ${sortOrder === 'latest' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
+            Latest
+          </button>
+        </div>
+      </div>
 
       <div className="flex-1 overflow-y-auto pt-[140px] md:pt-0 pb-20 md:pb-8">
         {sortedOutfits.length === 0 ? (
