@@ -511,7 +511,9 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                     </div>
                   )}
                   <p className="text-sm md:text-base leading-relaxed font-light text-gray-800">
-                    {outfitDescriptions[outfit.id] || outfit.insight_text}
+                    {(outfit.insight_text && !outfit.insight_text.startsWith('매칭 점수'))
+                      ? outfit.insight_text
+                      : outfitDescriptions[outfit.id] || outfit.insight_text}
                   </p>
                 </div>
               </div>

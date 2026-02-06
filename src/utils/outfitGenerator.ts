@@ -146,7 +146,10 @@ export async function generateOutfitsAutomatically(
     });
   }
 
-  await processBackgroundRemoval(bestOutfits, productList);
+  await Promise.all([
+    processBackgroundRemoval(bestOutfits, productList),
+    generateInsightsForOutfits(bestOutfits, generatedOutfits, productList, { gender, bodyType, vibe, targetSeason }),
+  ]);
 
   return generatedOutfits;
 }
@@ -192,4 +195,81 @@ async function processBackgroundRemoval(
       )
     );
   }
+}
+
+async function generateInsightsForOutfits(
+  bestOutfits: Array<{ outfit: OutfitCandidate; matchScore: { score: number } }>,
+  generatedOutfits: GeneratedOutfit[],
+  products: Product[],
+  context: { gender: string; bodyType: string; vibe: string; targetSeason?: string }
+): Promise<void> {
+  const productMap = new Map(products.map(p => [p.id, p]));
+  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-outfit-insight`;
+  const headers = {
+    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  await Promise.allSettled(
+    bestOutfits.map(async ({ outfit, matchScore }, index) => {
+      const outfitId = generatedOutfits[index]?.outfitId;
+      if (!outfitId) return;
+
+      const slots: Array<{ key: keyof OutfitCandidate; label: string }> = [
+        { key: 'outer', label: 'outer' },
+        { key: 'top', label: 'top' },
+        { key: 'bottom', label: 'bottom' },
+        { key: 'shoes', label: 'shoes' },
+        { key: 'bag', label: 'bag' },
+        { key: 'accessory', label: 'accessory' },
+      ];
+
+      const items = slots
+        .filter(s => outfit[s.key])
+        .map(s => {
+          const p = outfit[s.key] as Product;
+          return {
+            slot_type: s.label,
+            brand: p.brand || '',
+            name: p.name,
+            category: p.category,
+            color: p.color || '',
+            color_family: p.color_family || '',
+            material: p.material || '',
+            pattern: p.pattern || '',
+            silhouette: p.silhouette || '',
+            sub_category: p.sub_category || '',
+            vibe: p.vibe || [],
+            price: p.price,
+          };
+        });
+
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            items,
+            gender: context.gender,
+            bodyType: context.bodyType,
+            vibe: context.vibe,
+            matchScore: matchScore.score,
+            season: context.targetSeason,
+          }),
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (!data.success || !data.insight) return;
+
+        await supabase
+          .from('outfits')
+          .update({ 'AI insight': data.insight })
+          .eq('id', outfitId);
+      } catch (err) {
+        console.error(`Insight generation failed for outfit ${outfitId}:`, err);
+      }
+    })
+  );
 }
