@@ -492,14 +492,18 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                 <div className="w-full md:w-[500px] px-6 md:px-0 flex flex-col">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-xs md:text-xl font-bold tracking-widest text-black uppercase">AI INSIGHT</div>
-                    <button
-                      onClick={() => handleSave(outfit.id)}
-                      className={`p-2 transition-all ${isSaved ? 'text-black' : 'text-gray-300 hover:text-gray-600'}`}
-                      title={isSaved ? 'Remove from saved' : 'Save outfit'}
-                    >
-                      <Bookmark size={20} fill={isSaved ? 'currentColor' : 'none'} />
-                    </button>
                   </div>
+                  <button
+                    onClick={() => handleSave(outfit.id)}
+                    className={`flex items-center gap-2 mb-5 px-4 py-2.5 border text-sm tracking-wider uppercase transition-all w-fit ${
+                      isSaved
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-black border-gray-300 hover:border-black'
+                    }`}
+                  >
+                    <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
+                    {isSaved ? 'Saved' : 'Save This Look'}
+                  </button>
                   {getOutfitTotalPrice(outfit.id) > 0 && (
                     <div className="mb-3">
                       <span className="text-xs md:text-sm uppercase tracking-wider text-gray-500">Total Price</span>
