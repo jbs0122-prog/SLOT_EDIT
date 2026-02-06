@@ -17,6 +17,7 @@ interface OutfitItem {
     name: string;
     brand: string;
     image_url: string;
+    nobg_image_url?: string;
   };
 }
 
@@ -45,7 +46,8 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
             id,
             name,
             brand,
-            image_url
+            image_url,
+            nobg_image_url
           )
         `)
         .eq('outfit_id', outfitId);
@@ -81,7 +83,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         .map(item => ({
           slot_type: item.slot_type,
           product_id: item.product_id,
-          image_url: item.product!.image_url,
+          image_url: item.product!.nobg_image_url || item.product!.image_url,
         }));
 
       if (renderItems.length === 0) {

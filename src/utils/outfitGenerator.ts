@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { Product } from '../data/outfits';
 import { findBestOutfits, OutfitCandidate } from './matchingEngine';
+import { removeBackground } from './backgroundRemoval';
 
 export interface GenerateOutfitsParams {
   gender: string;
@@ -145,5 +146,50 @@ export async function generateOutfitsAutomatically(
     });
   }
 
+  await processBackgroundRemoval(bestOutfits, productList);
+
   return generatedOutfits;
+}
+
+async function processBackgroundRemoval(
+  outfits: Array<{ outfit: OutfitCandidate }>,
+  products: Product[]
+): Promise<void> {
+  const productMap = new Map(products.map(p => [p.id, p]));
+  const uniqueProductIds = new Set<string>();
+
+  for (const { outfit } of outfits) {
+    const items = [outfit.outer, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory];
+    for (const item of items) {
+      if (item) uniqueProductIds.add(item.id);
+    }
+  }
+
+  const productsToProcess: Product[] = [];
+  for (const id of uniqueProductIds) {
+    const product = productMap.get(id);
+    if (product && product.image_url) {
+      const { data } = await supabase
+        .from('products')
+        .select('nobg_image_url')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (!data?.nobg_image_url) {
+        productsToProcess.push(product);
+      }
+    }
+  }
+
+  const BATCH_SIZE = 3;
+  for (let i = 0; i < productsToProcess.length; i += BATCH_SIZE) {
+    const batch = productsToProcess.slice(i, i + BATCH_SIZE);
+    await Promise.allSettled(
+      batch.map(product =>
+        removeBackground(product.image_url, product.id).catch(err => {
+          console.error(`BG removal failed for product ${product.id}:`, err);
+        })
+      )
+    );
+  }
 }

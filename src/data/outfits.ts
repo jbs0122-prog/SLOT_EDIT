@@ -29,6 +29,7 @@ export interface Product {
   pattern?: string;
   formality?: number;
   warmth?: number;
+  nobg_image_url?: string;
   created_at: string;
   updated_at: string;
 }

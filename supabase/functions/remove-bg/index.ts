@@ -1,101 +1,117 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const PIXIAN_AUTH =
+  "Basic cHhyaWd5aXh2cjR4OTNnOnRlbXBmaXNma244Y2t1ZjBlZDg0OWg2YnF2MjZwcDcwc29icjVqYWhydXV1ajlhMjk4Y2Q=";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const REMOVE_BG_API_KEY = Deno.env.get("REMOVE_BG_API_KEY");
-
-    if (!REMOVE_BG_API_KEY) {
-      return new Response(
-        JSON.stringify({
-          error: "REMOVE_BG_API_KEY is not configured. Please add it to your environment variables.",
-        }),
-        {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-    }
-
-    const { imageUrl } = await req.json();
+    const { imageUrl, productId } = await req.json();
 
     if (!imageUrl) {
       return new Response(
         JSON.stringify({ error: "imageUrl is required" }),
         {
           status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
     const formData = new FormData();
-    formData.append("image_url", imageUrl);
-    formData.append("size", "auto");
+    formData.append("image.url", imageUrl);
+    formData.append("output.format", "png");
 
-    const response = await fetch("https://api.remove.bg/v1.0/removebg", {
-      method: "POST",
-      headers: {
-        "X-Api-Key": REMOVE_BG_API_KEY,
-      },
-      body: formData,
-    });
+    const pixianResponse = await fetch(
+      "https://api.pixian.ai/api/v2/remove-background",
+      {
+        method: "POST",
+        headers: { Authorization: PIXIAN_AUTH },
+        body: formData,
+      }
+    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (!pixianResponse.ok) {
+      const errorText = await pixianResponse.text();
       return new Response(
         JSON.stringify({
-          error: "Failed to remove background",
+          error: "Background removal failed",
           details: errorText,
         }),
         {
-          status: response.status,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
+          status: pixianResponse.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    const imageBlob = await response.blob();
+    const imageBuffer = new Uint8Array(await pixianResponse.arrayBuffer());
 
-    const base64Image = btoa(
-      String.fromCharCode(...new Uint8Array(await imageBlob.arrayBuffer()))
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const fileName = productId
+      ? `nobg/${productId}.png`
+      : `nobg/${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("product-images")
+      .upload(fileName, imageBuffer, {
+        contentType: "image/png",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      let binary = "";
+      for (let i = 0; i < imageBuffer.byteLength; i++) {
+        binary += String.fromCharCode(imageBuffer[i]);
+      }
+      const base64Image = btoa(binary);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          image: `data:image/png;base64,${base64Image}`,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("product-images")
+      .getPublicUrl(uploadData.path);
+
+    if (productId) {
+      await supabase
+        .from("products")
+        .update({ nobg_image_url: publicUrlData.publicUrl })
+        .eq("id", productId);
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        image: `data:image/png;base64,${base64Image}`,
+        url: publicUrlData.publicUrl,
+        image: publicUrlData.publicUrl,
       }),
       {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   } catch (error) {
-    console.error("Error:", error);
     return new Response(
       JSON.stringify({
         error: "Internal server error",
@@ -103,10 +119,7 @@ Deno.serve(async (req: Request) => {
       }),
       {
         status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }
