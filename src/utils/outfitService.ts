@@ -80,7 +80,7 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
     const { data, error } = await supabase
       .from('outfits')
       .select('*')
-      .eq('status', 'DONE_FLAT')
+      .in('status', ['DONE_FLAT', 'completed'])
       .not('image_url_flatlay', 'is', null)
       .neq('image_url_flatlay', '');
 

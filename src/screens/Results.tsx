@@ -86,6 +86,37 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
     }
   }, [rankingOutfits, rankingGender]);
 
+  const collectPinProductIds = (outfitList: Outfit[]): Map<string, Set<string>> => {
+    const map = new Map<string, Set<string>>();
+    outfitList.forEach(o => {
+      const ids = new Set<string>();
+      (o.flatlay_pins || []).forEach(p => { if (p.product_id) ids.add(p.product_id); });
+      (o.on_model_pins || []).forEach(p => { if (p.product_id) ids.add(p.product_id); });
+      if (ids.size > 0) map.set(o.id, ids);
+    });
+    return map;
+  };
+
+  const mapProduct = (product: any): Product => ({
+    id: product.id,
+    brand: product.brand || '',
+    name: product.name,
+    category: product.category,
+    gender: product.gender,
+    body_type: product.body_type || [],
+    vibe: product.vibe || [],
+    color: product.color || '',
+    season: product.season || [],
+    silhouette: product.silhouette || '',
+    image_url: product.image_url,
+    product_link: product.product_link || '',
+    affiliate_link: product.affiliate_link || '',
+    price: product.price,
+    stock_status: product.stock_status || 'in_stock',
+    created_at: product.created_at,
+    updated_at: product.updated_at,
+  });
+
   const loadOutfitProducts = async () => {
     const outfitIds = outfits.map(o => o.id);
     if (outfitIds.length === 0) return;
@@ -98,14 +129,18 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
 
       if (itemsError) throw itemsError;
 
-      const productIds = [...new Set(outfitItemsData?.map(item => item.product_id) || [])];
+      const pinProductMap = collectPinProductIds(outfits);
 
-      if (productIds.length === 0) return;
+      const allProductIds = new Set<string>();
+      outfitItemsData?.forEach(item => allProductIds.add(item.product_id));
+      pinProductMap.forEach(ids => ids.forEach(id => allProductIds.add(id)));
+
+      if (allProductIds.size === 0) return;
 
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
-        .in('id', productIds);
+        .in('id', [...allProductIds]);
 
       if (productsError) throw productsError;
 
@@ -114,29 +149,20 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
       outfitItemsData?.forEach(item => {
         const product = productsData?.find(p => p.id === item.product_id);
         if (product) {
-          if (!productMap[item.outfit_id]) {
-            productMap[item.outfit_id] = [];
-          }
-          productMap[item.outfit_id].push({
-            id: product.id,
-            brand: product.brand || '',
-            name: product.name,
-            category: product.category,
-            gender: product.gender,
-            body_type: product.body_type || [],
-            vibe: product.vibe || [],
-            color: product.color || '',
-            season: product.season || [],
-            silhouette: product.silhouette || '',
-            image_url: product.image_url,
-            product_link: product.product_link || '',
-            affiliate_link: product.affiliate_link || '',
-            price: product.price,
-            stock_status: product.stock_status || 'in_stock',
-            created_at: product.created_at,
-            updated_at: product.updated_at,
-          });
+          if (!productMap[item.outfit_id]) productMap[item.outfit_id] = [];
+          productMap[item.outfit_id].push(mapProduct(product));
         }
+      });
+
+      pinProductMap.forEach((ids, outfitId) => {
+        if (!productMap[outfitId]) productMap[outfitId] = [];
+        const existing = new Set(productMap[outfitId].map(p => p.id));
+        ids.forEach(pid => {
+          if (!existing.has(pid)) {
+            const product = productsData?.find(p => p.id === pid);
+            if (product) productMap[outfitId].push(mapProduct(product));
+          }
+        });
       });
 
       setOutfitProducts(productMap);
@@ -157,14 +183,18 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
 
       if (itemsError) throw itemsError;
 
-      const productIds = [...new Set(outfitItemsData?.map(item => item.product_id) || [])];
+      const pinProductMap = collectPinProductIds(rankingOutfits);
 
-      if (productIds.length === 0) return;
+      const allProductIds = new Set<string>();
+      outfitItemsData?.forEach(item => allProductIds.add(item.product_id));
+      pinProductMap.forEach(ids => ids.forEach(id => allProductIds.add(id)));
+
+      if (allProductIds.size === 0) return;
 
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
-        .in('id', productIds);
+        .in('id', [...allProductIds]);
 
       if (productsError) throw productsError;
 
@@ -173,29 +203,20 @@ export default function Results({ outfits, context, onBack, onGenerate }: Result
       outfitItemsData?.forEach(item => {
         const product = productsData?.find(p => p.id === item.product_id);
         if (product) {
-          if (!productMap[item.outfit_id]) {
-            productMap[item.outfit_id] = [];
-          }
-          productMap[item.outfit_id].push({
-            id: product.id,
-            brand: product.brand || '',
-            name: product.name,
-            category: product.category,
-            gender: product.gender,
-            body_type: product.body_type || [],
-            vibe: product.vibe || [],
-            color: product.color || '',
-            season: product.season || [],
-            silhouette: product.silhouette || '',
-            image_url: product.image_url,
-            product_link: product.product_link || '',
-            affiliate_link: product.affiliate_link || '',
-            price: product.price,
-            stock_status: product.stock_status || 'in_stock',
-            created_at: product.created_at,
-            updated_at: product.updated_at,
-          });
+          if (!productMap[item.outfit_id]) productMap[item.outfit_id] = [];
+          productMap[item.outfit_id].push(mapProduct(product));
         }
+      });
+
+      pinProductMap.forEach((ids, outfitId) => {
+        if (!productMap[outfitId]) productMap[outfitId] = [];
+        const existing = new Set(productMap[outfitId].map(p => p.id));
+        ids.forEach(pid => {
+          if (!existing.has(pid)) {
+            const product = productsData?.find(p => p.id === pid);
+            if (product) productMap[outfitId].push(mapProduct(product));
+          }
+        });
       });
 
       setOutfitProducts(productMap);
