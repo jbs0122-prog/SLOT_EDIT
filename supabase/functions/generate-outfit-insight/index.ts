@@ -108,12 +108,11 @@ ${season ? `- Season: ${season}` : ""}
 Items:
 ${itemDescriptions}
 
-Write a 2-3 sentence styling insight that:
-1. Explains why these pieces work well together (color harmony, silhouette balance, texture mix)${hasImage ? " — reference what you see in the image" : ""}
-2. Suggests what occasion or setting this outfit suits
-3. Uses professional but accessible fashion language
+Write a styling insight in EXACTLY 2 short sentences (max 35 words total):
+- Sentence 1: Why these pieces work together (color, silhouette, or texture)${hasImage ? " — reference the image" : ""}
+- Sentence 2: Best occasion or setting
 
-Do NOT use bullet points or lists. Write flowing prose. Do NOT start with "This outfit" - be more creative with the opening. Keep it under 80 words.`;
+No bullet points, no lists. Flowing prose only. Do NOT start with "This outfit". Keep it punchy and concise.`;
 
     const parts: Array<Record<string, unknown>> = [];
 
