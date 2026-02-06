@@ -307,7 +307,7 @@ export async function renderFlatlay(
 
   try {
     const logoImg = await loadImageWithProxy('/logo(white).png', false);
-    const logoWidth = 880;
+    const logoWidth = 616;
     const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
     const logoX = (canvas.width - logoWidth) / 2;
     const logoY = (canvas.height - logoHeight) / 2;
@@ -391,7 +391,7 @@ export async function renderFlatlayWithCustomPositions(
 
   try {
     const logoImg = await loadImageWithProxy('/logo(white).png', false);
-    const logoWidth = 880;
+    const logoWidth = 616;
     const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
     const logoX = (canvas.width - logoWidth) / 2;
     const logoY = (canvas.height - logoHeight) / 2;
