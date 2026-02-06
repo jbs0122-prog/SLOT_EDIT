@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Input from './screens/Input';
 import Results from './screens/Results';
 import Loading from './screens/Loading';
@@ -16,11 +16,66 @@ import { WeatherData, getSeasonsFromTemperature } from './utils/weather';
 
 type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users';
 
+const RESULTS_KEY = 'slotedit_results';
+
+function getHash(): string {
+  return window.location.hash.replace('#', '');
+}
+
+function screenFromHash(h: string): Screen {
+  if (h === 'admin') return 'admin';
+  if (h === 'admin-products') return 'admin-products';
+  if (h === 'admin-users') return 'admin-users';
+  if (h.startsWith('results')) return 'results';
+  return 'input';
+}
+
+function tabFromHash(h: string): NavTab {
+  if (h.includes('mens-ranking')) return 'mens-ranking';
+  if (h.includes('womens-ranking')) return 'womens-ranking';
+  if (h.includes('account')) return 'account';
+  return 'home';
+}
+
+function accountViewFromHash(h: string): 'menu' | 'saved' {
+  return h.includes('account/saved') ? 'saved' : 'menu';
+}
+
+function hashForTab(tab: NavTab): string {
+  if (tab === 'mens-ranking') return 'results/mens-ranking';
+  if (tab === 'womens-ranking') return 'results/womens-ranking';
+  if (tab === 'account') return 'results/account';
+  return 'results';
+}
+
+function persistResults(outfitList: Outfit[], ctx: object) {
+  try {
+    sessionStorage.setItem(RESULTS_KEY, JSON.stringify({ outfits: outfitList, ctx }));
+  } catch { /* ignore */ }
+}
+
+function restoreResults(): { outfits: Outfit[]; ctx: any } | null {
+  try {
+    const raw = sessionStorage.getItem(RESULTS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeString(str: string): string {
+  return str.trim().toLowerCase().replace(/_/g, ' ');
+}
+
 function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('loading');
+  const initialHash = getHash();
+  const isAdmin = initialHash.startsWith('admin');
+
+  const [currentScreen, setCurrentScreen] = useState<Screen>(isAdmin ? screenFromHash(initialHash) : 'loading');
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [selectedOutfits, setSelectedOutfits] = useState<Outfit[]>([]);
-  const [activeTab, setActiveTab] = useState<NavTab>('home');
+  const [activeTab, setActiveTab] = useState<NavTab>(tabFromHash(initialHash));
+  const [accountView, setAccountView] = useState<'menu' | 'saved'>(accountViewFromHash(initialHash));
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [context, setContext] = useState({
     gender: '',
@@ -29,55 +84,67 @@ function App() {
     weather: null as WeatherData | null,
   });
 
-  useEffect(() => {
-    if (window.location.hash === '#admin') {
-      setCurrentScreen('admin');
-      return;
-    }
-    if (window.location.hash === '#admin-products') {
-      setCurrentScreen('admin-products');
-      return;
-    }
-    if (window.location.hash === '#admin-users') {
-      setCurrentScreen('admin-users');
-      return;
-    }
+  const selectedOutfitsRef = useRef(selectedOutfits);
+  selectedOutfitsRef.current = selectedOutfits;
 
-    const loadOutfits = async () => {
+  useEffect(() => {
+    if (isAdmin) return;
+
+    const load = async () => {
       try {
         const data = await fetchOutfits();
         setOutfits(data);
-        setCurrentScreen('input');
-      } catch (error) {
-        console.error('Failed to load outfits:', error);
+
+        const h = getHash();
+        if (h.startsWith('results')) {
+          const saved = restoreResults();
+          if (saved) {
+            setSelectedOutfits(saved.outfits);
+            setContext(saved.ctx);
+            setCurrentScreen('results');
+            setActiveTab(tabFromHash(h));
+            setAccountView(accountViewFromHash(h));
+          } else {
+            window.location.hash = '';
+            setCurrentScreen('input');
+          }
+        } else {
+          setCurrentScreen('input');
+        }
+      } catch {
         setCurrentScreen('input');
       }
     };
 
-    loadOutfits();
-
-    const handlePopState = (event: PopStateEvent) => {
-      if (event.state && event.state.screen) {
-        setCurrentScreen(event.state.screen);
-      } else {
-        setCurrentScreen('input');
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-
-    if (!window.history.state || !window.history.state.screen) {
-      window.history.replaceState({ screen: 'input' }, '', window.location.href);
-    }
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
+    load();
   }, []);
 
-  const normalizeString = (str: string): string => {
-    return str.trim().toLowerCase().replace(/_/g, ' ');
-  };
+  useEffect(() => {
+    const handler = () => {
+      const h = getHash();
+      const screen = screenFromHash(h);
+
+      if (screen === 'results') {
+        if (selectedOutfitsRef.current.length === 0) {
+          const saved = restoreResults();
+          if (saved) {
+            setSelectedOutfits(saved.outfits);
+            setContext(saved.ctx);
+          } else {
+            window.location.hash = '';
+            return;
+          }
+        }
+        setActiveTab(tabFromHash(h));
+        setAccountView(accountViewFromHash(h));
+      }
+
+      setCurrentScreen(screen);
+    };
+
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
 
   const handleGenerate = (gender: string, bodyType: string, vibe: string, weather: WeatherData) => {
     const normalizedGender = normalizeString(gender);
@@ -111,25 +178,33 @@ function App() {
       return true;
     });
 
+    const ctx = { gender, bodyType, vibe, weather };
     setSelectedOutfits(matches);
-    setContext({ gender, bodyType, vibe, weather });
+    setContext(ctx);
     setActiveTab('home');
-
-    window.history.pushState({ screen: 'results' }, '', window.location.href);
     setCurrentScreen('results');
-  };
+    persistResults(matches, ctx);
 
-  const handleBack = () => {
-    if (currentScreen === 'results') {
-      setCurrentScreen('input');
-      window.history.back();
-    } else {
-      window.history.back();
+    const currentHash = getHash();
+    if (!currentHash.startsWith('results')) {
+      window.location.hash = 'results';
     }
   };
 
+  const handleBack = () => {
+    window.history.back();
+  };
+
   const handleTabChange = (tab: NavTab) => {
-    setActiveTab(tab);
+    window.location.hash = hashForTab(tab);
+  };
+
+  const handleAccountNavigate = (view: 'menu' | 'saved') => {
+    if (view === 'saved') {
+      window.location.hash = 'results/account/saved';
+    } else {
+      window.history.back();
+    }
   };
 
   const showBottomNav = currentScreen === 'results';
@@ -161,7 +236,11 @@ function App() {
           )}
           {activeTab === 'account' && (
             <div className="min-h-screen bg-white">
-              <MyAccountPage onRequestLogin={() => setShowLoginModal(true)} />
+              <MyAccountPage
+                onRequestLogin={() => setShowLoginModal(true)}
+                view={accountView}
+                onNavigate={handleAccountNavigate}
+              />
             </div>
           )}
           {showBottomNav && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}

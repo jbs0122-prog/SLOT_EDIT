@@ -7,6 +7,8 @@ import ImageSlider from './ImageSlider';
 
 interface MyAccountPageProps {
   onRequestLogin: () => void;
+  view: 'menu' | 'saved';
+  onNavigate: (view: 'menu' | 'saved') => void;
 }
 
 interface FeedbackCounts {
@@ -26,13 +28,12 @@ function getOrCreateSessionId(): string {
   return sessionId;
 }
 
-export default function MyAccountPage({ onRequestLogin }: MyAccountPageProps) {
+export default function MyAccountPage({ onRequestLogin, view, onNavigate }: MyAccountPageProps) {
   const { user, signOut } = useAuth();
   const [savedOutfits, setSavedOutfits] = useState<Outfit[]>([]);
   const [outfitProducts, setOutfitProducts] = useState<{ [id: string]: Product[] }>({});
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'menu' | 'saved'>('menu');
 
   useEffect(() => {
     if (user) {
@@ -223,7 +224,7 @@ export default function MyAccountPage({ onRequestLogin }: MyAccountPageProps) {
     return (
       <div className="pb-20 md:pb-8">
         <div className="px-6 py-6 border-b border-gray-100 flex items-center gap-4">
-          <button onClick={() => setView('menu')} className="text-gray-500 hover:text-black transition-colors text-sm">
+          <button onClick={() => onNavigate('menu')} className="text-gray-500 hover:text-black transition-colors text-sm">
             Back
           </button>
           <h1 className="text-xl font-bold tracking-wider uppercase">Saved Outfits</h1>
@@ -313,7 +314,7 @@ export default function MyAccountPage({ onRequestLogin }: MyAccountPageProps) {
 
         <div className="border-t border-gray-100">
           <button
-            onClick={() => { setView('saved'); loadSavedOutfits(); }}
+            onClick={() => { onNavigate('saved'); loadSavedOutfits(); }}
             className="w-full flex items-center justify-between py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors px-2"
           >
             <div className="flex items-center gap-3">

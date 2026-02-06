@@ -49,7 +49,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list") {
       const page = parseInt(url.searchParams.get("page") || "1");
-      const perPage = parseInt(url.searchParams.get("per_page") || "20");
+      const perPage = parseInt(url.searchParams.get("per_page") || "1000");
       const search = url.searchParams.get("search") || "";
 
       const {
