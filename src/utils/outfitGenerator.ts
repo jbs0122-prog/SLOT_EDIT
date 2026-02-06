@@ -51,6 +51,12 @@ export async function generateOutfitsAutomatically(
     price: p.price,
     stock_status: p.stock_status || 'in_stock',
     material: p.material || '',
+    color_family: p.color_family || '',
+    color_tone: p.color_tone || '',
+    sub_category: p.sub_category || '',
+    pattern: p.pattern || '',
+    formality: typeof p.formality === 'number' ? p.formality : undefined,
+    warmth: typeof p.warmth === 'number' ? p.warmth : undefined,
     created_at: p.created_at,
     updated_at: p.updated_at,
   }));

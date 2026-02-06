@@ -314,7 +314,7 @@ export default function AdminPins() {
                     <option value="ELEVATED_COOL">Elevated Cool</option>
                     <option value="EFFORTLESS_NATURAL">Effortless Natural</option>
                     <option value="RETRO_LUXE">Retro Luxe</option>
-                    <option value="SPORT-MODERN">Sport Modern</option>
+                    <option value="SPORT_MODERN">Sport Modern</option>
                     <option value="CREATIVE_LAYERED">Creative Layered</option>
                   </select>
                 </div>

@@ -226,7 +226,7 @@ export default function MatchingTest() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-gray-700">
                       {result.matchScore.breakdown.colorMatch}
@@ -262,6 +262,12 @@ export default function MatchingTest() {
                       {result.matchScore.breakdown.seasonMatch}
                     </div>
                     <div className="text-xs text-gray-500">Season</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-700">
+                      {result.matchScore.breakdown.silhouetteBalance}
+                    </div>
+                    <div className="text-xs text-gray-500">Silhouette</div>
                   </div>
                 </div>
 
