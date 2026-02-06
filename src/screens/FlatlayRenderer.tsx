@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { generateAndSaveFlatlay } from '../utils/flatlayRenderer';
+import { generateAndSaveModelPhoto } from '../utils/modelPhotoGenerator';
 
 interface FlatlayRendererProps {
   outfitId: string;
@@ -27,6 +28,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [renderedImageUrl, setRenderedImageUrl] = useState('');
+  const [renderingStep, setRenderingStep] = useState('');
 
   useEffect(() => {
     loadOutfitItems();
@@ -74,6 +76,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
     setRendering(true);
     setError('');
     setSuccess(false);
+    setRenderingStep('플랫레이 이미지 생성 중...');
 
     try {
       const validItems = items.filter(item => item.product?.image_url);
@@ -90,7 +93,16 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
       const { imageUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
 
       setRenderedImageUrl(imageUrl);
+      setRenderingStep('AI 모델컷 생성 중...');
+
+      try {
+        await generateAndSaveModelPhoto(outfitId, imageUrl);
+      } catch (modelError) {
+        console.error('Model photo generation error:', modelError);
+      }
+
       setSuccess(true);
+      setRenderingStep('');
 
       setTimeout(() => {
         onRendered();
@@ -101,6 +113,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
       setError((err as Error).message);
     } finally {
       setRendering(false);
+      setRenderingStep('');
     }
   };
 
@@ -151,7 +164,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                     <div>
                       <p className="font-medium text-green-900">렌더링 완료!</p>
                       <p className="text-sm text-green-700">
-                        플랫레이 이미지가 성공적으로 생성되고 저장되었습니다.
+                        플랫레이 이미지와 AI 모델컷이 성공적으로 생성되고 저장되었습니다.
                       </p>
                     </div>
                   </div>
@@ -203,6 +216,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                         <ul className="list-disc list-inside space-y-1 text-xs">
                           <li>제품 이미지의 흰 배경이 자동으로 제거됩니다</li>
                           <li>뉴트럴 톤 배경과 자연스러운 레이어링 효과를 적용합니다</li>
+                          <li>AI가 플랫레이 기반으로 모델컷을 자동 생성합니다 (서양인 모델)</li>
                           <li>생성된 이미지는 Supabase Storage에 자동 저장됩니다</li>
                           <li>각 제품에 쇼핑 버튼이 자동으로 추가됩니다</li>
                         </ul>
@@ -218,12 +232,12 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                     {rendering ? (
                       <>
                         <Loader className="animate-spin" size={20} />
-                        플랫레이 렌더링 중...
+                        {renderingStep || '플랫레이 렌더링 중...'}
                       </>
                     ) : (
                       <>
                         <ImageIcon size={20} />
-                        플랫레이 생성
+                        플랫레이 & 모델컷 생성
                       </>
                     )}
                   </button>
