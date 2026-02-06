@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { generateAndSaveFlatlay, ProductPosition } from '../utils/flatlayRenderer';
+import { removeBackground } from '../utils/backgroundRemoval';
 
 interface FlatlayRendererProps {
   outfitId: string;
@@ -25,6 +26,8 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
   const [items, setItems] = useState<OutfitItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [rendering, setRendering] = useState(false);
+  const [removingBg, setRemovingBg] = useState(false);
+  const [bgProgress, setBgProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [renderedImageUrl, setRenderedImageUrl] = useState('');
@@ -78,17 +81,35 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
     setSuccess(false);
 
     try {
-      const renderItems = items
-        .filter(item => item.product?.image_url)
-        .map(item => ({
-          slot_type: item.slot_type,
-          product_id: item.product_id,
-          image_url: item.product!.nobg_image_url || item.product!.image_url,
-        }));
-
-      if (renderItems.length === 0) {
+      const validItems = items.filter(item => item.product?.image_url);
+      if (validItems.length === 0) {
         throw new Error('이미지가 있는 제품이 없습니다.');
       }
+
+      const needsBgRemoval = validItems.filter(item => !item.product!.nobg_image_url);
+
+      if (needsBgRemoval.length > 0) {
+        setRemovingBg(true);
+        setBgProgress({ current: 0, total: needsBgRemoval.length });
+
+        for (let i = 0; i < needsBgRemoval.length; i++) {
+          const item = needsBgRemoval[i];
+          setBgProgress({ current: i + 1, total: needsBgRemoval.length });
+          try {
+            const nobgUrl = await removeBackground(item.product!.image_url, item.product!.id);
+            item.product!.nobg_image_url = nobgUrl;
+          } catch (err) {
+            console.error(`BG removal failed for ${item.product!.name}:`, err);
+          }
+        }
+        setRemovingBg(false);
+      }
+
+      const renderItems = validItems.map(item => ({
+        slot_type: item.slot_type,
+        product_id: item.product_id,
+        image_url: item.product!.nobg_image_url || item.product!.image_url,
+      }));
 
       const { imageUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
 
@@ -104,6 +125,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
       setError((err as Error).message);
     } finally {
       setRendering(false);
+      setRemovingBg(false);
     }
   };
 
@@ -221,7 +243,9 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                     {rendering ? (
                       <>
                         <Loader className="animate-spin" size={20} />
-                        렌더링 중...
+                        {removingBg
+                          ? `누끼 제거 중... (${bgProgress.current}/${bgProgress.total})`
+                          : '플랫레이 렌더링 중...'}
                       </>
                     ) : (
                       <>
