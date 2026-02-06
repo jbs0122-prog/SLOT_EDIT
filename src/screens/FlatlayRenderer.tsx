@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { supabase } from '../utils/supabase';
-import { generateAndSaveFlatlay, ProductPosition } from '../utils/flatlayRenderer';
-import { removeBackground } from '../utils/backgroundRemoval';
+import { generateAndSaveFlatlay } from '../utils/flatlayRenderer';
 
 interface FlatlayRendererProps {
   outfitId: string;
@@ -18,7 +17,6 @@ interface OutfitItem {
     name: string;
     brand: string;
     image_url: string;
-    nobg_image_url?: string;
   };
 }
 
@@ -26,8 +24,6 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
   const [items, setItems] = useState<OutfitItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [rendering, setRendering] = useState(false);
-  const [removingBg, setRemovingBg] = useState(false);
-  const [bgProgress, setBgProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [renderedImageUrl, setRenderedImageUrl] = useState('');
@@ -49,8 +45,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
             id,
             name,
             brand,
-            image_url,
-            nobg_image_url
+            image_url
           )
         `)
         .eq('outfit_id', outfitId);
@@ -86,29 +81,10 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         throw new Error('이미지가 있는 제품이 없습니다.');
       }
 
-      const needsBgRemoval = validItems.filter(item => !item.product!.nobg_image_url);
-
-      if (needsBgRemoval.length > 0) {
-        setRemovingBg(true);
-        setBgProgress({ current: 0, total: needsBgRemoval.length });
-
-        for (let i = 0; i < needsBgRemoval.length; i++) {
-          const item = needsBgRemoval[i];
-          setBgProgress({ current: i + 1, total: needsBgRemoval.length });
-          try {
-            const nobgUrl = await removeBackground(item.product!.image_url, item.product!.id);
-            item.product!.nobg_image_url = nobgUrl;
-          } catch (err) {
-            console.error(`BG removal failed for ${item.product!.name}:`, err);
-          }
-        }
-        setRemovingBg(false);
-      }
-
       const renderItems = validItems.map(item => ({
         slot_type: item.slot_type,
         product_id: item.product_id,
-        image_url: item.product!.nobg_image_url || item.product!.image_url,
+        image_url: item.product!.image_url,
       }));
 
       const { imageUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
@@ -125,7 +101,6 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
       setError((err as Error).message);
     } finally {
       setRendering(false);
-      setRemovingBg(false);
     }
   };
 
@@ -226,7 +201,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                       <div className="text-sm text-blue-800">
                         <p className="font-medium mb-1">렌더링 안내</p>
                         <ul className="list-disc list-inside space-y-1 text-xs">
-                          <li>세련된 플랫레이 스타일로 제품 이미지를 배치합니다</li>
+                          <li>제품 이미지의 흰 배경이 자동으로 제거됩니다</li>
                           <li>뉴트럴 톤 배경과 자연스러운 레이어링 효과를 적용합니다</li>
                           <li>생성된 이미지는 Supabase Storage에 자동 저장됩니다</li>
                           <li>각 제품에 쇼핑 버튼이 자동으로 추가됩니다</li>
@@ -243,9 +218,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                     {rendering ? (
                       <>
                         <Loader className="animate-spin" size={20} />
-                        {removingBg
-                          ? `누끼 제거 중... (${bgProgress.current}/${bgProgress.total})`
-                          : '플랫레이 렌더링 중...'}
+                        플랫레이 렌더링 중...
                       </>
                     ) : (
                       <>

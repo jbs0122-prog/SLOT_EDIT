@@ -50,6 +50,42 @@ async function loadImageWithProxy(url: string, useProxy: boolean): Promise<HTMLI
   });
 }
 
+function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = img.width;
+  tempCanvas.height = img.height;
+  const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })!;
+  tempCtx.drawImage(img, 0, 0);
+
+  const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+  const data = imageData.data;
+
+  const whiteThreshold = 235;
+  const edgeSoftness = 20;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) {
+      data[i + 3] = 0;
+    } else {
+      const minChannel = Math.min(r, g, b);
+      const brightness = (r + g + b) / 3;
+
+      if (brightness > (whiteThreshold - edgeSoftness) && minChannel > (whiteThreshold - edgeSoftness * 2)) {
+        const distFromThreshold = whiteThreshold - brightness;
+        const alpha = Math.min(255, Math.max(0, Math.round((distFromThreshold / edgeSoftness) * 255)));
+        data[i + 3] = Math.min(data[i + 3], alpha);
+      }
+    }
+  }
+
+  tempCtx.putImageData(imageData, 0, 0);
+  return tempCanvas;
+}
+
 async function calculateLayoutWithImages(
   items: Array<{ slot_type: string; image_url: string; product_id: string }>,
   canvasWidth: number,
@@ -229,6 +265,7 @@ export async function renderFlatlay(
   for (const position of positions) {
     try {
       const img = await loadImageWithProxy(position.image_url, opts.useProxy);
+      const processedImg = removeWhiteBackground(img);
 
       ctx.save();
 
@@ -240,12 +277,12 @@ export async function renderFlatlay(
         ctx.translate(-centerX, -centerY);
       }
 
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-      ctx.shadowBlur = 20;
-      ctx.shadowOffsetX = 5;
-      ctx.shadowOffsetY = 8;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+      ctx.shadowBlur = 25;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 6;
 
-      ctx.drawImage(img, position.x, position.y, position.width, position.height);
+      ctx.drawImage(processedImg, position.x, position.y, position.width, position.height);
 
       ctx.restore();
     } catch (error) {
@@ -277,8 +314,8 @@ export async function renderFlatlay(
 
     ctx.save();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-    const padding = 20;
-    ctx.fillRect(logoX - padding, logoY - padding, logoWidth + padding * 2, logoHeight + padding * 2);
+    const logoPad = 20;
+    ctx.fillRect(logoX - logoPad, logoY - logoPad, logoWidth + logoPad * 2, logoHeight + logoPad * 2);
     ctx.globalAlpha = 1.0;
     ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
     ctx.restore();
@@ -328,6 +365,7 @@ export async function renderFlatlayWithCustomPositions(
   for (const position of positions) {
     try {
       const img = await loadImageWithProxy(position.image_url, opts.useProxy);
+      const processedImg = removeWhiteBackground(img);
 
       ctx.save();
 
@@ -339,12 +377,12 @@ export async function renderFlatlayWithCustomPositions(
         ctx.translate(-centerX, -centerY);
       }
 
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-      ctx.shadowBlur = 20;
-      ctx.shadowOffsetX = 5;
-      ctx.shadowOffsetY = 8;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+      ctx.shadowBlur = 25;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 6;
 
-      ctx.drawImage(img, position.x, position.y, position.width, position.height);
+      ctx.drawImage(processedImg, position.x, position.y, position.width, position.height);
 
       ctx.restore();
     } catch (error) {
@@ -366,8 +404,8 @@ export async function renderFlatlayWithCustomPositions(
 
     ctx.save();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-    const padding = 20;
-    ctx.fillRect(logoX - padding, logoY - padding, logoWidth + padding * 2, logoHeight + padding * 2);
+    const logoPad = 20;
+    ctx.fillRect(logoX - logoPad, logoY - logoPad, logoWidth + logoPad * 2, logoHeight + logoPad * 2);
     ctx.globalAlpha = 1.0;
     ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
     ctx.restore();
