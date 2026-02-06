@@ -4,6 +4,7 @@ import Results from './screens/Results';
 import Loading from './screens/Loading';
 import AdminPins from './screens/AdminPins';
 import AdminProducts from './screens/AdminProducts';
+import AdminUsers from './screens/AdminUsers';
 import AdminLayout from './screens/AdminLayout';
 import BottomNav, { NavTab } from './screens/BottomNav';
 import RankingPage from './screens/RankingPage';
@@ -13,7 +14,7 @@ import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products';
+type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('loading');
@@ -35,6 +36,10 @@ function App() {
     }
     if (window.location.hash === '#admin-products') {
       setCurrentScreen('admin-products');
+      return;
+    }
+    if (window.location.hash === '#admin-users') {
+      setCurrentScreen('admin-users');
       return;
     }
 
@@ -170,6 +175,11 @@ function App() {
       {currentScreen === 'admin-products' && (
         <AdminLayout>
           <AdminProducts />
+        </AdminLayout>
+      )}
+      {currentScreen === 'admin-users' && (
+        <AdminLayout>
+          <AdminUsers />
         </AdminLayout>
       )}
       {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Save, ArrowLeft, Package } from 'lucide-react';
+import { X, Save, ArrowLeft, Package, Users } from 'lucide-react';
 
 type ImageType = 'flatlay' | 'on_model';
 
@@ -260,13 +260,22 @@ export default function AdminPins() {
                 <p className="text-gray-600 font-semibold">
                   총 {filteredOutfits.length}개의 코디 (전체: {outfits.length}개)
                 </p>
-                <a
-                  href="#admin-products"
-                  className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-                >
-                  <Package size={18} />
-                  제품 관리
-                </a>
+                <div className="flex gap-2">
+                  <a
+                    href="#admin-users"
+                    className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                  >
+                    <Users size={18} />
+                    회원 관리
+                  </a>
+                  <a
+                    href="#admin-products"
+                    className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                  >
+                    <Package size={18} />
+                    제품 관리
+                  </a>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
