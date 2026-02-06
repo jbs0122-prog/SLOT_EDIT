@@ -130,10 +130,7 @@ The photo should look like a high-end fashion catalog or editorial spread.`;
             },
           ],
           generationConfig: {
-            responseModalities: ["TEXT", "IMAGE"],
             temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
           },
         }),
       }
@@ -178,9 +175,10 @@ The photo should look like a high-end fashion catalog or editorial spread.`;
     let generatedImageData = null;
     let generatedMimeType = "image/png";
     for (const part of geminiResult.candidates[0].content.parts) {
-      if (part.inline_data?.data) {
-        generatedImageData = part.inline_data.data;
-        generatedMimeType = part.inline_data.mime_type || "image/png";
+      const inlineData = part.inline_data || part.inlineData;
+      if (inlineData?.data) {
+        generatedImageData = inlineData.data;
+        generatedMimeType = inlineData.mime_type || inlineData.mimeType || "image/png";
         break;
       }
     }
