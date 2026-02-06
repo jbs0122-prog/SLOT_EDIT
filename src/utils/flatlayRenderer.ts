@@ -306,16 +306,13 @@ export async function renderFlatlay(
   }
 
   try {
-    const logoImg = await loadImageWithProxy('/logo.png', false);
-    const logoWidth = 220;
+    const logoImg = await loadImageWithProxy('/logo(white).png', false);
+    const logoWidth = 880;
     const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
     const logoX = (canvas.width - logoWidth) / 2;
     const logoY = (canvas.height - logoHeight) / 2;
 
-    ctx.save();
-    ctx.globalAlpha = 0.35;
     ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
-    ctx.restore();
   } catch (error) {
     console.error('Failed to load logo:', error);
   }
@@ -393,16 +390,13 @@ export async function renderFlatlayWithCustomPositions(
   }
 
   try {
-    const logoImg = await loadImageWithProxy('/logo.png', false);
-    const logoWidth = 220;
+    const logoImg = await loadImageWithProxy('/logo(white).png', false);
+    const logoWidth = 880;
     const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
     const logoX = (canvas.width - logoWidth) / 2;
     const logoY = (canvas.height - logoHeight) / 2;
 
-    ctx.save();
-    ctx.globalAlpha = 0.35;
     ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
-    ctx.restore();
   } catch (error) {
     console.error('Failed to load logo:', error);
   }
