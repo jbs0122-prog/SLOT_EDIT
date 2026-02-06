@@ -4,6 +4,7 @@ import Results from './screens/Results';
 import Loading from './screens/Loading';
 import AdminPins from './screens/AdminPins';
 import AdminProducts from './screens/AdminProducts';
+import AdminLayout from './screens/AdminLayout';
 import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
 import { WeatherData } from './utils/weather';
@@ -125,8 +126,16 @@ function App() {
           onGenerate={handleGenerate}
         />
       )}
-      {currentScreen === 'admin' && <AdminPins />}
-      {currentScreen === 'admin-products' && <AdminProducts />}
+      {currentScreen === 'admin' && (
+        <AdminLayout>
+          <AdminPins />
+        </AdminLayout>
+      )}
+      {currentScreen === 'admin-products' && (
+        <AdminLayout>
+          <AdminProducts />
+        </AdminLayout>
+      )}
     </>
   );
 }
