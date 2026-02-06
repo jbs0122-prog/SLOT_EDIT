@@ -6,7 +6,7 @@ import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
-import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users } from 'lucide-react';
+import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users, Key } from 'lucide-react';
 
 type ViewMode = 'products' | 'outfits';
 
@@ -215,6 +215,13 @@ export default function AdminProducts() {
             <p className="text-gray-600">제품을 추가하고 코디와 연결하세요</p>
           </div>
           <div className="flex gap-2">
+            <a
+              href="#test-gemini"
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-pink-700 shadow-md"
+            >
+              <Key size={18} />
+              API 테스트
+            </a>
             <a
               href="#admin-users"
               className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Save, ArrowLeft, Package, Users } from 'lucide-react';
+import { X, Save, ArrowLeft, Package, Users, Key } from 'lucide-react';
 
 type ImageType = 'flatlay' | 'on_model';
 
@@ -261,6 +261,13 @@ export default function AdminPins() {
                   총 {filteredOutfits.length}개의 코디 (전체: {outfits.length}개)
                 </p>
                 <div className="flex gap-2">
+                  <a
+                    href="#test-gemini"
+                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-pink-700 shadow-md"
+                  >
+                    <Key size={18} />
+                    API 테스트
+                  </a>
                   <a
                     href="#admin-users"
                     className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"

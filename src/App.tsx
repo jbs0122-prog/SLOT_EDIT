@@ -6,6 +6,7 @@ import AdminPins from './screens/AdminPins';
 import AdminProducts from './screens/AdminProducts';
 import AdminUsers from './screens/AdminUsers';
 import AdminLayout from './screens/AdminLayout';
+import GeminiKeyTest from './screens/GeminiKeyTest';
 import BottomNav, { NavTab } from './screens/BottomNav';
 import RankingPage from './screens/RankingPage';
 import MyAccountPage from './screens/MyAccountPage';
@@ -14,7 +15,7 @@ import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users';
+type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'test-gemini';
 
 const RESULTS_KEY = 'slotedit_results';
 
@@ -26,6 +27,7 @@ function screenFromHash(h: string): Screen {
   if (h === 'admin') return 'admin';
   if (h === 'admin-products') return 'admin-products';
   if (h === 'admin-users') return 'admin-users';
+  if (h === 'test-gemini') return 'test-gemini';
   if (h.startsWith('results')) return 'results';
   return 'input';
 }
@@ -261,6 +263,7 @@ function App() {
           <AdminUsers />
         </AdminLayout>
       )}
+      {currentScreen === 'test-gemini' && <GeminiKeyTest />}
       {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
     </>
   );
