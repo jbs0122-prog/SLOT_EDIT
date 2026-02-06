@@ -33,8 +33,8 @@ function screenFromHash(h: string): Screen {
 }
 
 function tabFromHash(h: string): NavTab {
-  if (h.includes('mens-ranking')) return 'mens-ranking';
   if (h.includes('womens-ranking')) return 'womens-ranking';
+  if (h.includes('mens-ranking')) return 'mens-ranking';
   if (h.includes('account')) return 'account';
   return 'home';
 }
