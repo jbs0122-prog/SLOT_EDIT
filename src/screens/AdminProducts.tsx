@@ -31,10 +31,12 @@ export default function AdminProducts() {
   const [outfitFilterGender, setOutfitFilterGender] = useState('');
   const [outfitFilterBodyType, setOutfitFilterBodyType] = useState('');
   const [outfitFilterVibe, setOutfitFilterVibe] = useState('');
+  const [productUsageCounts, setProductUsageCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadProducts();
     loadOutfits();
+    loadProductUsageCounts();
   }, []);
 
   const loadProducts = async () => {
@@ -114,6 +116,27 @@ export default function AdminProducts() {
     }
   };
 
+  const loadProductUsageCounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('outfit_items')
+        .select('product_id');
+
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      data?.forEach(item => {
+        if (item.product_id) {
+          counts[item.product_id] = (counts[item.product_id] || 0) + 1;
+        }
+      });
+
+      setProductUsageCounts(counts);
+    } catch (error) {
+      console.error('Failed to load product usage counts:', error);
+    }
+  };
+
   const handleAddProduct = () => {
     setEditingProduct(null);
     setShowProductForm(true);
@@ -151,6 +174,7 @@ export default function AdminProducts() {
 
   const handleLinksUpdated = () => {
     loadOutfits();
+    loadProductUsageCounts();
   };
 
   const handleDeleteOutfit = async (outfitId: string) => {
@@ -173,6 +197,7 @@ export default function AdminProducts() {
       if (error) throw error;
 
       await loadOutfits();
+      await loadProductUsageCounts();
       alert('코디가 삭제되었습니다.');
     } catch (error) {
       console.error('Failed to delete outfit:', error);
@@ -345,6 +370,7 @@ export default function AdminProducts() {
                 products={filteredProducts}
                 onProductsChange={loadProducts}
                 onEditProduct={handleEditProduct}
+                usageCounts={productUsageCounts}
               />
             </div>
           </>
