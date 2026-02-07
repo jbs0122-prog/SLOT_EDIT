@@ -19,6 +19,7 @@ export default function AdminPins() {
   const [filterGender, setFilterGender] = useState<string>('');
   const [filterBodyType, setFilterBodyType] = useState<string>('');
   const [filterVibe, setFilterVibe] = useState<string>('');
+  const [tpo, setTpo] = useState<string>('');
 
   useEffect(() => {
     loadOutfits();
@@ -98,6 +99,7 @@ export default function AdminPins() {
     setSelectedImage('flatlay');
     setPins(outfit.flatlay_pins || []);
     setSelectedPinIndex(null);
+    setTpo(outfit.tpo || '');
   };
 
   const handleImageTypeChange = (type: ImageType) => {
@@ -147,9 +149,11 @@ export default function AdminPins() {
       console.log('Saving pins:', pins);
       console.log('Selected image:', selectedImage);
       console.log('Outfit ID:', selectedOutfit.id);
+      console.log('TPO:', tpo);
 
-      const updateData: Record<string, ImagePin[]> = {
+      const updateData: Record<string, any> = {
         [`${selectedImage}_pins`]: pins,
+        tpo: tpo || null,
       };
 
       console.log('Update data:', updateData);
@@ -167,7 +171,7 @@ export default function AdminPins() {
       // Verify the save by reading back from database
       const { data: verifyData, error: verifyError } = await supabase
         .from('outfits')
-        .select(`${selectedImage}_pins`)
+        .select(`${selectedImage}_pins, tpo`)
         .eq('id', selectedOutfit.id)
         .single();
 
@@ -179,11 +183,11 @@ export default function AdminPins() {
 
       const updatedOutfits = outfits.map(o =>
         o.id === selectedOutfit.id
-          ? { ...o, [`${selectedImage}_pins`]: pins }
+          ? { ...o, [`${selectedImage}_pins`]: pins, tpo: tpo || '' }
           : o
       );
       setOutfits(updatedOutfits);
-      setSelectedOutfit({ ...selectedOutfit, [`${selectedImage}_pins`]: pins });
+      setSelectedOutfit({ ...selectedOutfit, [`${selectedImage}_pins`]: pins, tpo: tpo || '' });
     } catch (error) {
       console.error('Save error:', error);
       alert('저장 실패: ' + (error as Error).message);
@@ -405,6 +409,26 @@ export default function AdminPins() {
                   {saving ? '저장 중...' : '저장'}
                 </button>
               </div>
+            </div>
+
+            <div className="mb-6 bg-purple-50 rounded-lg p-4 border border-purple-200">
+              <label className="block text-sm font-semibold text-purple-900 mb-2">
+                TPO (Time, Place, Occasion)
+              </label>
+              <select
+                value={tpo}
+                onChange={(e) => setTpo(e.target.value)}
+                className="w-full px-4 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="">선택 안 함 (TPO 미표시)</option>
+                <option value="WORK">WORK</option>
+                <option value="DATE">DATE</option>
+                <option value="WEEKEND">WEEKEND</option>
+                <option value="INTERVIEW">INTERVIEW</option>
+              </select>
+              <p className="text-xs text-purple-700 mt-2">
+                TPO를 선택하면 이미지 우측 상단에 표시됩니다. 선택하지 않으면 표시되지 않습니다.
+              </p>
             </div>
 
             {showProductsPanel && (

@@ -21,7 +21,9 @@ export default function DesktopSidebar({ activeTab, onTabChange, onRequestLogin 
   return (
     <aside className="hidden md:flex flex-col h-screen w-[260px] border-r border-gray-200 bg-white flex-shrink-0 sticky top-0 z-30">
       <div className="px-6 pt-8 pb-6">
-        <img src="/logo.png" alt="SLOT EDIT" className="h-14" />
+        <button onClick={() => window.location.hash = ''} className="focus:outline-none">
+          <img src="/logo.png" alt="SLOT EDIT" className="h-14" />
+        </button>
       </div>
 
       <nav className="flex-1 px-3 py-2">

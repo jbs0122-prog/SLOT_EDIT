@@ -381,7 +381,9 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
       <header className="fixed top-0 left-0 right-0 bg-white z-40 border-b border-gray-200 md:hidden">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between mb-3">
-            <img src="/logo.png" alt="SLOT EDIT" className="h-12" />
+            <button onClick={() => window.location.hash = ''} className="focus:outline-none">
+              <img src="/logo.png" alt="SLOT EDIT" className="h-12" />
+            </button>
             {weather && (
               <div className="text-sm text-gray-700 font-medium">
                 {getWeatherEmoji(weather.condition)} {weather.temperature}°F
@@ -544,8 +546,8 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
         ) : (
           sortedOutfits.map((outfit, index) => {
             const images = [];
-            if (outfit.image_url_flatlay) images.push({ url: outfit.image_url_flatlay, label: 'Flatlay', tpo: outfit.tpo });
-            if (outfit.image_url_on_model) images.push({ url: outfit.image_url_on_model, label: 'On Model', tpo: outfit.tpo });
+            if (outfit.image_url_flatlay) images.push({ url: outfit.image_url_flatlay, label: 'Flatlay', tpo: outfit.tpo || '' });
+            if (outfit.image_url_on_model) images.push({ url: outfit.image_url_on_model, label: 'On Model', tpo: outfit.tpo || '' });
             const feedback = feedbackCounts[outfit.id] || { likes: 0, dislikes: 0, userFeedback: null };
             const isSaved = savedOutfitIds.has(outfit.id);
 
