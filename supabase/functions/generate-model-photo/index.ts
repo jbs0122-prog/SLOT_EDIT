@@ -69,13 +69,15 @@ Deno.serve(async (req: Request) => {
     const randomEthnicity =
       ethnicityOptions[Math.floor(Math.random() * ethnicityOptions.length)];
 
-    const genderText = gender === "남성" ? "male" : "female";
+    const genderLower = gender.toLowerCase();
+    const genderText = (genderLower === "male" || genderLower === "남성") ? "male" : "female";
+    const bodyTypeLower = bodyType.toLowerCase();
     const bodyTypeText =
-      bodyType === "슬림"
-        ? "slim, fit"
-        : bodyType === "오버핏"
-          ? "relaxed fit, comfortable style"
-          : "regular fit";
+      (bodyTypeLower === "slim" || bodyTypeLower === "슬림")
+        ? "slim, lean, fit"
+        : (bodyTypeLower === "plus-size" || bodyTypeLower === "오버핏" || bodyTypeLower === "plus_size")
+          ? "plus-size, relaxed fit, comfortable style"
+          : "regular, athletic fit";
 
     const fetchImageResponse = await fetch(flatlayImageUrl);
     if (!fetchImageResponse.ok) {
@@ -86,11 +88,17 @@ Deno.serve(async (req: Request) => {
     const imageBuffer = await fetchImageResponse.arrayBuffer();
     const base64Image = uint8ArrayToBase64(new Uint8Array(imageBuffer));
 
-    const prompt = `Create a professional fashion editorial photo of a ${randomEthnicity} ${genderText} model wearing the exact outfit shown in the flatlay image.
+    const genderDescription = genderText === "male"
+      ? "a MAN (male, masculine). The model MUST be clearly a MALE person with masculine features."
+      : "a WOMAN (female, feminine). The model MUST be clearly a FEMALE person with feminine features.";
+
+    const prompt = `CRITICAL: The model MUST be ${genderText.toUpperCase()}. Generate a professional fashion editorial photo of ${genderDescription}
+
+The model is ${randomEthnicity}, wearing the exact outfit shown in the flatlay image.
 
 Model specifications:
+- Gender: ${genderText.toUpperCase()} (THIS IS MANDATORY - do NOT use the opposite gender)
 - Ethnicity: ${randomEthnicity}
-- Gender: ${genderText}
 - Body type: ${bodyTypeText}
 - Age: 25-30 years old
 
@@ -102,9 +110,10 @@ Photo requirements:
 - Professional fashion photography style
 - High fashion editorial aesthetic
 - The clothing items should match EXACTLY what's shown in the flatlay image
+- The model MUST be ${genderText.toUpperCase()}
 ${occasion ? `- Context: outfit for ${occasion}` : ""}
 
-The photo should look like a high-end fashion catalog or editorial spread.`;
+REMINDER: The model in the photo MUST be a ${genderText} person. This is a ${genderText === "male" ? "menswear" : "womenswear"} outfit.`;
 
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${geminiApiKey}`,
