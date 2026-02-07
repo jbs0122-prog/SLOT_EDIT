@@ -43,6 +43,7 @@ function getOrCreateSessionId(): string {
 export default function Results({ outfits, context, onBack, onGenerate, onRequestLogin }: ResultsProps) {
   const { user } = useAuth();
   const { gender, bodyType, vibe, weather } = context;
+  const [localOutfits, setLocalOutfits] = useState<Outfit[]>(outfits);
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
   const [sortedOutfits, setSortedOutfits] = useState<Outfit[]>(outfits);
   const [sortOrder, setSortOrder] = useState<'likes' | 'latest'>('likes');
@@ -72,13 +73,18 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   const minSwipeDistance = 100;
 
   useEffect(() => {
+    setLocalOutfits(outfits);
+  }, [outfits]);
+
+  useEffect(() => {
     loadFeedbackCounts();
     loadOutfitProducts();
+    refreshOutfitImages();
     if (containerRef.current) {
       const scrollableDiv = containerRef.current.querySelector('.overflow-y-auto');
       if (scrollableDiv) scrollableDiv.scrollTop = 0;
     }
-  }, [outfits]);
+  }, [localOutfits]);
 
   useEffect(() => {
     if (user) loadSavedOutfits();
@@ -104,8 +110,41 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
     stock_status: product.stock_status || 'in_stock', created_at: product.created_at, updated_at: product.updated_at,
   });
 
+  const refreshOutfitImages = async () => {
+    const outfitIds = localOutfits.map(o => o.id);
+    if (outfitIds.length === 0) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('outfits')
+        .select('id, image_url_flatlay, image_url_on_model, flatlay_pins, on_model_pins')
+        .in('id', outfitIds);
+
+      if (error) throw error;
+      if (!data) return;
+
+      setLocalOutfits(prev =>
+        prev.map(outfit => {
+          const updated = data.find(d => d.id === outfit.id);
+          if (updated) {
+            return {
+              ...outfit,
+              image_url_flatlay: updated.image_url_flatlay || outfit.image_url_flatlay,
+              image_url_on_model: updated.image_url_on_model || outfit.image_url_on_model,
+              flatlay_pins: updated.flatlay_pins || outfit.flatlay_pins,
+              on_model_pins: updated.on_model_pins || outfit.on_model_pins,
+            };
+          }
+          return outfit;
+        })
+      );
+    } catch (error) {
+      console.error('Failed to refresh outfit images:', error);
+    }
+  };
+
   const loadOutfitProducts = async () => {
-    const outfitIds = outfits.map(o => o.id);
+    const outfitIds = localOutfits.map(o => o.id);
     if (outfitIds.length === 0) return;
 
     try {
@@ -113,7 +152,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
         .from('outfit_items').select('outfit_id, product_id').in('outfit_id', outfitIds);
       if (itemsError) throw itemsError;
 
-      const pinProductMap = collectPinProductIds(outfits);
+      const pinProductMap = collectPinProductIds(localOutfits);
       const allProductIds = new Set<string>();
       outfitItemsData?.forEach(item => allProductIds.add(item.product_id));
       pinProductMap.forEach(ids => ids.forEach(id => allProductIds.add(id)));
@@ -173,30 +212,30 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
 
   useEffect(() => {
     const descriptions: { [id: string]: string } = {};
-    outfits.forEach(outfit => {
+    localOutfits.forEach(outfit => {
       const products = outfitProducts[outfit.id] || [];
       if (products.length > 0) descriptions[outfit.id] = generateOutfitDescription(products, outfit);
     });
     setOutfitDescriptions(descriptions);
-  }, [outfitProducts, outfits]);
+  }, [outfitProducts, localOutfits]);
 
   const getOutfitTotalPrice = (outfitId: string): number => {
     return (outfitProducts[outfitId] || []).reduce((sum, p) => sum + (p.price || 0), 0);
   };
 
   useEffect(() => {
-    const sorted = [...outfits].sort((a, b) => {
+    const sorted = [...localOutfits].sort((a, b) => {
       if (sortOrder === 'likes') {
         return (feedbackCounts[b.id]?.likes || 0) - (feedbackCounts[a.id]?.likes || 0);
       }
       return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
     });
     setSortedOutfits(sorted);
-  }, [outfits, feedbackCounts, sortOrder]);
+  }, [localOutfits, feedbackCounts, sortOrder]);
 
   const loadFeedbackCounts = async () => {
     const sessionId = getOrCreateSessionId();
-    const outfitIds = outfits.map(o => o.id);
+    const outfitIds = localOutfits.map(o => o.id);
     try {
       const { data, error } = await supabase
         .from('outfit_feedback').select('outfit_id, feedback_type, session_id').in('outfit_id', outfitIds);

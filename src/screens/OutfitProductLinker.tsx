@@ -230,13 +230,25 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                   return (
                     <div
                       key={slot.value}
-                      onDragOver={(e) => e.preventDefault()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onDrop={(e) => {
                         e.preventDefault();
+                        e.stopPropagation();
                         handleDrop(slot.value);
                       }}
-                      className={`border-2 border-dashed rounded-lg p-4 transition-colors ${
-                        draggedProduct && draggedProduct.category === slot.value
+                      onDragEnter={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.add('drag-over');
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove('drag-over');
+                      }}
+                      className={`border-2 border-dashed rounded-lg p-4 transition-all ${
+                        draggedProduct
                           ? 'border-blue-500 bg-blue-50'
                           : 'border-gray-300'
                       }`}
@@ -319,11 +331,15 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                   filteredProducts.map(product => (
                     <div
                       key={product.id}
-                      draggable
-                      onDragStart={() => handleDragStart(product)}
+                      draggable={true}
+                      onDragStart={(e) => {
+                        handleDragStart(product);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', product.id);
+                      }}
                       onDragEnd={handleDragEnd}
-                      className={`flex items-start gap-3 bg-white border rounded-lg p-3 cursor-move hover:border-blue-500 hover:shadow-sm transition-all ${
-                        draggedProduct?.id === product.id ? 'opacity-50' : ''
+                      className={`flex items-start gap-3 bg-white border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-500 hover:shadow-md transition-all ${
+                        draggedProduct?.id === product.id ? 'opacity-50 scale-95' : ''
                       }`}
                     >
                       <img
