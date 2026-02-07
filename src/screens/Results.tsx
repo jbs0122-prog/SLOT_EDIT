@@ -84,7 +84,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
       const scrollableDiv = containerRef.current.querySelector('.overflow-y-auto');
       if (scrollableDiv) scrollableDiv.scrollTop = 0;
     }
-  }, [localOutfits]);
+  }, [outfits]);
 
   useEffect(() => {
     if (user) loadSavedOutfits();
