@@ -187,9 +187,9 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
             </div>
 
             <div className="flex items-center gap-2 pt-3 border-t">
-              {product.product_link && (
+              {(product.affiliate_link || product.product_link) && (
                 <a
-                  href={product.product_link}
+                  href={product.affiliate_link || product.product_link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
