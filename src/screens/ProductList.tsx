@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { Edit2, Trash2, ExternalLink, Copy } from 'lucide-react';
+import { Edit2, Trash2, ExternalLink, Copy, Ban } from 'lucide-react';
+import { MAX_OUTFIT_USAGE } from '../utils/outfitGenerator';
 
 interface ProductListProps {
   products: Product[];
@@ -168,12 +169,20 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500">코디 사용:</span>
                 <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                  (usageCounts[product.id] || 0) > 0
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-600'
+                  (usageCounts[product.id] || 0) >= MAX_OUTFIT_USAGE
+                    ? 'bg-red-100 text-red-700'
+                    : (usageCounts[product.id] || 0) > 0
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-600'
                 }`}>
                   {usageCounts[product.id] || 0}회
                 </span>
+                {(usageCounts[product.id] || 0) >= MAX_OUTFIT_USAGE && (
+                  <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200">
+                    <Ban size={10} />
+                    자동생성 제외
+                  </span>
+                )}
               </div>
             </div>
 

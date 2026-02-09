@@ -21,18 +21,36 @@ export interface GeneratedOutfit {
   matchScore: number;
 }
 
+export const MAX_OUTFIT_USAGE = 5;
+
 export async function generateOutfitsAutomatically(
   params: GenerateOutfitsParams
 ): Promise<GeneratedOutfit[]> {
   const { gender, bodyType, vibe, count = 5, targetWarmth, targetSeason } = params;
 
-  const { data: products, error: fetchError } = await supabase
-    .from('products')
-    .select('*');
+  const [productsResult, usageResult] = await Promise.all([
+    supabase.from('products').select('*'),
+    supabase.from('outfit_items').select('product_id'),
+  ]);
 
-  if (fetchError) throw fetchError;
-  if (!products || products.length === 0) {
+  if (productsResult.error) throw productsResult.error;
+  if (!productsResult.data || productsResult.data.length === 0) {
     throw new Error('제품이 없습니다. 먼저 제품을 추가해주세요.');
+  }
+
+  const usageCounts: Record<string, number> = {};
+  usageResult.data?.forEach(item => {
+    if (item.product_id) {
+      usageCounts[item.product_id] = (usageCounts[item.product_id] || 0) + 1;
+    }
+  });
+
+  const products = productsResult.data.filter(
+    p => (usageCounts[p.id] || 0) < MAX_OUTFIT_USAGE
+  );
+
+  if (products.length === 0) {
+    throw new Error('사용 가능한 제품이 없습니다. 모든 제품이 코디 사용 한도(5회)에 도달했습니다.');
   }
 
   const productList: Product[] = products.map(p => ({
