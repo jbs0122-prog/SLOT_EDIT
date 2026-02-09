@@ -49,6 +49,9 @@ const SILHOUETTE_BALANCE: { [key: string]: string[] } = {
   wide: ['fitted', 'slim'],
   fitted: ['wide', 'relaxed', 'oversized', 'straight'],
   slim: ['wide', 'relaxed', 'oversized', 'regular'],
+  regular: ['slim', 'fitted', 'wide', 'relaxed', 'oversized'],
+  straight: ['fitted', 'slim', 'oversized', 'relaxed'],
+  tapered: ['relaxed', 'oversized', 'regular', 'wide'],
 };
 
 function shuffle<T>(arr: T[]): T[] {

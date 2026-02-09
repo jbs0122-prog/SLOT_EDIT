@@ -70,18 +70,18 @@ Deno.serve(async (req: Request) => {
 Return ONLY valid JSON (no markdown, no code blocks) with these exact fields:
 {
   "category": "상의|하의|아우터|신발|가방|액세서리",
-  "sub_category": "specific type like 티셔츠, 셔츠, 청바지, 슬랙스, 코트, 자켓, 스니커즈, 구두, 크로스백, 숄더백, 목걸이, 반지 etc.",
+  "sub_category": "tshirt|shirt|knit|hoodie|sweatshirt|turtleneck|denim|slacks|chinos|jogger|cargo|shorts|puffer|coat|blazer|jacket|cardigan|trench|sneaker|derby|loafer|boot|runner|tote|backpack|crossbody|duffle|belt|cap|scarf|glove|watch",
   "gender": "남성|여성|공용",
   "color": "exact color name in Korean like 검정, 흰색, 네이비, 베이지, 카키, 그레이 etc.",
-  "color_family": "무채색|난색|한색",
-  "color_tone": "밝음|중간|어두움",
-  "pattern": "무지|스트라이프|체크|도트|프린트|기타",
+  "color_family": "black|white|grey|navy|beige|brown|blue|green|red|yellow|purple|pink|orange|metallic|multi",
+  "color_tone": "warm|cool|neutral",
+  "pattern": "solid|stripe|check|graphic|print|other",
   "material": "면|폴리에스터|울|가죽|데님|니트|시폰|린넨|혼방 etc.",
-  "silhouette": "슬림|레귤러|오버사이즈|와이드",
-  "vibe": ["캐주얼", "포멀", "스트릿", "빈티지", "미니멀", "페미닌", "모던", "클래식"] (select 1-3 that apply),
-  "season": ["봄", "여름", "가을", "겨울"] (select applicable seasons),
-  "formality": 1-10 (1=very casual, 10=very formal),
-  "warmth": 1-10 (1=very cool, 10=very warm),
+  "silhouette": "oversized|relaxed|wide|regular|straight|fitted|slim|tapered",
+  "vibe": ["ELEVATED_COOL", "EFFORTLESS_NATURAL", "ARTISTIC_MINIMAL", "RETRO_LUXE", "SPORT_MODERN", "CREATIVE_LAYERED"] (select 1-3 that apply),
+  "season": ["spring", "summer", "fall", "winter"] (select applicable seasons),
+  "formality": 1-5 (1=very casual, 3=smart casual, 5=formal),
+  "warmth": 1-5 (1=summer lightweight, 3=spring/fall, 5=heavy winter),
   "description": "Brief Korean description of the item"
 }`
       : `Analyze this outfit combination and provide styling insights in Korean.`;

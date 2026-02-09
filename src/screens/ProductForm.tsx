@@ -249,33 +249,12 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         '공용': 'UNISEX'
       };
 
-      const seasonMap: Record<string, string> = {
-        '봄': 'spring',
-        '여름': 'summer',
-        '가을': 'fall',
-        '겨울': 'winter'
-      };
-
-      const colorFamilyMap: Record<string, string> = {
-        '무채색': 'neutral',
-        '난색': 'warm',
-        '한색': 'cool'
-      };
-
-      const colorToneMap: Record<string, string> = {
-        '밝음': 'light',
-        '중간': 'medium',
-        '어두움': 'dark'
-      };
-
-      const patternMap: Record<string, string> = {
-        '무지': 'solid',
-        '스트라이프': 'stripe',
-        '체크': 'check',
-        '도트': 'dot',
-        '프린트': 'print',
-        '기타': 'other'
-      };
+      const validColorFamilies = ['black', 'white', 'grey', 'navy', 'beige', 'brown', 'blue', 'green', 'red', 'yellow', 'purple', 'pink', 'orange', 'metallic', 'multi'];
+      const validColorTones = ['warm', 'cool', 'neutral'];
+      const validPatterns = ['solid', 'stripe', 'check', 'graphic', 'print', 'other'];
+      const validSilhouettes = ['oversized', 'relaxed', 'wide', 'regular', 'straight', 'fitted', 'slim', 'tapered'];
+      const validSeasons = ['spring', 'summer', 'fall', 'winter'];
+      const validVibes = ['ELEVATED_COOL', 'EFFORTLESS_NATURAL', 'ARTISTIC_MINIMAL', 'RETRO_LUXE', 'SPORT_MODERN', 'CREATIVE_LAYERED'];
 
       setFormData(prev => ({
         ...prev,
@@ -284,15 +263,15 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         gender: genderMap[analysis.gender] || prev.gender,
         color: analysis.color || prev.color,
         material: analysis.material || prev.material,
-        silhouette: analysis.silhouette || prev.silhouette,
-        vibe: analysis.vibe || prev.vibe,
-        season: analysis.season.map(s => seasonMap[s] || s).filter(Boolean) || prev.season,
-        color_family: colorFamilyMap[analysis.color_family] || analysis.color_family || prev.color_family,
-        color_tone: colorToneMap[analysis.color_tone] || analysis.color_tone || prev.color_tone,
+        silhouette: validSilhouettes.includes(analysis.silhouette) ? analysis.silhouette : prev.silhouette,
+        vibe: analysis.vibe?.filter(v => validVibes.includes(v)).length > 0 ? analysis.vibe.filter(v => validVibes.includes(v)) : prev.vibe,
+        season: analysis.season?.filter(s => validSeasons.includes(s)).length > 0 ? analysis.season.filter(s => validSeasons.includes(s)) : prev.season,
+        color_family: validColorFamilies.includes(analysis.color_family) ? analysis.color_family : prev.color_family,
+        color_tone: validColorTones.includes(analysis.color_tone) ? analysis.color_tone : prev.color_tone,
         sub_category: analysis.sub_category || prev.sub_category,
-        pattern: patternMap[analysis.pattern] || analysis.pattern || prev.pattern,
-        formality: analysis.formality || prev.formality,
-        warmth: analysis.warmth || prev.warmth
+        pattern: validPatterns.includes(analysis.pattern) ? analysis.pattern : prev.pattern,
+        formality: analysis.formality ? Math.max(1, Math.min(5, Math.round(analysis.formality))) : prev.formality,
+        warmth: analysis.warmth ? Math.max(1, Math.min(5, Math.round(analysis.warmth))) : prev.warmth
       }));
 
       alert('AI 분석이 완료되었습니다! 필요한 부분은 수정해주세요.');
