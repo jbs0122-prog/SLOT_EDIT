@@ -451,13 +451,21 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 실루엣
               </label>
-              <input
-                type="text"
+              <select
                 value={formData.silhouette}
                 onChange={(e) => handleChange('silhouette', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="예: oversized, fitted"
-              />
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              >
+                <option value="">선택하세요</option>
+                <option value="oversized">Oversized (오버사이즈)</option>
+                <option value="relaxed">Relaxed (릴랙스드)</option>
+                <option value="wide">Wide (와이드)</option>
+                <option value="regular">Regular (레귤러)</option>
+                <option value="straight">Straight (스트레이트)</option>
+                <option value="fitted">Fitted (피티드)</option>
+                <option value="slim">Slim (슬림)</option>
+                <option value="tapered">Tapered (테이퍼드)</option>
+              </select>
             </div>
 
             <div>
