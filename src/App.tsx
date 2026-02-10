@@ -12,11 +12,17 @@ import DesktopSidebar from './screens/DesktopSidebar';
 import RankingPage from './screens/RankingPage';
 import MyAccountPage from './screens/MyAccountPage';
 import LoginModal from './screens/LoginModal';
+import Footer from './screens/Footer';
+import PrivacyPolicy from './screens/PrivacyPolicy';
+import TermsOfService from './screens/TermsOfService';
+import AffiliateDisclosure from './screens/AffiliateDisclosure';
+import DMCAPolicy from './screens/DMCAPolicy';
+import Accessibility from './screens/Accessibility';
 import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature, getTargetWarmth } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'test-gemini';
+type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
 
 const RESULTS_KEY = 'slotedit_results';
 
@@ -29,6 +35,11 @@ function screenFromHash(h: string): Screen {
   if (h === 'admin-products') return 'admin-products';
   if (h === 'admin-users') return 'admin-users';
   if (h === 'test-gemini') return 'test-gemini';
+  if (h === 'privacy-policy') return 'privacy-policy';
+  if (h === 'terms-of-service') return 'terms-of-service';
+  if (h === 'affiliate-disclosure') return 'affiliate-disclosure';
+  if (h === 'dmca-policy') return 'dmca-policy';
+  if (h === 'accessibility') return 'accessibility';
   if (h.startsWith('results')) return 'results';
   return 'input';
 }
@@ -251,7 +262,12 @@ function App() {
   return (
     <>
       {currentScreen === 'loading' && <Loading />}
-      {currentScreen === 'input' && <Input onGenerate={handleGenerate} />}
+      {currentScreen === 'input' && (
+        <>
+          <Input onGenerate={handleGenerate} />
+          <Footer />
+        </>
+      )}
       {currentScreen === 'results' && (
         <div className="relative flex">
           <DesktopSidebar
@@ -261,22 +277,27 @@ function App() {
           />
           <div className="flex-1 min-w-0">
             {activeTab === 'home' && (
-              <Results
-                outfits={selectedOutfits}
-                context={context}
-                onBack={handleBack}
-                onGenerate={handleGenerate}
-                onRequestLogin={() => setShowLoginModal(true)}
-              />
+              <>
+                <Results
+                  outfits={selectedOutfits}
+                  context={context}
+                  onBack={handleBack}
+                  onGenerate={handleGenerate}
+                  onRequestLogin={() => setShowLoginModal(true)}
+                />
+                <Footer />
+              </>
             )}
             {activeTab === 'mens-ranking' && (
               <div className="min-h-screen bg-white">
                 <RankingPage gender="MALE" onRequestLogin={() => setShowLoginModal(true)} />
+                <Footer />
               </div>
             )}
             {activeTab === 'womens-ranking' && (
               <div className="min-h-screen bg-white">
                 <RankingPage gender="FEMALE" onRequestLogin={() => setShowLoginModal(true)} />
+                <Footer />
               </div>
             )}
             {activeTab === 'account' && (
@@ -286,6 +307,7 @@ function App() {
                   view={accountView}
                   onNavigate={handleAccountNavigate}
                 />
+                <Footer />
               </div>
             )}
           </div>
@@ -308,6 +330,11 @@ function App() {
         </AdminLayout>
       )}
       {currentScreen === 'test-gemini' && <GeminiKeyTest />}
+      {currentScreen === 'privacy-policy' && <PrivacyPolicy />}
+      {currentScreen === 'terms-of-service' && <TermsOfService />}
+      {currentScreen === 'affiliate-disclosure' && <AffiliateDisclosure />}
+      {currentScreen === 'dmca-policy' && <DMCAPolicy />}
+      {currentScreen === 'accessibility' && <Accessibility />}
       {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
     </>
   );
