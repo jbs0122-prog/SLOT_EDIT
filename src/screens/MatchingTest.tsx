@@ -49,6 +49,13 @@ export default function MatchingTest() {
         product_link: p.product_link || '',
         price: p.price,
         stock_status: p.stock_status || 'in_stock',
+        material: p.material || '',
+        color_family: p.color_family || '',
+        color_tone: p.color_tone || '',
+        sub_category: p.sub_category || '',
+        pattern: p.pattern || '',
+        formality: typeof p.formality === 'number' ? p.formality : undefined,
+        warmth: typeof p.warmth === 'number' ? p.warmth : undefined,
         created_at: p.created_at,
         updated_at: p.updated_at,
       }));
@@ -86,20 +93,30 @@ export default function MatchingTest() {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
             <p className="text-xs text-gray-500">{product.brand}</p>
-            <div className="flex gap-2 mt-1 flex-wrap">
-              {(product as any).color_family && (
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                  {(product as any).color_family}
+            <div className="flex gap-1.5 mt-1 flex-wrap">
+              {product.color_family && (
+                <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                  {product.color_family}
                 </span>
               )}
-              {(product as any).pattern && (
-                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
-                  {(product as any).pattern}
+              {product.pattern && (
+                <span className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
+                  {product.pattern}
                 </span>
               )}
-              {(product as any).formality && (
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                  F:{(product as any).formality}
+              {product.material && (
+                <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                  {product.material}
+                </span>
+              )}
+              {product.sub_category && (
+                <span className="text-xs bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">
+                  {product.sub_category}
+                </span>
+              )}
+              {product.formality !== undefined && (
+                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
+                  F:{product.formality}
                 </span>
               )}
             </div>
@@ -226,49 +243,29 @@ export default function MatchingTest() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">
-                      {result.matchScore.breakdown.colorMatch}
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+                  {([
+                    ['colorMatch', 'Color', '16%'],
+                    ['toneMatch', 'Tone', '10%'],
+                    ['patternBalance', 'Pattern', '10%'],
+                    ['formalityMatch', 'Formality', '10%'],
+                    ['warmthMatch', 'Warmth', '6%'],
+                    ['seasonMatch', 'Season', '6%'],
+                    ['silhouetteBalance', 'Silhouette', '12%'],
+                    ['materialCompat', 'Material', '8%'],
+                    ['subCategoryMatch', 'SubCat', '6%'],
+                    ['colorDepth', 'Palette', '6%'],
+                    ['moodCoherence', 'Mood', '6%'],
+                    ['accessoryHarmony', 'Accessory', '4%'],
+                  ] as const).map(([key, label, weight]) => (
+                    <div key={key} className="text-center">
+                      <div className="text-2xl font-bold text-gray-700">
+                        {(result.matchScore.breakdown as Record<string, number>)[key]}
+                      </div>
+                      <div className="text-xs text-gray-500">{label}</div>
+                      <div className="text-[10px] text-gray-400">{weight}</div>
                     </div>
-                    <div className="text-xs text-gray-500">Color</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">
-                      {result.matchScore.breakdown.toneMatch}
-                    </div>
-                    <div className="text-xs text-gray-500">Tone</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">
-                      {result.matchScore.breakdown.patternBalance}
-                    </div>
-                    <div className="text-xs text-gray-500">Pattern</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">
-                      {result.matchScore.breakdown.formalityMatch}
-                    </div>
-                    <div className="text-xs text-gray-500">Formality</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">
-                      {result.matchScore.breakdown.warmthMatch}
-                    </div>
-                    <div className="text-xs text-gray-500">Warmth</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">
-                      {result.matchScore.breakdown.seasonMatch}
-                    </div>
-                    <div className="text-xs text-gray-500">Season</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">
-                      {result.matchScore.breakdown.silhouetteBalance}
-                    </div>
-                    <div className="text-xs text-gray-500">Silhouette</div>
-                  </div>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
