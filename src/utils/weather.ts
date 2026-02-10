@@ -49,9 +49,17 @@ function setCachedWeather(data: WeatherData): void {
   }
 }
 
+const sessionCache = new Map<number, WeatherData>();
+
 export async function fetchNYCWeather(daysAhead: 0 | 1 = 0): Promise<WeatherData> {
+  const memCached = sessionCache.get(daysAhead);
+  if (memCached && Date.now() - memCached.timestamp < CACHE_DURATION) {
+    return memCached;
+  }
+
   const cached = getCachedWeather();
   if (cached && daysAhead === 0) {
+    sessionCache.set(0, cached);
     return cached;
   }
 
@@ -86,6 +94,8 @@ export async function fetchNYCWeather(daysAhead: 0 | 1 = 0): Promise<WeatherData
       timestamp: Date.now()
     };
 
+    sessionCache.set(daysAhead, weatherData);
+
     if (daysAhead === 0) {
       setCachedWeather(weatherData);
     }
@@ -106,10 +116,17 @@ export async function fetchNYCWeather(daysAhead: 0 | 1 = 0): Promise<WeatherData
 }
 
 export function getSeasonsFromTemperature(tempF: number): string[] {
-  if (tempF < 45) return ['winter'];
-  if (tempF < 60) return ['winter', 'fall', 'spring'];
-  if (tempF < 75) return ['spring', 'fall'];
-  return ['summer', 'spring'];
+  if (tempF < 40) return ['winter'];
+  if (tempF < 55) return ['fall', 'spring'];
+  if (tempF < 75) return ['spring', 'summer'];
+  return ['summer'];
+}
+
+export function getTargetWarmth(tempF: number): number {
+  if (tempF < 40) return 5;
+  if (tempF < 55) return 4;
+  if (tempF < 75) return 3;
+  return 1.5;
 }
 
 export function getWeatherEmoji(condition: WeatherCondition): string {

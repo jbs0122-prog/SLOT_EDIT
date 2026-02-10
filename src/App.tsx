@@ -14,7 +14,7 @@ import MyAccountPage from './screens/MyAccountPage';
 import LoginModal from './screens/LoginModal';
 import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
-import { WeatherData, getSeasonsFromTemperature } from './utils/weather';
+import { WeatherData, getSeasonsFromTemperature, getTargetWarmth } from './utils/weather';
 
 type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'test-gemini';
 
@@ -68,6 +68,34 @@ function restoreResults(): { outfits: Outfit[]; ctx: any } | null {
 
 function normalizeString(str: string): string {
   return str.trim().toLowerCase().replace(/_/g, ' ');
+}
+
+function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: boolean): number {
+  let score = 0;
+  if (!outfit.items || outfit.items.length === 0) return 0;
+
+  const warmths = outfit.items
+    .map(item => item.product?.warmth)
+    .filter((w): w is number => typeof w === 'number');
+
+  if (warmths.length > 0) {
+    const avgWarmth = warmths.reduce((s, w) => s + w, 0) / warmths.length;
+    score += Math.max(0, 10 - Math.abs(avgWarmth - targetWarmth) * 3);
+  }
+
+  if (isWetWeather) {
+    const hasOuter = outfit.items.some(item => item.slot_type === 'outer');
+    if (hasOuter) score += 3;
+
+    const wetResistantMaterials = ['leather', 'nylon', 'polyester', 'gore-tex', 'waterproof'];
+    const hasResistantMaterial = outfit.items.some(item => {
+      const material = (item.product?.material || '').toLowerCase();
+      return wetResistantMaterials.some(m => material.includes(m));
+    });
+    if (hasResistantMaterial) score += 2;
+  }
+
+  return score;
 }
 
 function App() {
@@ -154,6 +182,9 @@ function App() {
     const normalizedBodyType = normalizeString(bodyType);
     const normalizedVibe = normalizeString(vibe);
     const weatherSeasons = getSeasonsFromTemperature(weather.temperature);
+    const isCold = weather.temperature < 40;
+    const isWetWeather = weather.condition === 'Rainy' || weather.condition === 'Snow';
+    const targetWarmth = getTargetWarmth(weather.temperature);
 
     const matches = outfits.filter(outfit => {
       const matchesGender = normalizeString(outfit.gender) === normalizedGender;
@@ -161,6 +192,9 @@ function App() {
       const matchesVibe = normalizeString(outfit.vibe) === normalizedVibe;
 
       if (!matchesGender || !matchesBodyType || !matchesVibe) return false;
+
+      const hasOuter = outfit.items?.some(item => item.slot_type === 'outer');
+      if (isCold && !hasOuter) return false;
 
       if (outfit.items && outfit.items.length > 0) {
         const productsWithSeasons = outfit.items.filter(
@@ -172,21 +206,23 @@ function App() {
             return acc.filter(s => productSeasons.includes(s));
           }, [...productsWithSeasons[0].product!.season]);
 
-          if (commonSeasons.length > 0) {
-            return weatherSeasons.some(s => commonSeasons.includes(s));
-          }
+          return commonSeasons.length > 0 && weatherSeasons.some(s => commonSeasons.includes(s));
         }
       }
 
       return true;
     });
 
+    const sorted = [...matches].sort((a, b) => {
+      return computeWeatherFit(b, targetWarmth, isWetWeather) - computeWeatherFit(a, targetWarmth, isWetWeather);
+    });
+
     const ctx = { gender, bodyType, vibe, weather };
-    setSelectedOutfits(matches);
+    setSelectedOutfits(sorted);
     setContext(ctx);
     setActiveTab('home');
     setCurrentScreen('results');
-    persistResults(matches, ctx);
+    persistResults(sorted, ctx);
 
     const currentHash = getHash();
     if (!currentHash.startsWith('results')) {
