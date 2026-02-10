@@ -132,7 +132,7 @@ async function calculateLayoutWithImages(
       zIndex: 3,
     },
     bottom: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.52,
+      maxSize: Math.min(availableWidth, availableHeight) * 0.60,
       offsetX: availableWidth * 0.22,
       offsetY: availableHeight * 0.10,
       rotation: 0,
