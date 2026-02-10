@@ -6,7 +6,7 @@ import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
-import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users, Key } from 'lucide-react';
+import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users, Key, Scissors } from 'lucide-react';
 
 type ViewMode = 'products' | 'outfits';
 
@@ -241,8 +241,15 @@ export default function AdminProducts() {
           </div>
           <div className="flex gap-2">
             <a
+              href="#admin-extract"
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-cyan-700 shadow-md"
+            >
+              <Scissors size={18} />
+              누끼 추출
+            </a>
+            <a
               href="#test-gemini"
-              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-pink-700 shadow-md"
+              className="flex items-center gap-2 bg-gradient-to-r from-gray-700 to-gray-900 text-white px-4 py-2 rounded-lg hover:from-gray-800 hover:to-black shadow-md"
             >
               <Key size={18} />
               API 테스트

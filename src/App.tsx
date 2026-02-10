@@ -5,6 +5,7 @@ import Loading from './screens/Loading';
 import AdminPins from './screens/AdminPins';
 import AdminProducts from './screens/AdminProducts';
 import AdminUsers from './screens/AdminUsers';
+import ModelProductExtractor from './screens/ModelProductExtractor';
 import AdminLayout from './screens/AdminLayout';
 import GeminiKeyTest from './screens/GeminiKeyTest';
 import BottomNav, { NavTab } from './screens/BottomNav';
@@ -22,7 +23,7 @@ import { Outfit } from './data/outfits';
 import { fetchOutfits } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature, getTargetWarmth } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
+type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'admin-extract' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
 
 const RESULTS_KEY = 'slotedit_results';
 
@@ -34,6 +35,7 @@ function screenFromHash(h: string): Screen {
   if (h === 'admin') return 'admin';
   if (h === 'admin-products') return 'admin-products';
   if (h === 'admin-users') return 'admin-users';
+  if (h === 'admin-extract') return 'admin-extract';
   if (h === 'test-gemini') return 'test-gemini';
   if (h === 'privacy-policy') return 'privacy-policy';
   if (h === 'terms-of-service') return 'terms-of-service';
@@ -329,6 +331,11 @@ function App() {
       {currentScreen === 'admin-users' && (
         <AdminLayout>
           <AdminUsers />
+        </AdminLayout>
+      )}
+      {currentScreen === 'admin-extract' && (
+        <AdminLayout>
+          <ModelProductExtractor onBack={() => { window.location.hash = 'admin-products'; }} />
         </AdminLayout>
       )}
       {currentScreen === 'test-gemini' && <GeminiKeyTest />}
