@@ -72,18 +72,20 @@ Return ONLY valid JSON (no markdown, no code blocks) with these exact fields:
   "category": "상의|하의|아우터|신발|가방|액세서리",
   "sub_category": "tshirt|shirt|knit|hoodie|sweatshirt|turtleneck|denim|slacks|chinos|jogger|cargo|shorts|puffer|coat|blazer|jacket|cardigan|trench|sneaker|derby|loafer|boot|runner|tote|backpack|crossbody|duffle|belt|cap|scarf|glove|watch",
   "gender": "남성|여성|공용",
-  "color": "exact color name in Korean like 검정, 흰색, 네이비, 베이지, 카키, 그레이 etc.",
-  "color_family": "black|white|grey|navy|beige|brown|blue|green|red|yellow|purple|pink|orange|metallic|multi",
+  "color": "exact color name in Korean like 검정, 흰색, 네이비, 베이지, 카키, 그레이, 차콜, 크림, 아이보리, 카멜, 올리브, 버건디, 와인, 러스트, 머스타드, 세이지, 민트, 코랄, 라벤더, 하늘색 etc.",
+  "color_family": "black|white|grey|charcoal|navy|beige|cream|ivory|brown|tan|camel|olive|khaki|sage|rust|mustard|burgundy|wine|blue|sky_blue|denim|teal|green|mint|red|coral|yellow|orange|pink|lavender|purple|metallic|multi",
   "color_tone": "warm|cool|neutral",
-  "pattern": "solid|stripe|check|graphic|print|other",
-  "material": "면|폴리에스터|울|가죽|데님|니트|시폰|린넨|혼방 etc.",
+  "pattern": "solid|stripe|check|floral|graphic|print|other",
+  "material": "면|폴리에스터|울|가죽|데님|니트|시폰|린넨|혼방|나일론|캐시미어|벨벳|스웨이드|플리스|저지|텐셀|모달 etc.",
   "silhouette": "oversized|relaxed|wide|regular|straight|fitted|slim|tapered",
   "vibe": ["ELEVATED_COOL", "EFFORTLESS_NATURAL", "ARTISTIC_MINIMAL", "RETRO_LUXE", "SPORT_MODERN", "CREATIVE_LAYERED"] (select 1-3 that apply),
   "season": ["spring", "summer", "fall", "winter"] (select applicable seasons),
   "formality": 1-5 (1=very casual, 3=smart casual, 5=formal),
   "warmth": 1-5 (1=summer lightweight, 3=spring/fall, 5=heavy winter),
   "description": "Brief Korean description of the item"
-}`
+}
+
+IMPORTANT: Be precise with color_family. Use specific values like burgundy instead of red for dark reds, olive instead of green for muted greens, cream instead of white for off-whites, charcoal instead of grey for dark greys, denim for denim blue, camel/tan for light browns.`
       : `Analyze this outfit combination and provide styling insights in Korean.`;
 
     const geminiResponse = await fetch(

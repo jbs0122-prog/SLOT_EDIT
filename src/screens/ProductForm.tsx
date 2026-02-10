@@ -40,16 +40,34 @@ const COLOR_FAMILIES = [
   { value: 'black', label: 'Black (검정)' },
   { value: 'white', label: 'White (흰색)' },
   { value: 'grey', label: 'Grey (회색)' },
+  { value: 'charcoal', label: 'Charcoal (차콜)' },
   { value: 'navy', label: 'Navy (네이비)' },
   { value: 'beige', label: 'Beige (베이지)' },
+  { value: 'cream', label: 'Cream (크림)' },
+  { value: 'ivory', label: 'Ivory (아이보리)' },
   { value: 'brown', label: 'Brown (갈색)' },
+  { value: 'tan', label: 'Tan (탄)' },
+  { value: 'camel', label: 'Camel (카멜)' },
+  { value: 'olive', label: 'Olive (올리브)' },
+  { value: 'khaki', label: 'Khaki (카키)' },
+  { value: 'sage', label: 'Sage (세이지)' },
+  { value: 'rust', label: 'Rust (러스트)' },
+  { value: 'mustard', label: 'Mustard (머스타드)' },
+  { value: 'burgundy', label: 'Burgundy (버건디)' },
+  { value: 'wine', label: 'Wine (와인)' },
   { value: 'blue', label: 'Blue (파랑)' },
+  { value: 'sky_blue', label: 'Sky Blue (하늘색)' },
+  { value: 'denim', label: 'Denim (데님)' },
+  { value: 'teal', label: 'Teal (틸)' },
   { value: 'green', label: 'Green (초록)' },
+  { value: 'mint', label: 'Mint (민트)' },
   { value: 'red', label: 'Red (빨강)' },
+  { value: 'coral', label: 'Coral (코랄)' },
   { value: 'yellow', label: 'Yellow (노랑)' },
-  { value: 'purple', label: 'Purple (보라)' },
-  { value: 'pink', label: 'Pink (핑크)' },
   { value: 'orange', label: 'Orange (주황)' },
+  { value: 'pink', label: 'Pink (핑크)' },
+  { value: 'lavender', label: 'Lavender (라벤더)' },
+  { value: 'purple', label: 'Purple (보라)' },
   { value: 'metallic', label: 'Metallic (메탈릭)' },
   { value: 'multi', label: 'Multi (멀티컬러)' }
 ];
@@ -66,6 +84,7 @@ const PATTERNS = [
   { value: 'solid', label: 'Solid (무지)' },
   { value: 'stripe', label: 'Stripe (스트라이프)' },
   { value: 'check', label: 'Check (체크)' },
+  { value: 'floral', label: 'Floral (플로럴)' },
   { value: 'graphic', label: 'Graphic (그래픽)' },
   { value: 'print', label: 'Print (프린트)' },
   { value: 'other', label: 'Other (기타)' }
@@ -249,9 +268,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         '공용': 'UNISEX'
       };
 
-      const validColorFamilies = ['black', 'white', 'grey', 'navy', 'beige', 'brown', 'blue', 'green', 'red', 'yellow', 'purple', 'pink', 'orange', 'metallic', 'multi'];
+      const validColorFamilies = ['black', 'white', 'grey', 'charcoal', 'navy', 'beige', 'cream', 'ivory', 'brown', 'tan', 'camel', 'olive', 'khaki', 'sage', 'rust', 'mustard', 'burgundy', 'wine', 'blue', 'sky_blue', 'denim', 'teal', 'green', 'mint', 'red', 'coral', 'yellow', 'orange', 'pink', 'lavender', 'purple', 'metallic', 'multi'];
       const validColorTones = ['warm', 'cool', 'neutral'];
-      const validPatterns = ['solid', 'stripe', 'check', 'graphic', 'print', 'other'];
+      const validPatterns = ['solid', 'stripe', 'check', 'floral', 'graphic', 'print', 'other'];
       const validSilhouettes = ['oversized', 'relaxed', 'wide', 'regular', 'straight', 'fitted', 'slim', 'tapered'];
       const validSeasons = ['spring', 'summer', 'fall', 'winter'];
       const validVibes = ['ELEVATED_COOL', 'EFFORTLESS_NATURAL', 'ARTISTIC_MINIMAL', 'RETRO_LUXE', 'SPORT_MODERN', 'CREATIVE_LAYERED'];

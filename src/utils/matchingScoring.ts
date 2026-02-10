@@ -1,135 +1,19 @@
 import { Product } from '../data/outfits';
 import { OutfitCandidate, MatchScore } from './matchingEngine';
-
-const NEUTRAL_COLORS = ['black', 'white', 'grey', 'beige', 'navy'];
-const EARTH_TONES = ['beige', 'brown', 'green', 'orange'];
-
-const COLOR_HARMONY_RULES: Record<string, string[]> = {
-  black: ['white', 'grey', 'beige', 'red', 'blue', 'green', 'yellow', 'pink', 'purple', 'orange'],
-  white: ['black', 'grey', 'navy', 'blue', 'red', 'green', 'beige', 'brown'],
-  grey: ['black', 'white', 'navy', 'blue', 'pink', 'yellow', 'beige'],
-  navy: ['white', 'beige', 'grey', 'brown', 'red', 'yellow'],
-  beige: ['white', 'brown', 'navy', 'black', 'green', 'blue'],
-  brown: ['beige', 'white', 'green', 'orange', 'yellow', 'navy'],
-  blue: ['white', 'grey', 'beige', 'yellow', 'orange', 'brown', 'black'],
-  green: ['beige', 'brown', 'white', 'black', 'yellow', 'blue'],
-  red: ['black', 'white', 'navy', 'grey', 'beige'],
-  yellow: ['navy', 'grey', 'black', 'blue', 'white', 'brown'],
-  purple: ['grey', 'white', 'black', 'beige', 'pink'],
-  pink: ['grey', 'white', 'black', 'navy', 'beige'],
-  orange: ['navy', 'brown', 'beige', 'grey', 'black', 'white'],
-  metallic: ['black', 'white', 'navy', 'grey', 'beige'],
-  multi: ['black', 'white', 'grey', 'navy', 'beige'],
-};
-
-const SILHOUETTE_BALANCE: Record<string, string[]> = {
-  oversized: ['slim', 'fitted', 'straight', 'tapered'],
-  relaxed: ['slim', 'fitted', 'straight', 'tapered'],
-  wide: ['fitted', 'slim'],
-  fitted: ['wide', 'relaxed', 'oversized', 'straight'],
-  slim: ['wide', 'relaxed', 'oversized', 'regular'],
-  regular: ['slim', 'fitted', 'wide', 'relaxed', 'oversized'],
-  straight: ['fitted', 'slim', 'oversized', 'relaxed'],
-  tapered: ['relaxed', 'oversized', 'regular', 'wide'],
-};
-
-const MATERIAL_GROUPS: Record<string, string[]> = {
-  luxe: ['silk', 'satin', 'velvet', 'cashmere', 'chiffon', 'organza'],
-  structured: ['denim', 'leather', 'tweed', 'suede', 'corduroy'],
-  classic: ['wool', 'cotton', 'linen'],
-  casual: ['jersey', 'fleece', 'sweatshirt', 'terry', 'neoprene'],
-  knit: ['knit', 'crochet', 'ribbed', 'cable-knit', 'mohair'],
-  technical: ['nylon', 'polyester', 'gore-tex', 'spandex', 'mesh', 'windbreaker'],
-};
-
-const MATERIAL_COMPAT: Record<string, number> = {
-  'luxe-luxe': 1, 'luxe-classic': 0.8, 'luxe-structured': 0.6,
-  'luxe-knit': 0.5, 'luxe-casual': 0.3, 'luxe-technical': 0.2,
-  'structured-structured': 1, 'structured-classic': 0.9, 'structured-casual': 0.6,
-  'structured-knit': 0.6, 'structured-technical': 0.5,
-  'classic-classic': 1, 'classic-casual': 0.8, 'classic-knit': 0.8, 'classic-technical': 0.5,
-  'casual-casual': 1, 'casual-knit': 0.9, 'casual-technical': 0.7,
-  'knit-knit': 1, 'knit-technical': 0.5,
-  'technical-technical': 1,
-};
-
-const SUB_CATEGORY_STYLE: Record<string, string> = {
-  blazer: 'formal', suit_jacket: 'formal', dress_shirt: 'formal', blouse: 'formal',
-  slacks: 'formal', dress_pants: 'formal', pencil_skirt: 'formal', trench_coat: 'formal',
-  oxford: 'formal', loafer: 'formal', heel: 'formal', derby: 'formal',
-  clutch: 'formal', structured_bag: 'formal',
-
-  cardigan: 'smart_casual', polo: 'smart_casual', chino: 'smart_casual',
-  midi_skirt: 'smart_casual', ankle_boot: 'smart_casual', knit_vest: 'smart_casual',
-  tote: 'smart_casual', shoulder_bag: 'smart_casual', watch: 'smart_casual',
-
-  t_shirt: 'casual', hoodie: 'casual', sweatshirt: 'casual', denim_jacket: 'casual',
-  jeans: 'casual', jogger: 'casual', shorts: 'casual', cargo: 'casual',
-  sneaker: 'casual', sandal: 'casual', canvas: 'casual',
-  backpack: 'casual', crossbody: 'casual', cap: 'casual', beanie: 'casual',
-
-  track_jacket: 'sporty', windbreaker: 'sporty', puffer: 'sporty',
-  legging: 'sporty', track_pants: 'sporty', biker_shorts: 'sporty',
-  running_shoe: 'sporty', training_shoe: 'sporty', sports_bag: 'sporty',
-};
-
-const STYLE_COMPAT: Record<string, Record<string, number>> = {
-  formal: { formal: 1, smart_casual: 0.7, casual: 0.3, sporty: 0.1 },
-  smart_casual: { formal: 0.7, smart_casual: 1, casual: 0.8, sporty: 0.4 },
-  casual: { formal: 0.3, smart_casual: 0.8, casual: 1, sporty: 0.7 },
-  sporty: { formal: 0.1, smart_casual: 0.4, casual: 0.7, sporty: 1 },
-};
-
-const COLOR_WHEEL = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink'];
-
-function getColorFamily(item: Product): string {
-  return item.color_family || '';
-}
-
-function getColorTone(item: Product): string {
-  return item.color_tone || '';
-}
-
-function getPattern(item: Product): string {
-  return item.pattern || '';
-}
-
-function getFormality(item: Product): number | undefined {
-  return item.formality;
-}
-
-function getWarmth(item: Product): number | undefined {
-  return item.warmth;
-}
-
-function getSilhouette(item: Product): string {
-  return item.silhouette || '';
-}
-
-function getMaterialGroup(material: string): string | null {
-  const m = material.toLowerCase();
-  for (const [group, materials] of Object.entries(MATERIAL_GROUPS)) {
-    if (materials.some(mat => m.includes(mat))) return group;
-  }
-  return null;
-}
-
-function getMaterialCompatScore(g1: string, g2: string): number {
-  return MATERIAL_COMPAT[`${g1}-${g2}`] ?? MATERIAL_COMPAT[`${g2}-${g1}`] ?? 0.5;
-}
-
-function getSubCategoryStyle(item: Product): string | null {
-  const sub = (item.sub_category || '').toLowerCase().replace(/[\s-]/g, '_');
-  return SUB_CATEGORY_STYLE[sub] || null;
-}
-
-function getColorWheelDistance(c1: string, c2: string): number {
-  const i1 = COLOR_WHEEL.indexOf(c1);
-  const i2 = COLOR_WHEEL.indexOf(c2);
-  if (i1 === -1 || i2 === -1) return -1;
-  const dist = Math.abs(i1 - i2);
-  return Math.min(dist, COLOR_WHEEL.length - dist);
-}
+import {
+  COLOR_PROFILES,
+  getColorHarmonyScore,
+  isNeutralColor,
+  isEarthTone,
+  inferColorFamily,
+  inferMaterialGroup,
+  inferSubCategoryStyle,
+  getMaterialCompatScore,
+  getPatternCompatScore,
+  getVibeCompatScore,
+  STYLE_COMPAT,
+  SILHOUETTE_BALANCE,
+} from './matchingData';
 
 function getAllItems(outfit: OutfitCandidate): Product[] {
   return [outfit.outer, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory]
@@ -141,170 +25,156 @@ function getCoreItems(outfit: OutfitCandidate): Product[] {
     .filter(Boolean) as Product[];
 }
 
-export function scoreColorMatch(outfit: OutfitCandidate): number {
+interface AxisResult {
+  score: number;
+  hasData: boolean;
+}
+
+function getColorFamily(item: Product): string {
+  return inferColorFamily(item);
+}
+
+function scoreColorMatchAxis(outfit: OutfitCandidate): AxisResult {
   const items = getAllItems(outfit);
-  if (items.length < 3) return 0;
+  if (items.length < 3) return { score: 0, hasData: false };
 
-  let score = 100;
   const colorFamilies = items.map(getColorFamily).filter(Boolean);
+  if (colorFamilies.length < 2) return { score: 50, hasData: false };
 
-  if (colorFamilies.length === 0) return 50;
-  if (colorFamilies.length < Math.ceil(items.length * 0.5)) return 50;
-
-  const neutralCount = colorFamilies.filter(c => NEUTRAL_COLORS.includes(c)).length;
-  const accentColors = colorFamilies.filter(c => !NEUTRAL_COLORS.includes(c));
-  const uniqueAccents = new Set(accentColors);
-
-  if (uniqueAccents.size > 2) {
-    score -= 30;
-  } else if (uniqueAccents.size === 2) {
-    score -= 10;
-  }
-
-  if (neutralCount >= colorFamilies.length - 1 && uniqueAccents.size <= 1) {
-    score += 15;
-  }
-
-  const earthToneCount = colorFamilies.filter(c => EARTH_TONES.includes(c)).length;
-  if (earthToneCount >= 2 && neutralCount >= 1) {
-    score += 8;
-  }
+  let totalHarmony = 0;
+  let pairCount = 0;
 
   for (let i = 0; i < colorFamilies.length; i++) {
     for (let j = i + 1; j < colorFamilies.length; j++) {
-      const c1 = colorFamilies[i];
-      const c2 = colorFamilies[j];
-
-      if (c1 === c2) {
-        score += NEUTRAL_COLORS.includes(c1) ? 3 : -8;
-        continue;
-      }
-
-      if (COLOR_HARMONY_RULES[c1]?.includes(c2)) {
-        score += 3;
-      } else {
-        score -= 15;
-      }
+      totalHarmony += getColorHarmonyScore(colorFamilies[i], colorFamilies[j]);
+      pairCount++;
     }
   }
 
-  return Math.max(0, Math.min(100, score));
+  const avgHarmony = pairCount > 0 ? totalHarmony / pairCount : 50;
+
+  const neutralCount = colorFamilies.filter(c => isNeutralColor(c)).length;
+  const accentColors = colorFamilies.filter(c => !isNeutralColor(c) && !isEarthTone(c));
+  const uniqueAccents = new Set(accentColors);
+
+  let bonus = 0;
+  if (neutralCount >= colorFamilies.length - 1 && uniqueAccents.size <= 1) bonus += 10;
+  if (uniqueAccents.size > 2) bonus -= 15;
+
+  const earthCount = colorFamilies.filter(c => isEarthTone(c)).length;
+  if (earthCount >= 2 && neutralCount >= 1) bonus += 5;
+
+  return {
+    score: Math.max(0, Math.min(100, avgHarmony + bonus)),
+    hasData: true,
+  };
 }
 
-export function scoreToneMatch(outfit: OutfitCandidate): number {
+function scoreToneMatchAxis(outfit: OutfitCandidate): AxisResult {
   const items = getAllItems(outfit);
-  if (items.length < 3) return 0;
+  if (items.length < 3) return { score: 0, hasData: false };
+
+  const tones = items.map(i => i.color_tone || '').filter(Boolean);
+  if (tones.length < Math.ceil(items.length * 0.4)) return { score: 50, hasData: false };
 
   let score = 100;
-  const tones = items.map(getColorTone).filter(Boolean);
-
-  if (tones.length === 0) return 50;
-  if (tones.length < Math.ceil(items.length * 0.5)) return 50;
-
-  const toneSet = new Set(tones);
-  const neutralCount = tones.filter(t => t === 'neutral').length;
   const warmCount = tones.filter(t => t === 'warm').length;
   const coolCount = tones.filter(t => t === 'cool').length;
+  const neutralCount = tones.filter(t => t === 'neutral').length;
+  const toneSet = new Set(tones);
 
   if (warmCount > 0 && coolCount > 0) {
     const mixRatio = Math.min(warmCount, coolCount) / Math.max(warmCount, coolCount);
-    if (mixRatio > 0.5 && neutralCount === 0) {
-      score -= 25;
-    } else if (mixRatio > 0.3) {
-      score -= 12;
+    if (mixRatio > 0.5 && neutralCount === 0) score -= 25;
+    else if (mixRatio > 0.3) score -= 12;
+  }
+
+  if (toneSet.size === 1) score += 20;
+  else if (toneSet.size === 2 && neutralCount > 0) score += 12;
+
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
+}
+
+function scorePatternBalanceAxis(outfit: OutfitCandidate): AxisResult {
+  const items = getAllItems(outfit);
+  if (items.length < 3) return { score: 0, hasData: false };
+
+  const patterns = items.map(i => i.pattern || '').filter(Boolean);
+  if (patterns.length < Math.ceil(items.length * 0.4)) return { score: 50, hasData: false };
+
+  const nonSolid = patterns.filter(p => p !== 'solid');
+
+  if (nonSolid.length === 0) return { score: 92, hasData: true };
+  if (nonSolid.length === 1) return { score: 95, hasData: true };
+
+  let totalCompat = 0;
+  let pairCount = 0;
+  for (let i = 0; i < nonSolid.length; i++) {
+    for (let j = i + 1; j < nonSolid.length; j++) {
+      totalCompat += getPatternCompatScore(nonSolid[i], nonSolid[j]);
+      pairCount++;
     }
   }
 
-  if (toneSet.size === 1) {
-    score += 20;
-  } else if (toneSet.size === 2 && neutralCount > 0) {
-    score += 12;
-  }
-
-  return Math.max(0, Math.min(100, score));
-}
-
-export function scorePatternBalance(outfit: OutfitCandidate): number {
-  const items = getAllItems(outfit);
-  if (items.length < 3) return 0;
-
-  let score = 100;
-  const patterns = items.map(getPattern).filter(Boolean);
-
-  if (patterns.length === 0) return 50;
-  if (patterns.length < Math.ceil(items.length * 0.5)) return 50;
-
-  const solidCount = patterns.filter(p => p === 'solid').length;
-  const patternedCount = patterns.length - solidCount;
-
-  if (patternedCount === 0) {
-    score += 10;
-  } else if (patternedCount === 1) {
-    score += 15;
-  } else if (patternedCount === 2) {
-    const nonSolid = patterns.filter(p => p !== 'solid');
-    const unique = new Set(nonSolid);
-    score += unique.size === 1 ? -10 : 3;
-  } else if (patternedCount >= 3) {
-    score -= 30;
-  }
+  let score = pairCount > 0 ? totalCompat / pairCount : 70;
 
   const visiblePatterns = [
-    outfit.outer ? getPattern(outfit.outer) : null,
-    getPattern(outfit.top),
-    getPattern(outfit.bottom),
+    outfit.outer ? (outfit.outer.pattern || '') : null,
+    outfit.top.pattern || '',
+    outfit.bottom.pattern || '',
   ].filter(Boolean).filter(p => p !== 'solid');
 
-  if (visiblePatterns.length > 2) {
-    score -= 20;
-  }
+  if (visiblePatterns.length > 2) score -= 15;
+  if (nonSolid.length >= 3) score -= 10;
 
-  return Math.max(0, Math.min(100, score));
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-export function scoreFormalityMatch(outfit: OutfitCandidate): number {
+function scoreFormalityMatchAxis(outfit: OutfitCandidate): AxisResult {
   const items = getCoreItems(outfit);
-  if (items.length < 3) return 0;
+  if (items.length < 3) return { score: 0, hasData: false };
+
+  const formalities = items
+    .map(i => i.formality)
+    .filter((f): f is number => typeof f === 'number');
+
+  if (formalities.length < 2) return { score: 50, hasData: false };
 
   let score = 100;
-  const formalities = items.map(getFormality).filter((f): f is number => typeof f === 'number');
+  const avg = formalities.reduce((s, f) => s + f, 0) / formalities.length;
 
-  if (formalities.length === 0) return 50;
-  if (formalities.length < Math.ceil(items.length * 0.5)) return 50;
-
-  const avg = formalities.reduce((sum, f) => sum + f, 0) / formalities.length;
-
-  for (const formality of formalities) {
-    const deviation = Math.abs(formality - avg);
-    if (deviation > 2) score -= 20;
-    else if (deviation > 1) score -= 10;
+  for (const f of formalities) {
+    const dev = Math.abs(f - avg);
+    if (dev > 2) score -= 20;
+    else if (dev > 1) score -= 10;
   }
 
-  const avgDeviation = formalities.reduce((sum, f) => sum + Math.abs(f - avg), 0) / formalities.length;
-  if (avgDeviation < 0.5) score += 15;
+  const avgDev = formalities.reduce((s, f) => s + Math.abs(f - avg), 0) / formalities.length;
+  if (avgDev < 0.5) score += 15;
 
   const range = Math.max(...formalities) - Math.min(...formalities);
   if (range > 2) score -= 15;
 
-  return Math.max(0, Math.min(100, score));
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-export function scoreWarmthMatch(outfit: OutfitCandidate, targetWarmth?: number): number {
+function scoreWarmthMatchAxis(outfit: OutfitCandidate, targetWarmth?: number): AxisResult {
   const items = getCoreItems(outfit);
-  if (items.length < 3) return 0;
+  if (items.length < 3) return { score: 0, hasData: false };
+
+  const warmths = items
+    .map(i => i.warmth)
+    .filter((w): w is number => typeof w === 'number');
+
+  if (warmths.length < 2) return { score: 50, hasData: false };
 
   let score = 100;
-  const warmths = items.map(getWarmth).filter((w): w is number => typeof w === 'number');
-
-  if (warmths.length === 0) return 50;
-  if (warmths.length < Math.ceil(items.length * 0.5)) return 50;
-
-  const avg = warmths.reduce((sum, w) => sum + w, 0) / warmths.length;
+  const avg = warmths.reduce((s, w) => s + w, 0) / warmths.length;
 
   if (targetWarmth) {
-    const targetDeviation = Math.abs(avg - targetWarmth);
-    if (targetDeviation > 1.5) score -= 30;
-    else if (targetDeviation > 1) score -= 15;
+    const targetDev = Math.abs(avg - targetWarmth);
+    if (targetDev > 1.5) score -= 30;
+    else if (targetDev > 1) score -= 15;
     else score += 10;
   }
 
@@ -312,13 +182,13 @@ export function scoreWarmthMatch(outfit: OutfitCandidate, targetWarmth?: number)
   if (range > 2) score -= 20;
   else if (range <= 1) score += 10;
 
-  return Math.max(0, Math.min(100, score));
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-export function scoreSeasonMatch(outfit: OutfitCandidate, targetSeason?: string): number {
+function scoreSeasonMatchAxis(outfit: OutfitCandidate, targetSeason?: string): AxisResult {
   const items = getCoreItems(outfit);
-  if (items.length < 3) return 0;
-  if (!targetSeason) return 75;
+  if (items.length < 3) return { score: 0, hasData: false };
+  if (!targetSeason) return { score: 75, hasData: false };
 
   let score = 100;
   let matchCount = 0;
@@ -337,14 +207,14 @@ export function scoreSeasonMatch(outfit: OutfitCandidate, targetSeason?: string)
 
   if (matchCount === items.length) score += 15;
 
-  return Math.max(0, Math.min(100, score));
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-export function scoreSilhouetteBalance(outfit: OutfitCandidate): number {
-  const topSil = getSilhouette(outfit.top);
-  const bottomSil = getSilhouette(outfit.bottom);
+function scoreSilhouetteBalanceAxis(outfit: OutfitCandidate): AxisResult {
+  const topSil = outfit.top.silhouette || '';
+  const bottomSil = outfit.bottom.silhouette || '';
 
-  if (!topSil || !bottomSil) return 50;
+  if (!topSil || !bottomSil) return { score: 50, hasData: false };
 
   let score = 70;
 
@@ -357,21 +227,20 @@ export function scoreSilhouetteBalance(outfit: OutfitCandidate): number {
   }
 
   if (outfit.outer) {
-    const outerSil = getSilhouette(outfit.outer);
+    const outerSil = outfit.outer.silhouette || '';
     if (outerSil === 'oversized' && topSil === 'oversized') score -= 15;
   }
 
-  return Math.max(0, Math.min(100, score));
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-export function scoreMaterialCompat(outfit: OutfitCandidate): number {
+function scoreMaterialCompatAxis(outfit: OutfitCandidate): AxisResult {
   const items = getCoreItems(outfit);
-  const materials = items.map(item => item.material || '').filter(Boolean);
+  const groups = items
+    .map(item => inferMaterialGroup(item))
+    .filter(Boolean) as string[];
 
-  if (materials.length < 2) return 50;
-
-  const groups = materials.map(getMaterialGroup).filter(Boolean) as string[];
-  if (groups.length < 2) return 50;
+  if (groups.length < 2) return { score: 50, hasData: false };
 
   let totalCompat = 0;
   let pairCount = 0;
@@ -383,14 +252,19 @@ export function scoreMaterialCompat(outfit: OutfitCandidate): number {
     }
   }
 
-  return Math.round((totalCompat / pairCount) * 100);
+  return {
+    score: Math.round((totalCompat / pairCount) * 100),
+    hasData: true,
+  };
 }
 
-export function scoreSubCategoryMatch(outfit: OutfitCandidate): number {
+function scoreSubCategoryMatchAxis(outfit: OutfitCandidate): AxisResult {
   const items = getCoreItems(outfit);
-  const styles = items.map(getSubCategoryStyle).filter(Boolean) as string[];
+  const styles = items
+    .map(item => inferSubCategoryStyle(item))
+    .filter(Boolean) as string[];
 
-  if (styles.length < 2) return 50;
+  if (styles.length < 2) return { score: 50, hasData: false };
 
   let totalCompat = 0;
   let pairCount = 0;
@@ -402,29 +276,31 @@ export function scoreSubCategoryMatch(outfit: OutfitCandidate): number {
     }
   }
 
-  return Math.round((totalCompat / pairCount) * 100);
+  return {
+    score: Math.round((totalCompat / pairCount) * 100),
+    hasData: true,
+  };
 }
 
-export function scoreColorDepth(outfit: OutfitCandidate): number {
+function scoreColorDepthAxis(outfit: OutfitCandidate): AxisResult {
   const items = getCoreItems(outfit);
   const colors = items.map(getColorFamily).filter(Boolean);
 
-  if (colors.length < 3) return 50;
+  if (colors.length < 3) return { score: 50, hasData: false };
 
-  const neutrals = colors.filter(c => NEUTRAL_COLORS.includes(c));
-  const accents = colors.filter(c => !NEUTRAL_COLORS.includes(c));
+  const neutrals = colors.filter(c => isNeutralColor(c));
+  const accents = colors.filter(c => !isNeutralColor(c));
   const uniqueAccents = [...new Set(accents)];
 
   let score = 70;
 
-  if (uniqueAccents.length <= 1 && neutrals.length >= 2) {
-    score += 20;
-  }
+  if (uniqueAccents.length <= 1 && neutrals.length >= 2) score += 20;
 
   if (uniqueAccents.length === 2) {
-    const dist = getColorWheelDistance(uniqueAccents[0], uniqueAccents[1]);
-    if (dist === 1) score += 15;
-    else if (dist >= 3) score += 10;
+    const p1 = COLOR_PROFILES[uniqueAccents[0]];
+    const p2 = COLOR_PROFILES[uniqueAccents[1]];
+    if (p1 && p2 && p1.warmth === p2.warmth) score += 12;
+    else if (p1 && p2 && p1.lightness !== p2.lightness) score += 8;
   }
 
   const colorCounts = new Map<string, number>();
@@ -436,61 +312,67 @@ export function scoreColorDepth(outfit: OutfitCandidate): number {
     if (baseRatio >= 0.4 && baseRatio <= 0.7) score += 10;
   }
 
-  const uniqueAll = new Set(colors);
-  if (uniqueAll.size > 4) score -= 15;
+  if (new Set(colors).size > 4) score -= 15;
 
-  return Math.max(0, Math.min(100, score));
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-export function scoreMoodCoherence(outfit: OutfitCandidate): number {
+function scoreMoodCoherenceAxis(outfit: OutfitCandidate): AxisResult {
   const items = getCoreItems(outfit);
   const vibeArrays = items.map(item => item.vibe || []).filter(v => v.length > 0);
 
-  if (vibeArrays.length < 2) return 50;
+  if (vibeArrays.length < 2) return { score: 50, hasData: false };
 
+  let totalScore = 0;
+  let pairCount = 0;
+
+  for (let i = 0; i < vibeArrays.length; i++) {
+    for (let j = i + 1; j < vibeArrays.length; j++) {
+      let bestCompat = 0;
+      for (const v1 of vibeArrays[i]) {
+        for (const v2 of vibeArrays[j]) {
+          bestCompat = Math.max(bestCompat, getVibeCompatScore(v1, v2));
+        }
+      }
+      totalScore += bestCompat;
+      pairCount++;
+    }
+  }
+
+  let score = pairCount > 0 ? totalScore / pairCount : 50;
+
+  const allVibes = vibeArrays.flat();
   const vibeCounts = new Map<string, number>();
-  vibeArrays.forEach(vibes => {
-    vibes.forEach(v => vibeCounts.set(v, (vibeCounts.get(v) || 0) + 1));
-  });
-
+  allVibes.forEach(v => vibeCounts.set(v, (vibeCounts.get(v) || 0) + 1));
   const maxShared = Math.max(...vibeCounts.values());
-  const shareRatio = maxShared / vibeArrays.length;
+  if (maxShared >= vibeArrays.length) score += 10;
+  else if (maxShared >= vibeArrays.length * 0.75) score += 5;
 
-  let score: number;
-  if (shareRatio >= 1) score = 100;
-  else if (shareRatio >= 0.75) score = 85;
-  else if (shareRatio >= 0.5) score = 70;
-  else score = 50;
-
-  const sharedVibes = [...vibeCounts.entries()].filter(([, count]) => count >= 2).length;
-  if (sharedVibes >= 2) score += 10;
-
-  return Math.max(0, Math.min(100, score));
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-export function scoreAccessoryHarmony(outfit: OutfitCandidate): number {
+function scoreAccessoryHarmonyAxis(outfit: OutfitCandidate): AxisResult {
   const accessories = [outfit.bag, outfit.accessory].filter(Boolean) as Product[];
-  if (accessories.length === 0) return 50;
+  if (accessories.length === 0) return { score: 70, hasData: false };
 
   const mainItems = getCoreItems(outfit);
   const mainColors = mainItems.map(getColorFamily).filter(Boolean);
-  const mainFormalities = mainItems.map(getFormality).filter((f): f is number => typeof f === 'number');
+  const mainFormalities = mainItems.map(i => i.formality).filter((f): f is number => typeof f === 'number');
 
   let score = 70;
 
   for (const acc of accessories) {
     const accColor = getColorFamily(acc);
-    const accFormality = getFormality(acc);
+    const accFormality = acc.formality;
 
-    if (accColor) {
-      const isNeutral = NEUTRAL_COLORS.includes(accColor);
-      const harmonizes = mainColors.some(c =>
-        c === accColor || COLOR_HARMONY_RULES[c]?.includes(accColor)
-      );
-
-      if (isNeutral) score += 8;
-      else if (harmonizes) score += 5;
-      else score -= 10;
+    if (accColor && mainColors.length > 0) {
+      let bestHarmony = 0;
+      for (const mc of mainColors) {
+        bestHarmony = Math.max(bestHarmony, getColorHarmonyScore(mc, accColor));
+      }
+      if (bestHarmony >= 85) score += 10;
+      else if (bestHarmony >= 70) score += 5;
+      else if (bestHarmony < 50) score -= 10;
     }
 
     if (accFormality !== undefined && mainFormalities.length > 0) {
@@ -501,10 +383,10 @@ export function scoreAccessoryHarmony(outfit: OutfitCandidate): number {
     }
   }
 
-  return Math.max(0, Math.min(100, score));
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-const WEIGHTS = {
+const BASE_WEIGHTS = {
   colorMatch: 0.16,
   toneMatch: 0.10,
   patternBalance: 0.10,
@@ -523,48 +405,39 @@ export function scoreOutfit(
   outfit: OutfitCandidate,
   context?: { targetWarmth?: number; targetSeason?: string }
 ): MatchScore {
-  const colorMatch = scoreColorMatch(outfit);
-  const toneMatch = scoreToneMatch(outfit);
-  const patternBalance = scorePatternBalance(outfit);
-  const formalityMatch = scoreFormalityMatch(outfit);
-  const warmthMatch = scoreWarmthMatch(outfit, context?.targetWarmth);
-  const seasonMatch = scoreSeasonMatch(outfit, context?.targetSeason);
-  const silhouetteBalance = scoreSilhouetteBalance(outfit);
-  const materialCompat = scoreMaterialCompat(outfit);
-  const subCategoryMatch = scoreSubCategoryMatch(outfit);
-  const colorDepth = scoreColorDepth(outfit);
-  const moodCoherence = scoreMoodCoherence(outfit);
-  const accessoryHarmony = scoreAccessoryHarmony(outfit);
+  const axes: { key: keyof typeof BASE_WEIGHTS; result: AxisResult }[] = [
+    { key: 'colorMatch', result: scoreColorMatchAxis(outfit) },
+    { key: 'toneMatch', result: scoreToneMatchAxis(outfit) },
+    { key: 'patternBalance', result: scorePatternBalanceAxis(outfit) },
+    { key: 'formalityMatch', result: scoreFormalityMatchAxis(outfit) },
+    { key: 'warmthMatch', result: scoreWarmthMatchAxis(outfit, context?.targetWarmth) },
+    { key: 'seasonMatch', result: scoreSeasonMatchAxis(outfit, context?.targetSeason) },
+    { key: 'silhouetteBalance', result: scoreSilhouetteBalanceAxis(outfit) },
+    { key: 'materialCompat', result: scoreMaterialCompatAxis(outfit) },
+    { key: 'subCategoryMatch', result: scoreSubCategoryMatchAxis(outfit) },
+    { key: 'colorDepth', result: scoreColorDepthAxis(outfit) },
+    { key: 'moodCoherence', result: scoreMoodCoherenceAxis(outfit) },
+    { key: 'accessoryHarmony', result: scoreAccessoryHarmonyAxis(outfit) },
+  ];
 
-  const totalScore =
-    colorMatch * WEIGHTS.colorMatch +
-    toneMatch * WEIGHTS.toneMatch +
-    patternBalance * WEIGHTS.patternBalance +
-    formalityMatch * WEIGHTS.formalityMatch +
-    warmthMatch * WEIGHTS.warmthMatch +
-    seasonMatch * WEIGHTS.seasonMatch +
-    silhouetteBalance * WEIGHTS.silhouetteBalance +
-    materialCompat * WEIGHTS.materialCompat +
-    subCategoryMatch * WEIGHTS.subCategoryMatch +
-    colorDepth * WEIGHTS.colorDepth +
-    moodCoherence * WEIGHTS.moodCoherence +
-    accessoryHarmony * WEIGHTS.accessoryHarmony;
+  let activeWeight = 0;
+  let weightedSum = 0;
+  const breakdown: Record<string, number> = {};
+
+  for (const { key, result } of axes) {
+    breakdown[key] = Math.round(result.score);
+
+    if (result.hasData) {
+      const w = BASE_WEIGHTS[key];
+      activeWeight += w;
+      weightedSum += result.score * w;
+    }
+  }
+
+  const finalScore = activeWeight > 0 ? weightedSum / activeWeight : 50;
 
   return {
-    score: Math.round(totalScore),
-    breakdown: {
-      colorMatch: Math.round(colorMatch),
-      toneMatch: Math.round(toneMatch),
-      patternBalance: Math.round(patternBalance),
-      formalityMatch: Math.round(formalityMatch),
-      warmthMatch: Math.round(warmthMatch),
-      seasonMatch: Math.round(seasonMatch),
-      silhouetteBalance: Math.round(silhouetteBalance),
-      materialCompat: Math.round(materialCompat),
-      subCategoryMatch: Math.round(subCategoryMatch),
-      colorDepth: Math.round(colorDepth),
-      moodCoherence: Math.round(moodCoherence),
-      accessoryHarmony: Math.round(accessoryHarmony),
-    },
+    score: Math.round(finalScore),
+    breakdown: breakdown as MatchScore['breakdown'],
   };
 }
