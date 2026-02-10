@@ -116,10 +116,10 @@ export async function fetchNYCWeather(daysAhead: 0 | 1 = 0): Promise<WeatherData
 }
 
 export function getSeasonsFromTemperature(tempF: number): string[] {
-  if (tempF < 40) return ['winter'];
-  if (tempF < 55) return ['fall', 'spring'];
-  if (tempF < 75) return ['spring', 'summer'];
-  return ['summer'];
+  if (tempF < 40) return ['winter', 'fall'];
+  if (tempF < 55) return ['fall', 'winter', 'spring'];
+  if (tempF < 75) return ['spring', 'summer', 'fall'];
+  return ['summer', 'spring'];
 }
 
 export function getTargetWarmth(tempF: number): number {

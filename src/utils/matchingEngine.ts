@@ -83,7 +83,7 @@ function passesHardConstraints(
     const warmths = allItems.map(getWarmth).filter((w): w is number => typeof w === 'number');
     if (warmths.length > 0) {
       const avgWarmth = warmths.reduce((s, w) => s + w, 0) / warmths.length;
-      if (avgWarmth < 2) return false;
+      if (avgWarmth < 1.5) return false;
     }
   }
 
@@ -91,7 +91,6 @@ function passesHardConstraints(
 }
 
 function shouldIncludeOuter(targetSeason?: string, targetWarmth?: number): boolean {
-  if (targetSeason === 'summer') return false;
   if (targetWarmth !== undefined && targetWarmth <= 2) return false;
   return true;
 }

@@ -81,7 +81,23 @@ function normalizeString(str: string): string {
   return str.trim().toLowerCase().replace(/[_-]/g, ' ');
 }
 
-function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: boolean): number {
+function computeSeasonFit(outfit: Outfit, weatherSeasons: string[]): number {
+  if (!outfit.items || outfit.items.length === 0) return 0;
+
+  const productsWithSeasons = outfit.items.filter(
+    item => item.product?.season && item.product.season.length > 0
+  );
+  if (productsWithSeasons.length === 0) return 5;
+
+  const matchingCount = productsWithSeasons.filter(item => {
+    const productSeasons = item.product!.season;
+    return weatherSeasons.some(s => productSeasons.includes(s));
+  }).length;
+
+  return (matchingCount / productsWithSeasons.length) * 10;
+}
+
+function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: boolean, weatherSeasons: string[]): number {
   let score = 0;
   if (!outfit.items || outfit.items.length === 0) return 0;
 
@@ -93,6 +109,8 @@ function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: b
     const avgWarmth = warmths.reduce((s, w) => s + w, 0) / warmths.length;
     score += Math.max(0, 10 - Math.abs(avgWarmth - targetWarmth) * 3);
   }
+
+  score += computeSeasonFit(outfit, weatherSeasons);
 
   if (isWetWeather) {
     const hasOuter = outfit.items.some(item => item.slot_type === 'outer');
@@ -207,25 +225,11 @@ function App() {
       const hasOuter = outfit.items?.some(item => item.slot_type === 'outer');
       if (isCold && !hasOuter) return false;
 
-      if (outfit.items && outfit.items.length > 0) {
-        const productsWithSeasons = outfit.items.filter(
-          item => item.product?.season && item.product.season.length > 0
-        );
-        if (productsWithSeasons.length > 0) {
-          const matchingProductsCount = productsWithSeasons.filter(item => {
-            const productSeasons = item.product!.season;
-            return weatherSeasons.some(s => productSeasons.includes(s));
-          }).length;
-
-          return matchingProductsCount >= productsWithSeasons.length * 0.5;
-        }
-      }
-
       return true;
     });
 
     const sorted = [...matches].sort((a, b) => {
-      return computeWeatherFit(b, targetWarmth, isWetWeather) - computeWeatherFit(a, targetWarmth, isWetWeather);
+      return computeWeatherFit(b, targetWarmth, isWetWeather, weatherSeasons) - computeWeatherFit(a, targetWarmth, isWetWeather, weatherSeasons);
     });
 
     const ctx = { gender, bodyType, vibe, weather };
