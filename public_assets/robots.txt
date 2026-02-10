@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin-products
+Disallow: /admin-users
+Disallow: /test-gemini
+
+Sitemap: https://slotedit.com/sitemap.xml
