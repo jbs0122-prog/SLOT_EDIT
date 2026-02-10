@@ -78,7 +78,7 @@ function restoreResults(): { outfits: Outfit[]; ctx: any } | null {
 }
 
 function normalizeString(str: string): string {
-  return str.trim().toLowerCase().replace(/_/g, ' ');
+  return str.trim().toLowerCase().replace(/[_-]/g, ' ');
 }
 
 function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: boolean): number {
