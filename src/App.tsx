@@ -277,31 +277,29 @@ function App() {
           />
           <div className="flex-1 min-w-0">
             {activeTab === 'home' && (
-              <>
-                <Results
-                  outfits={selectedOutfits}
-                  context={context}
-                  onBack={handleBack}
-                  onGenerate={handleGenerate}
-                  onRequestLogin={() => setShowLoginModal(true)}
-                />
-                <Footer />
-              </>
+              <Results
+                outfits={selectedOutfits}
+                context={context}
+                onBack={handleBack}
+                onGenerate={handleGenerate}
+                onRequestLogin={() => setShowLoginModal(true)}
+                footer={<Footer />}
+              />
             )}
             {activeTab === 'mens-ranking' && (
-              <div className="min-h-screen bg-white">
+              <div className="h-screen overflow-y-auto bg-white">
                 <RankingPage gender="MALE" onRequestLogin={() => setShowLoginModal(true)} />
                 <Footer />
               </div>
             )}
             {activeTab === 'womens-ranking' && (
-              <div className="min-h-screen bg-white">
+              <div className="h-screen overflow-y-auto bg-white">
                 <RankingPage gender="FEMALE" onRequestLogin={() => setShowLoginModal(true)} />
                 <Footer />
               </div>
             )}
             {activeTab === 'account' && (
-              <div className="min-h-screen bg-white">
+              <div className="h-screen overflow-y-auto bg-white">
                 <MyAccountPage
                   onRequestLogin={() => setShowLoginModal(true)}
                   view={accountView}

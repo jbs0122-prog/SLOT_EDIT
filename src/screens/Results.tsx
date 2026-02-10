@@ -17,6 +17,7 @@ interface ResultsProps {
   onBack: () => void;
   onGenerate: (gender: string, bodyType: string, vibe: string, weather: WeatherData) => void;
   onRequestLogin: () => void;
+  footer?: React.ReactNode;
 }
 
 const GENDER_OPTIONS = ['MALE', 'FEMALE'];
@@ -40,7 +41,7 @@ function getOrCreateSessionId(): string {
   return sessionId;
 }
 
-export default function Results({ outfits, context, onBack, onGenerate, onRequestLogin }: ResultsProps) {
+export default function Results({ outfits, context, onBack, onGenerate, onRequestLogin, footer }: ResultsProps) {
   const { user } = useAuth();
   const { gender, bodyType, vibe, weather } = context;
   const [localOutfits, setLocalOutfits] = useState<Outfit[]>(outfits);
@@ -730,6 +731,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
             </div>
           </div>
         )}
+        {footer}
       </div>
     </div>
   );
