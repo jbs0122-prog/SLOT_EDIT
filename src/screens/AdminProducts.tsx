@@ -328,6 +328,7 @@ export default function AdminProducts() {
                 >
                   <option value="all">전체 카테고리</option>
                   <option value="outer">아우터</option>
+                  <option value="mid">미드레이어</option>
                   <option value="top">상의</option>
                   <option value="bottom">하의</option>
                   <option value="shoes">신발</option>

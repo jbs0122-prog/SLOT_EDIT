@@ -69,8 +69,8 @@ Deno.serve(async (req: Request) => {
 
 Return ONLY valid JSON (no markdown, no code blocks) with these exact fields:
 {
-  "category": "상의|하의|아우터|신발|가방|액세서리",
-  "sub_category": "tshirt|shirt|knit|hoodie|sweatshirt|turtleneck|denim|slacks|chinos|jogger|cargo|shorts|puffer|coat|blazer|jacket|cardigan|trench|sneaker|derby|loafer|boot|runner|tote|backpack|crossbody|duffle|belt|cap|scarf|glove|watch",
+  "category": "상의|미드레이어|하의|아우터|신발|가방|액세서리 (미드레이어=니트/가디건/스웨터/조끼/플리스 등 셔츠 위에 걸치는 중간 레이어, 상의=셔츠/티셔츠/폴로/터틀넥 등 기본 상의)",
+  "sub_category": "tshirt|shirt|polo|turtleneck|tank|knit|cardigan|sweater|vest|fleece|hoodie|sweatshirt|denim|slacks|chinos|jogger|cargo|shorts|puffer|coat|blazer|jacket|trench|sneaker|derby|loafer|boot|runner|tote|backpack|crossbody|duffle|belt|cap|scarf|glove|watch",
   "gender": "남성|여성|공용",
   "color": "exact color name in Korean like 검정, 흰색, 네이비, 베이지, 카키, 그레이, 차콜, 크림, 아이보리, 카멜, 올리브, 버건디, 와인, 러스트, 머스타드, 세이지, 민트, 코랄, 라벤더, 하늘색 etc.",
   "color_family": "black|white|grey|charcoal|navy|beige|cream|ivory|brown|tan|camel|olive|khaki|sage|rust|mustard|burgundy|wine|blue|sky_blue|denim|teal|green|mint|red|coral|yellow|orange|pink|lavender|purple|metallic|multi",

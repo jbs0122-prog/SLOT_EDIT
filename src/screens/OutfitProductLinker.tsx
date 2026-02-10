@@ -12,6 +12,7 @@ interface OutfitProductLinkerProps {
 
 const SLOT_TYPES = [
   { value: 'outer', label: '아우터' },
+  { value: 'mid', label: '미드레이어' },
   { value: 'top', label: '상의' },
   { value: 'bottom', label: '하의' },
   { value: 'shoes', label: '신발' },

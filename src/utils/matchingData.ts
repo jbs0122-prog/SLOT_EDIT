@@ -276,6 +276,7 @@ export const SUB_CATEGORY_STYLE: Record<string, string> = {
   cardigan: 'smart_casual', polo: 'smart_casual', chino: 'smart_casual', chinos: 'smart_casual',
   midi_skirt: 'smart_casual', ankle_boot: 'smart_casual', knit_vest: 'smart_casual',
   knit: 'smart_casual', shirt: 'smart_casual', turtleneck: 'smart_casual',
+  sweater: 'smart_casual', vest: 'smart_casual', fleece: 'casual', tank: 'casual',
   tote: 'smart_casual', shoulder_bag: 'smart_casual', watch: 'smart_casual',
   coat: 'smart_casual', boot: 'smart_casual',
 

@@ -74,6 +74,7 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
   const getItemLabel = (category: string) => {
     const labels: Record<string, string> = {
       outer: '아우터',
+      mid: '미드레이어',
       top: '상의',
       bottom: '하의',
       shoes: '신발',

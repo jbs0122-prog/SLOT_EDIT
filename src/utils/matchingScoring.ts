@@ -16,12 +16,12 @@ import {
 } from './matchingData';
 
 function getAllItems(outfit: OutfitCandidate): Product[] {
-  return [outfit.outer, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory]
+  return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory]
     .filter(Boolean) as Product[];
 }
 
 function getCoreItems(outfit: OutfitCandidate): Product[] {
-  return [outfit.outer, outfit.top, outfit.bottom, outfit.shoes]
+  return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes]
     .filter(Boolean) as Product[];
 }
 
@@ -120,6 +120,7 @@ function scorePatternBalanceAxis(outfit: OutfitCandidate): AxisResult {
 
   const visiblePatterns = [
     outfit.outer ? (outfit.outer.pattern || '') : null,
+    outfit.mid ? (outfit.mid.pattern || '') : null,
     outfit.top.pattern || '',
     outfit.bottom.pattern || '',
   ].filter(Boolean).filter(p => p !== 'solid');
@@ -229,6 +230,12 @@ function scoreSilhouetteBalanceAxis(outfit: OutfitCandidate): AxisResult {
   if (outfit.outer) {
     const outerSil = outfit.outer.silhouette || '';
     if (outerSil === 'oversized' && topSil === 'oversized') score -= 15;
+  }
+
+  if (outfit.mid) {
+    const midSil = outfit.mid.silhouette || '';
+    if (midSil === 'oversized' && topSil === 'oversized') score -= 10;
+    if (midSil && topSil && midSil === 'fitted' && topSil === 'fitted') score += 5;
   }
 
   return { score: Math.max(0, Math.min(100, score)), hasData: true };

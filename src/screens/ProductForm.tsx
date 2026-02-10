@@ -13,6 +13,7 @@ interface ProductFormProps {
 
 const CATEGORIES = [
   { value: 'outer', label: '아우터' },
+  { value: 'mid', label: '미드레이어' },
   { value: 'top', label: '상의' },
   { value: 'bottom', label: '하의' },
   { value: 'shoes', label: '신발' },
@@ -97,17 +98,25 @@ const SUB_CATEGORIES: Record<string, { value: string; label: string }[]> = {
     { value: 'coat', label: 'Coat (코트)' },
     { value: 'blazer', label: 'Blazer (블레이저)' },
     { value: 'jacket', label: 'Jacket (재킷)' },
-    { value: 'cardigan', label: 'Cardigan (가디건)' },
     { value: 'trench', label: 'Trench (트렌치)' }
+  ],
+  mid: [
+    { value: '', label: '선택 안함' },
+    { value: 'knit', label: 'Knit (니트)' },
+    { value: 'cardigan', label: 'Cardigan (가디건)' },
+    { value: 'sweater', label: 'Sweater (스웨터)' },
+    { value: 'vest', label: 'Vest (조끼)' },
+    { value: 'fleece', label: 'Fleece (플리스)' },
+    { value: 'hoodie', label: 'Hoodie (후드)' },
+    { value: 'sweatshirt', label: 'Sweatshirt (맨투맨)' }
   ],
   top: [
     { value: '', label: '선택 안함' },
     { value: 'tshirt', label: 'T-shirt (티셔츠)' },
     { value: 'shirt', label: 'Shirt (셔츠)' },
-    { value: 'knit', label: 'Knit (니트)' },
-    { value: 'hoodie', label: 'Hoodie (후드)' },
-    { value: 'sweatshirt', label: 'Sweatshirt (맨투맨)' },
-    { value: 'turtleneck', label: 'Turtleneck (터틀넥)' }
+    { value: 'polo', label: 'Polo (폴로)' },
+    { value: 'turtleneck', label: 'Turtleneck (터틀넥)' },
+    { value: 'tank', label: 'Tank Top (탱크탑)' }
   ],
   bottom: [
     { value: '', label: '선택 안함' },
@@ -257,6 +266,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         '상의': 'top',
         '하의': 'bottom',
         '아우터': 'outer',
+        '미드레이어': 'mid',
         '신발': 'shoes',
         '가방': 'bag',
         '액세서리': 'accessory'

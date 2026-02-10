@@ -198,7 +198,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
 
   const generateOutfitDescription = (products: Product[], outfit: Outfit): string => {
     if (products.length === 0) return '';
-    const slotOrder: Record<string, number> = { outer: 0, top: 1, bottom: 2, shoes: 3, bag: 4, accessory: 5 };
+    const slotOrder: Record<string, number> = { outer: 0, mid: 1, top: 2, bottom: 3, shoes: 4, bag: 5, accessory: 6 };
     const sorted = [...products].sort((a, b) => (slotOrder[a.category] ?? 99) - (slotOrder[b.category] ?? 99));
     const brandSet = new Set(sorted.map(p => p.brand).filter(Boolean));
     const brands = Array.from(brandSet);

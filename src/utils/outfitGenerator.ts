@@ -127,6 +127,9 @@ export async function generateOutfitsAutomatically(
     if (outfit.outer) {
       items.push({ slot_type: 'outer', product_id: outfit.outer.id });
     }
+    if (outfit.mid) {
+      items.push({ slot_type: 'mid', product_id: outfit.mid.id });
+    }
     if (outfit.top) {
       items.push({ slot_type: 'top', product_id: outfit.top.id });
     }
@@ -180,7 +183,7 @@ async function processBackgroundRemoval(
   const uniqueProductIds = new Set<string>();
 
   for (const { outfit } of outfits) {
-    const items = [outfit.outer, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory];
+    const items = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory];
     for (const item of items) {
       if (item) uniqueProductIds.add(item.id);
     }
@@ -235,6 +238,7 @@ async function generateInsightsForOutfits(
 
       const slots: Array<{ key: keyof OutfitCandidate; label: string }> = [
         { key: 'outer', label: 'outer' },
+        { key: 'mid', label: 'mid' },
         { key: 'top', label: 'top' },
         { key: 'bottom', label: 'bottom' },
         { key: 'shoes', label: 'shoes' },
