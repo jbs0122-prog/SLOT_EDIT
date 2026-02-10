@@ -97,7 +97,7 @@ function shouldIncludeOuter(targetSeason?: string, targetWarmth?: number): boole
 }
 
 function shouldIncludeMid(targetWarmth?: number): boolean {
-  if (targetWarmth !== undefined && targetWarmth <= 2) return false;
+  if (targetWarmth !== undefined && targetWarmth <= 3) return false;
   return true;
 }
 
