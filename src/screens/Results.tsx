@@ -107,7 +107,14 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
     color: product.color || '', season: product.season || [], silhouette: product.silhouette || '',
     image_url: product.image_url, product_link: product.product_link || '',
     affiliate_link: product.affiliate_link || '', price: product.price,
-    stock_status: product.stock_status || 'in_stock', created_at: product.created_at, updated_at: product.updated_at,
+    stock_status: product.stock_status || 'in_stock',
+    material: product.material || '', color_family: product.color_family || '',
+    color_tone: product.color_tone || '', sub_category: product.sub_category || '',
+    pattern: product.pattern || '',
+    formality: typeof product.formality === 'number' ? product.formality : undefined,
+    warmth: typeof product.warmth === 'number' ? product.warmth : undefined,
+    nobg_image_url: product.nobg_image_url || '',
+    created_at: product.created_at, updated_at: product.updated_at,
   });
 
   const refreshOutfitImages = async () => {

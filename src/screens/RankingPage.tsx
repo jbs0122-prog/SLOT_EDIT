@@ -176,7 +176,14 @@ export default function RankingPage({ gender, onRequestLogin }: RankingPageProps
     color: p.color || '', season: p.season || [], silhouette: p.silhouette || '',
     image_url: p.image_url, product_link: p.product_link || '',
     affiliate_link: p.affiliate_link || '', price: p.price,
-    stock_status: p.stock_status || 'in_stock', created_at: p.created_at, updated_at: p.updated_at,
+    stock_status: p.stock_status || 'in_stock',
+    material: p.material || '', color_family: p.color_family || '',
+    color_tone: p.color_tone || '', sub_category: p.sub_category || '',
+    pattern: p.pattern || '',
+    formality: typeof p.formality === 'number' ? p.formality : undefined,
+    warmth: typeof p.warmth === 'number' ? p.warmth : undefined,
+    nobg_image_url: p.nobg_image_url || '',
+    created_at: p.created_at, updated_at: p.updated_at,
   });
 
   const getTotalPrice = (outfitId: string): number => {
