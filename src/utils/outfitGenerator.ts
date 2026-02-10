@@ -263,14 +263,6 @@ async function generateInsightsForOutfits(
         });
 
       try {
-        const { data: outfitRow } = await supabase
-          .from('outfits')
-          .select('image_url_flatlay')
-          .eq('id', outfitId)
-          .maybeSingle();
-
-        const flatlayImageUrl = outfitRow?.image_url_flatlay || undefined;
-
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers,
@@ -281,7 +273,6 @@ async function generateInsightsForOutfits(
             vibe: context.vibe,
             matchScore: matchScore.score,
             season: context.targetSeason,
-            flatlayImageUrl,
           }),
         });
 

@@ -164,7 +164,7 @@ export const MATERIAL_GROUPS: Record<string, string[]> = {
   eco: ['tencel', 'modal', 'bamboo', '텐셀', '모달', '대나무'],
   sheer: ['lace', 'tulle', 'voile', '레이스', '튤', '보일'],
   fur: ['fur', 'faux fur', 'shearling', '퍼', '인조퍼', '시어링', '양털'],
-  down: ['down', 'padding', '다운', '패딩', '충전재', '오리털', '거위털'],
+  down: ['padding', '다운', '패딩', '충전재', '오리털', '거위털'],
   waxed: ['waxed', 'coated', '왁스', '코팅', '라미네이트'],
 };
 
@@ -199,7 +199,13 @@ export function getMaterialGroup(material: string): string | null {
   if (!material) return null;
   const m = material.toLowerCase().trim();
   for (const [group, materials] of Object.entries(MATERIAL_GROUPS)) {
-    if (materials.some(mat => m.includes(mat))) return group;
+    if (materials.some(mat => {
+      if (mat.length <= 3) {
+        const regex = new RegExp(`(^|[\\s,/])${mat}($|[\\s,/])`, 'i');
+        return regex.test(m);
+      }
+      return m.includes(mat);
+    })) return group;
   }
   return null;
 }
@@ -348,15 +354,23 @@ export function inferColorFamily(product: Product): string {
   if (product.color_family) return product.color_family;
 
   const colorName = (product.color || '').toLowerCase().trim();
+  if (!colorName) return '';
+
   if (COLOR_NAME_TO_FAMILY[colorName]) return COLOR_NAME_TO_FAMILY[colorName];
 
-  for (const [name, family] of Object.entries(COLOR_NAME_TO_FAMILY)) {
-    if (colorName.includes(name) || name.includes(colorName)) return family;
+  if (colorName.length >= 2) {
+    for (const [name, family] of Object.entries(COLOR_NAME_TO_FAMILY)) {
+      if (name.length < 2) continue;
+      if (colorName.includes(name) || (colorName.length >= 3 && name.includes(colorName))) return family;
+    }
   }
 
   const productName = (product.name || '').toLowerCase();
-  for (const [name, family] of Object.entries(COLOR_NAME_TO_FAMILY)) {
-    if (productName.includes(name)) return family;
+  if (productName.length >= 2) {
+    for (const [name, family] of Object.entries(COLOR_NAME_TO_FAMILY)) {
+      if (name.length < 2) continue;
+      if (productName.includes(name)) return family;
+    }
   }
 
   return '';
@@ -368,7 +382,13 @@ export function inferMaterialGroup(product: Product): string | null {
 
   const name = (product.name || '').toLowerCase();
   for (const [grp, materials] of Object.entries(MATERIAL_GROUPS)) {
-    if (materials.some(mat => name.includes(mat))) return grp;
+    if (materials.some(mat => {
+      if (mat.length <= 4) {
+        const regex = new RegExp(`(^|[\\s,/])${mat}($|[\\s,/])`, 'i');
+        return regex.test(name);
+      }
+      return name.includes(mat);
+    })) return grp;
   }
 
   return null;

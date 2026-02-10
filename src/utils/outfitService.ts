@@ -27,8 +27,17 @@ const fetchOutfitItems = async (outfitIds: string[]): Promise<Map<string, Outfit
         silhouette,
         image_url,
         product_link,
+        affiliate_link,
         price,
         stock_status,
+        material,
+        color_family,
+        color_tone,
+        sub_category,
+        pattern,
+        formality,
+        warmth,
+        nobg_image_url,
         created_at,
         updated_at
       )
@@ -59,8 +68,17 @@ const fetchOutfitItems = async (outfitIds: string[]): Promise<Map<string, Outfit
         silhouette: item.products.silhouette || '',
         image_url: item.products.image_url,
         product_link: item.products.product_link || '',
+        affiliate_link: item.products.affiliate_link || '',
         price: item.products.price,
         stock_status: item.products.stock_status || 'in_stock',
+        material: item.products.material || '',
+        color_family: item.products.color_family || '',
+        color_tone: item.products.color_tone || '',
+        sub_category: item.products.sub_category || '',
+        pattern: item.products.pattern || '',
+        formality: typeof item.products.formality === 'number' ? item.products.formality : undefined,
+        warmth: typeof item.products.warmth === 'number' ? item.products.warmth : undefined,
+        nobg_image_url: item.products.nobg_image_url || '',
         created_at: item.products.created_at,
         updated_at: item.products.updated_at,
       } : undefined,
@@ -123,7 +141,10 @@ export const fetchRankingOutfits = async (gender: 'MALE' | 'FEMALE'): Promise<Ou
     const { data: outfitsData, error: outfitsError } = await supabase
       .from('outfits')
       .select('*')
-      .eq('gender', gender);
+      .eq('gender', gender)
+      .in('status', ['DONE_FLAT', 'completed'])
+      .not('image_url_flatlay', 'is', null)
+      .neq('image_url_flatlay', '');
 
     if (outfitsError) throw outfitsError;
     if (!outfitsData || outfitsData.length === 0) {
