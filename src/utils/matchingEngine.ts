@@ -221,7 +221,7 @@ function generateSampled(
     const bottom = pickRandom(bottoms);
     const shoe = pickRandom(shoes);
     const outer = outers.length > 0 ? pickRandom(outers) : undefined;
-    const mid = mids.length > 0 ? (Math.random() < 0.7 ? pickRandom(mids) : undefined) : undefined;
+    const mid = mids.length > 0 ? (Math.random() < 0.85 ? pickRandom(mids) : undefined) : undefined;
     const bag = bags.length > 0 ? (Math.random() < 0.8 ? pickRandom(bags) : undefined) : undefined;
     const accessory = accessories.length > 0 ? (Math.random() < 0.7 ? pickRandom(accessories) : undefined) : undefined;
 
