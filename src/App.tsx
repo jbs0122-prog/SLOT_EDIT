@@ -212,12 +212,12 @@ function App() {
           item => item.product?.season && item.product.season.length > 0
         );
         if (productsWithSeasons.length > 0) {
-          const commonSeasons = productsWithSeasons.reduce<string[]>((acc, item) => {
+          const matchingProductsCount = productsWithSeasons.filter(item => {
             const productSeasons = item.product!.season;
-            return acc.filter(s => productSeasons.includes(s));
-          }, [...productsWithSeasons[0].product!.season]);
+            return weatherSeasons.some(s => productSeasons.includes(s));
+          }).length;
 
-          return commonSeasons.length > 0 && weatherSeasons.some(s => commonSeasons.includes(s));
+          return matchingProductsCount >= productsWithSeasons.length * 0.5;
         }
       }
 
