@@ -9,6 +9,7 @@ export interface ProductPosition {
   height: number;
   rotation?: number;
   slot_type: string;
+  price?: number | null;
 }
 
 interface ImageDimensions {
@@ -87,7 +88,7 @@ function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
 }
 
 async function calculateLayoutWithImages(
-  items: Array<{ slot_type: string; image_url: string; product_id: string }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null }>,
   canvasWidth: number,
   canvasHeight: number,
   padding: number,
@@ -196,6 +197,7 @@ async function calculateLayoutWithImages(
           width,
           height,
           rotation: 0,
+          price: item.price,
         });
         continue;
       }
@@ -220,6 +222,7 @@ async function calculateLayoutWithImages(
         width,
         height,
         rotation: config.rotation,
+        price: item.price,
       });
     } catch (error) {
       console.error(`Failed to load image for ${item.slot_type}:`, error);
@@ -236,6 +239,7 @@ async function calculateLayoutWithImages(
         width: fallbackSize,
         height: fallbackSize,
         rotation: config?.rotation || 0,
+        price: item.price,
       });
     }
   }
@@ -243,8 +247,48 @@ async function calculateLayoutWithImages(
   return positions;
 }
 
+function drawPriceLabel(
+  ctx: CanvasRenderingContext2D,
+  position: ProductPosition,
+  canvasWidth: number
+) {
+  if (!position.price) return;
+
+  const priceText = `₩${position.price.toLocaleString()}`;
+  const fontSize = Math.round(canvasWidth * 0.018);
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+
+  const textMetrics = ctx.measureText(priceText);
+  const paddingX = fontSize * 0.5;
+  const paddingY = fontSize * 0.35;
+  const boxWidth = textMetrics.width + paddingX * 2;
+  const boxHeight = fontSize + paddingY * 2;
+  const borderRadius = fontSize * 0.3;
+
+  const boxX = position.x + position.width - boxWidth - 4;
+  const boxY = position.y + position.height - boxHeight - 4;
+
+  ctx.save();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
+  ctx.beginPath();
+  ctx.roundRect(boxX, boxY, boxWidth, boxHeight, borderRadius);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(priceText, boxX + boxWidth / 2, boxY + boxHeight / 2);
+
+  ctx.restore();
+}
+
 export async function renderFlatlay(
-  items: Array<{ slot_type: string; image_url: string; product_id: string }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null }>,
   options: RenderOptions = {}
 ): Promise<{ imageBlob: Blob; positions: ProductPosition[] }> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -310,6 +354,10 @@ export async function renderFlatlay(
         position.y + position.height / 2
       );
     }
+  }
+
+  for (const position of positions) {
+    drawPriceLabel(ctx, position, opts.canvasWidth);
   }
 
   try {
@@ -425,7 +473,7 @@ export async function renderFlatlayWithCustomPositions(
 
 export async function generateAndSaveFlatlay(
   outfitId: string,
-  items: Array<{ slot_type: string; image_url: string; product_id: string }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null }>,
   options: RenderOptions = {}
 ): Promise<{ imageUrl: string; positions: ProductPosition[] }> {
   const { imageBlob, positions } = await renderFlatlay(items, options);

@@ -18,6 +18,7 @@ interface OutfitItem {
     name: string;
     brand: string;
     image_url: string;
+    price: number | null;
   };
 }
 
@@ -49,7 +50,8 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
             id,
             name,
             brand,
-            image_url
+            image_url,
+            price
           )
         `)
         .eq('outfit_id', outfitId);
@@ -91,6 +93,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         slot_type: item.slot_type,
         product_id: item.product_id,
         image_url: item.product!.image_url,
+        price: item.product!.price,
       }));
 
       const { imageUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
