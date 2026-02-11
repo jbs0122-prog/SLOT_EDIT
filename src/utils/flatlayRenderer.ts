@@ -251,6 +251,16 @@ async function calculateLayoutWithImages(
   return positions;
 }
 
+const SLOT_CATEGORY_LABELS: Record<string, string> = {
+  outer: 'Outer',
+  top: 'Top',
+  mid: 'Mid Layer',
+  bottom: 'Bottom',
+  shoes: 'Shoes',
+  bag: 'Bag',
+  accessory: 'Accessory',
+};
+
 function drawPriceLabel(
   ctx: CanvasRenderingContext2D,
   position: ProductPosition,
@@ -258,13 +268,15 @@ function drawPriceLabel(
 ) {
   if (!position.price) return;
 
+  const categoryText = SLOT_CATEGORY_LABELS[position.slot_type] || position.slot_type;
   const priceText = `$${position.price.toLocaleString()}`;
   const fontSize = Math.round(canvasWidth * 0.016);
-  const nameFontSize = Math.round(fontSize * 0.75);
+  const categoryFontSize = Math.round(fontSize * 0.7);
   const paddingX = fontSize * 0.6;
-  const paddingY = fontSize * 0.4;
+  const paddingY = fontSize * 0.35;
   const borderRadius = fontSize * 0.3;
-  const lineGap = fontSize * 0.2;
+  const lineGap = fontSize * 0.15;
+  const pinOffset = Math.round(canvasWidth * 0.018);
 
   ctx.save();
   ctx.shadowColor = 'transparent';
@@ -272,35 +284,21 @@ function drawPriceLabel(
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
 
-  const hasName = !!position.name;
-  let nameText = '';
-  let nameWidth = 0;
-
-  if (hasName) {
-    ctx.font = `500 ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    const maxNameWidth = position.width * 0.8;
-    nameText = position.name!;
-    nameWidth = ctx.measureText(nameText).width;
-    if (nameWidth > maxNameWidth) {
-      while (nameText.length > 3 && ctx.measureText(nameText + '...').width > maxNameWidth) {
-        nameText = nameText.slice(0, -1);
-      }
-      nameText = nameText + '...';
-      nameWidth = ctx.measureText(nameText).width;
-    }
-  }
+  ctx.font = `500 ${categoryFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  const categoryWidth = ctx.measureText(categoryText).width;
 
   ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   const priceWidth = ctx.measureText(priceText).width;
 
-  const contentWidth = Math.max(priceWidth, nameWidth);
+  const contentWidth = Math.max(priceWidth, categoryWidth);
   const boxWidth = contentWidth + paddingX * 2;
-  const boxHeight = hasName
-    ? nameFontSize + lineGap + fontSize + paddingY * 2
-    : fontSize + paddingY * 2;
+  const boxHeight = categoryFontSize + lineGap + fontSize + paddingY * 2;
 
-  const boxX = position.x + position.width - boxWidth - 4;
-  const boxY = position.y + position.height - boxHeight - 4;
+  const pinCenterX = position.x + position.width / 2;
+  const pinCenterY = position.y + position.height / 2;
+
+  const boxX = pinCenterX - boxWidth / 2;
+  const boxY = pinCenterY + pinOffset;
 
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxWidth, boxHeight, borderRadius);
@@ -310,22 +308,15 @@ function drawPriceLabel(
   ctx.textAlign = 'center';
   const centerX = boxX + boxWidth / 2;
 
-  if (hasName) {
-    ctx.font = `500 ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.textBaseline = 'top';
-    ctx.fillText(nameText, centerX, boxY + paddingY);
+  ctx.font = `500 ${categoryFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+  ctx.textBaseline = 'top';
+  ctx.fillText(categoryText, centerX, boxY + paddingY);
 
-    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.textBaseline = 'top';
-    ctx.fillText(priceText, centerX, boxY + paddingY + nameFontSize + lineGap);
-  } else {
-    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(priceText, centerX, boxY + boxHeight / 2);
-  }
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.textBaseline = 'top';
+  ctx.fillText(priceText, centerX, boxY + paddingY + categoryFontSize + lineGap);
 
   ctx.restore();
 }
