@@ -10,6 +10,7 @@ export interface ProductPosition {
   rotation?: number;
   slot_type: string;
   price?: number | null;
+  name?: string;
 }
 
 interface ImageDimensions {
@@ -88,7 +89,7 @@ function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
 }
 
 async function calculateLayoutWithImages(
-  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string }>,
   canvasWidth: number,
   canvasHeight: number,
   padding: number,
@@ -198,6 +199,7 @@ async function calculateLayoutWithImages(
           height,
           rotation: 0,
           price: item.price,
+          name: item.name,
         });
         continue;
       }
@@ -223,6 +225,7 @@ async function calculateLayoutWithImages(
         height,
         rotation: config.rotation,
         price: item.price,
+        name: item.name,
       });
     } catch (error) {
       console.error(`Failed to load image for ${item.slot_type}:`, error);
@@ -240,6 +243,7 @@ async function calculateLayoutWithImages(
         height: fallbackSize,
         rotation: config?.rotation || 0,
         price: item.price,
+        name: item.name,
       });
     }
   }
@@ -255,18 +259,12 @@ function drawPriceLabel(
   if (!position.price) return;
 
   const priceText = `$${position.price.toLocaleString()}`;
-  const fontSize = Math.round(canvasWidth * 0.018);
-  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-
-  const textMetrics = ctx.measureText(priceText);
-  const paddingX = fontSize * 0.5;
-  const paddingY = fontSize * 0.35;
-  const boxWidth = textMetrics.width + paddingX * 2;
-  const boxHeight = fontSize + paddingY * 2;
+  const fontSize = Math.round(canvasWidth * 0.016);
+  const nameFontSize = Math.round(fontSize * 0.75);
+  const paddingX = fontSize * 0.6;
+  const paddingY = fontSize * 0.4;
   const borderRadius = fontSize * 0.3;
-
-  const boxX = position.x + position.width - boxWidth - 4;
-  const boxY = position.y + position.height - boxHeight - 4;
+  const lineGap = fontSize * 0.2;
 
   ctx.save();
   ctx.shadowColor = 'transparent';
@@ -274,23 +272,68 @@ function drawPriceLabel(
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
 
+  const hasName = !!position.name;
+  let nameText = '';
+  let nameWidth = 0;
+
+  if (hasName) {
+    ctx.font = `500 ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const maxNameWidth = position.width * 0.8;
+    nameText = position.name!;
+    nameWidth = ctx.measureText(nameText).width;
+    if (nameWidth > maxNameWidth) {
+      while (nameText.length > 3 && ctx.measureText(nameText + '...').width > maxNameWidth) {
+        nameText = nameText.slice(0, -1);
+      }
+      nameText = nameText + '...';
+      nameWidth = ctx.measureText(nameText).width;
+    }
+  }
+
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  const priceWidth = ctx.measureText(priceText).width;
+
+  const contentWidth = Math.max(priceWidth, nameWidth);
+  const boxWidth = contentWidth + paddingX * 2;
+  const boxHeight = hasName
+    ? nameFontSize + lineGap + fontSize + paddingY * 2
+    : fontSize + paddingY * 2;
+
+  const boxX = position.x + position.width - boxWidth - 4;
+  const boxY = position.y + position.height - boxHeight - 4;
+
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxWidth, boxHeight, borderRadius);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(priceText, boxX + boxWidth / 2, boxY + boxHeight / 2);
+  const centerX = boxX + boxWidth / 2;
+
+  if (hasName) {
+    ctx.font = `500 ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.textBaseline = 'top';
+    ctx.fillText(nameText, centerX, boxY + paddingY);
+
+    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.textBaseline = 'top';
+    ctx.fillText(priceText, centerX, boxY + paddingY + nameFontSize + lineGap);
+  } else {
+    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(priceText, centerX, boxY + boxHeight / 2);
+  }
 
   ctx.restore();
 }
 
 export async function renderFlatlay(
-  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string }>,
   options: RenderOptions = {}
-): Promise<{ imageBlob: Blob; positions: ProductPosition[] }> {
+): Promise<{ imageBlob: Blob; cleanBlob: Blob; positions: ProductPosition[] }> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   const canvas = document.createElement('canvas');
@@ -356,10 +399,6 @@ export async function renderFlatlay(
     }
   }
 
-  for (const position of positions) {
-    drawPriceLabel(ctx, position, opts.canvasWidth);
-  }
-
   try {
     const logoImg = await loadImageWithProxy('/logo(white).png', false);
     const logoWidth = 616;
@@ -378,19 +417,27 @@ export async function renderFlatlay(
     y: ((pos.y + pos.height / 2) / opts.canvasHeight) * 100,
   }));
 
-  return new Promise((resolve, reject) => {
+  const cleanBlob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve({ imageBlob: blob, positions: pinsWithPercentages });
-        } else {
-          reject(new Error('Failed to create image blob'));
-        }
-      },
+      (blob) => blob ? resolve(blob) : reject(new Error('Failed to create clean image blob')),
       'image/png',
       0.95
     );
   });
+
+  for (const position of positions) {
+    drawPriceLabel(ctx, position, opts.canvasWidth);
+  }
+
+  const imageBlob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error('Failed to create image blob')),
+      'image/png',
+      0.95
+    );
+  });
+
+  return { imageBlob, cleanBlob, positions: pinsWithPercentages };
 }
 
 export async function renderFlatlayWithCustomPositions(
@@ -473,12 +520,30 @@ export async function renderFlatlayWithCustomPositions(
 
 export async function generateAndSaveFlatlay(
   outfitId: string,
-  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string }>,
   options: RenderOptions = {}
-): Promise<{ imageUrl: string; positions: ProductPosition[] }> {
-  const { imageBlob, positions } = await renderFlatlay(items, options);
+): Promise<{ imageUrl: string; cleanImageUrl: string; positions: ProductPosition[] }> {
+  const { imageBlob, cleanBlob, positions } = await renderFlatlay(items, options);
 
-  const fileName = `flatlay_${outfitId}_${Date.now()}.png`;
+  const timestamp = Date.now();
+
+  const cleanFileName = `flatlay_clean_${outfitId}_${timestamp}.png`;
+  const cleanFilePath = `outfits/${cleanFileName}`;
+
+  const { error: cleanUploadError } = await supabase.storage
+    .from('product-images')
+    .upload(cleanFilePath, cleanBlob, {
+      contentType: 'image/png',
+      cacheControl: '3600',
+    });
+
+  if (cleanUploadError) throw cleanUploadError;
+
+  const { data: cleanUrlData } = supabase.storage
+    .from('product-images')
+    .getPublicUrl(cleanFilePath);
+
+  const fileName = `flatlay_${outfitId}_${timestamp}.png`;
   const filePath = `outfits/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
@@ -507,6 +572,7 @@ export async function generateAndSaveFlatlay(
 
   return {
     imageUrl: urlData.publicUrl,
+    cleanImageUrl: cleanUrlData.publicUrl,
     positions,
   };
 }

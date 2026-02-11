@@ -94,15 +94,16 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         product_id: item.product_id,
         image_url: item.product!.image_url,
         price: item.product!.price,
+        name: item.product!.name,
       }));
 
-      const { imageUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
+      const { imageUrl, cleanImageUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
 
       setRenderedImageUrl(imageUrl);
       setRenderingStep('AI 모델컷 생성 중... (최대 30초 소요)');
 
       try {
-        const modelUrl = await generateAndSaveModelPhoto(outfitId, imageUrl);
+        const modelUrl = await generateAndSaveModelPhoto(outfitId, cleanImageUrl);
         setModelImageUrl(modelUrl);
       } catch (modelError) {
         console.error('Model photo generation error:', modelError);
