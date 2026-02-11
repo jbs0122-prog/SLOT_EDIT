@@ -141,7 +141,10 @@ No bullet points, no lists. Flowing prose only. Do NOT start with "This outfit".
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 256,
+            maxOutputTokens: 1024,
+            thinkingConfig: {
+              thinkingBudget: 0,
+            },
           },
         }),
       }

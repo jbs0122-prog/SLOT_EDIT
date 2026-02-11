@@ -270,13 +270,13 @@ function drawPriceLabel(
 
   const categoryText = SLOT_CATEGORY_LABELS[position.slot_type] || position.slot_type;
   const priceText = `$${position.price.toLocaleString()}`;
-  const fontSize = Math.round(canvasWidth * 0.016);
-  const categoryFontSize = Math.round(fontSize * 0.7);
-  const paddingX = fontSize * 0.6;
-  const paddingY = fontSize * 0.35;
-  const borderRadius = fontSize * 0.3;
-  const lineGap = fontSize * 0.15;
-  const pinOffset = Math.round(canvasWidth * 0.018);
+  const fontSize = Math.round(canvasWidth * 0.022);
+  const categoryFontSize = Math.round(fontSize * 0.72);
+  const paddingX = fontSize * 0.7;
+  const paddingY = fontSize * 0.45;
+  const borderRadius = fontSize * 0.35;
+  const lineGap = fontSize * 0.18;
+  const pinOffset = Math.round(canvasWidth * 0.022);
 
   ctx.save();
   ctx.shadowColor = 'transparent';
