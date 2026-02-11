@@ -254,7 +254,7 @@ function drawPriceLabel(
 ) {
   if (!position.price) return;
 
-  const priceText = `₩${position.price.toLocaleString()}`;
+  const priceText = `$${position.price.toLocaleString()}`;
   const fontSize = Math.round(canvasWidth * 0.018);
   ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
 

@@ -283,7 +283,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                             </p>
                             {item.product.price && (
                               <p className="text-xs text-gray-500 mt-1">
-                                ₩{item.product.price.toLocaleString()}
+                                ${item.product.price.toLocaleString()}
                               </p>
                             )}
                           </div>
@@ -364,7 +364,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                         </div>
                         {product.price && (
                           <p className="text-sm font-semibold text-gray-900 mt-1">
-                            ₩{product.price.toLocaleString()}
+                            ${product.price.toLocaleString()}
                           </p>
                         )}
                         {product.vibe && product.vibe.length > 0 && (
