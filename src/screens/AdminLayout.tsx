@@ -1,16 +1,24 @@
 import { useState, useEffect } from 'react';
-import { LogOut } from 'lucide-react';
+import { LogOut, Package, MapPin, Users, Image } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { Session } from '@supabase/supabase-js';
 import AdminLogin from './AdminLogin';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
+  currentPage?: 'pins' | 'products' | 'users' | 'extract';
 }
 
-export default function AdminLayout({ children }: AdminLayoutProps) {
+export default function AdminLayout({ children, currentPage }: AdminLayoutProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const menuItems = [
+    { id: 'pins' as const, label: 'Pins', icon: MapPin, href: '#admin' },
+    { id: 'products' as const, label: 'Products', icon: Package, href: '#admin-products' },
+    { id: 'users' as const, label: 'Users', icon: Users, href: '#admin-users' },
+    { id: 'extract' as const, label: 'Extract', icon: Image, href: '#admin-extract' },
+  ];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -43,17 +51,50 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   return (
-    <div className="relative">
-      <div className="fixed top-4 right-4 z-50">
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2 bg-black/60 backdrop-blur-sm border border-white/10 rounded-lg text-white/70 hover:text-white hover:bg-black/80 transition-all text-sm"
-        >
-          <LogOut className="w-4 h-4" />
-          로그아웃
-        </button>
-      </div>
-      {children}
+    <div className="flex min-h-screen bg-[#1a1a1a]">
+      <aside className="fixed left-0 top-0 h-screen w-64 bg-black/40 backdrop-blur-sm border-r border-white/10 flex flex-col">
+        <div className="p-6 border-b border-white/10">
+          <h1 className="text-xl font-bold text-white">Admin Panel</h1>
+        </div>
+
+        <nav className="flex-1 p-4">
+          <ul className="space-y-2">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id;
+              return (
+                <li key={item.id}>
+                  <a
+                    href={item.href}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                      isActive
+                        ? 'bg-white text-black font-medium'
+                        : 'text-white/60 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="p-4 border-t border-white/10">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all"
+          >
+            <LogOut className="w-5 h-5" />
+            <span>로그아웃</span>
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 ml-64">
+        {children}
+      </main>
     </div>
   );
 }

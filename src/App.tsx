@@ -319,22 +319,22 @@ function App() {
         </div>
       )}
       {currentScreen === 'admin' && (
-        <AdminLayout>
+        <AdminLayout currentPage="pins">
           <AdminPins />
         </AdminLayout>
       )}
       {currentScreen === 'admin-products' && (
-        <AdminLayout>
+        <AdminLayout currentPage="products">
           <AdminProducts />
         </AdminLayout>
       )}
       {currentScreen === 'admin-users' && (
-        <AdminLayout>
+        <AdminLayout currentPage="users">
           <AdminUsers />
         </AdminLayout>
       )}
       {currentScreen === 'admin-extract' && (
-        <AdminLayout>
+        <AdminLayout currentPage="extract">
           <ModelProductExtractor onBack={() => { window.location.hash = 'admin-products'; }} />
         </AdminLayout>
       )}
