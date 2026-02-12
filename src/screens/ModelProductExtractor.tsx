@@ -3,6 +3,7 @@ import { uploadProductImage, validateImageFile } from '../utils/imageUpload';
 import { detectItemsInPhoto, extractProductImage } from '../utils/productExtractor';
 import { analyzeFashionImage } from '../utils/fashionAnalyzer';
 import { supabase } from '../utils/supabase';
+import { compressImageToTarget, downloadBlob } from '../utils/imageCompression';
 import type { DetectedItem } from '../utils/productExtractor';
 import {
   Upload,
@@ -27,6 +28,7 @@ interface ExtractedItemState extends DetectedItem {
   extractedImageUrl?: string;
   saved?: boolean;
   saving?: boolean;
+  downloading?: boolean;
   error?: string;
 }
 
@@ -190,6 +192,34 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
       alert('제품 저장 실패: ' + (error as Error).message);
       setItems((prev) =>
         prev.map((it, i) => (i === index ? { ...it, saving: false } : it))
+      );
+    }
+  };
+
+  const handleDownloadCompressed = async (index: number) => {
+    const item = items[index];
+    if (!item.extractedImageUrl) return;
+
+    setItems((prev) =>
+      prev.map((it, i) => (i === index ? { ...it, downloading: true } : it))
+    );
+
+    try {
+      const result = await compressImageToTarget(item.extractedImageUrl, 100, 1200, 1200);
+
+      const filename = `${item.label.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_compressed.webp`;
+      downloadBlob(result.blob, filename);
+
+      const sizeKB = (result.size / 1024).toFixed(1);
+      const originalSizeKB = (result.originalSize / 1024).toFixed(1);
+      alert(
+        `압축 완료!\n원본: ${originalSizeKB}KB → 압축: ${sizeKB}KB\n압축률: ${result.compressionRatio.toFixed(1)}%`
+      );
+    } catch (error) {
+      alert('압축 실패: ' + (error as Error).message);
+    } finally {
+      setItems((prev) =>
+        prev.map((it, i) => (i === index ? { ...it, downloading: false } : it))
       );
     }
   };
@@ -481,7 +511,7 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
                             />
                           </div>
 
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-3">
                             <a
                               href={item.extractedImageUrl}
                               target="_blank"
@@ -491,6 +521,23 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
                               <Download size={14} />
                               이미지 보기
                             </a>
+                            <button
+                              onClick={() => handleDownloadCompressed(index)}
+                              disabled={item.downloading}
+                              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 text-sm font-medium transition-colors shadow-sm"
+                            >
+                              {item.downloading ? (
+                                <>
+                                  <Loader2 size={14} className="animate-spin" />
+                                  압축 중...
+                                </>
+                              ) : (
+                                <>
+                                  <Download size={14} />
+                                  압축 다운로드 {'(<100KB)'}
+                                </>
+                              )}
+                            </button>
                             {item.saved ? (
                               <div className="flex items-center gap-1.5 px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
                                 <Check size={14} />
