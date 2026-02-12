@@ -26,6 +26,7 @@ export default function AdminProducts() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterGender, setFilterGender] = useState('all');
+  const [filterBodyType, setFilterBodyType] = useState('all');
   const [filterVibe, setFilterVibe] = useState('all');
 
   const [outfitFilterGender, setOutfitFilterGender] = useState('');
@@ -212,8 +213,10 @@ export default function AdminProducts() {
                          product.brand.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = filterCategory === 'all' || product.category === filterCategory;
     const matchesGender = filterGender === 'all' || product.gender === filterGender;
+    const matchesBodyType = filterBodyType === 'all' ||
+                           (Array.isArray(product.body_type) && product.body_type.includes(filterBodyType));
     const matchesVibe = filterVibe === 'all' || product.vibe.includes(filterVibe);
-    return matchesSearch && matchesCategory && matchesGender && matchesVibe;
+    return matchesSearch && matchesCategory && matchesGender && matchesBodyType && matchesVibe;
   });
 
   const filteredOutfits = outfits.filter(outfit => {
@@ -320,7 +323,7 @@ export default function AdminProducts() {
         {viewMode === 'products' ? (
           <>
             <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <input
                   type="text"
                   placeholder="제품명 또는 브랜드 검색..."
@@ -351,6 +354,16 @@ export default function AdminProducts() {
                   <option value="MALE">남성</option>
                   <option value="FEMALE">여성</option>
                   <option value="UNISEX">유니섹스</option>
+                </select>
+                <select
+                  value={filterBodyType}
+                  onChange={(e) => setFilterBodyType(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">전체 체형</option>
+                  <option value="slim">Slim</option>
+                  <option value="regular">Regular</option>
+                  <option value="plus-size">Plus-size</option>
                 </select>
                 <select
                   value={filterVibe}
