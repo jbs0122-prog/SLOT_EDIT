@@ -321,6 +321,38 @@ function drawPriceLabel(
   ctx.restore();
 }
 
+async function compressCanvasToTarget(
+  canvas: HTMLCanvasElement,
+  targetSizeKB: number
+): Promise<Blob> {
+  const targetBytes = targetSizeKB * 1024;
+  let quality = 0.85;
+
+  while (quality >= 0.3) {
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => b ? resolve(b) : reject(new Error('Failed to create blob')),
+        'image/webp',
+        quality
+      );
+    });
+
+    if (blob.size <= targetBytes) {
+      return blob;
+    }
+
+    quality -= 0.08;
+  }
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => b ? resolve(b) : reject(new Error('Failed to create blob')),
+      'image/webp',
+      0.3
+    );
+  });
+}
+
 export async function renderFlatlay(
   items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string }>,
   options: RenderOptions = {}
@@ -408,25 +440,13 @@ export async function renderFlatlay(
     y: ((pos.y + pos.height / 2) / opts.canvasHeight) * 100,
   }));
 
-  const cleanBlob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => blob ? resolve(blob) : reject(new Error('Failed to create clean image blob')),
-      'image/png',
-      0.95
-    );
-  });
+  const cleanBlob = await compressCanvasToTarget(canvas, 300);
 
   for (const position of positions) {
     drawPriceLabel(ctx, position, opts.canvasWidth);
   }
 
-  const imageBlob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => blob ? resolve(blob) : reject(new Error('Failed to create image blob')),
-      'image/png',
-      0.95
-    );
-  });
+  const imageBlob = await compressCanvasToTarget(canvas, 300);
 
   return { imageBlob, cleanBlob, positions: pinsWithPercentages };
 }
@@ -494,19 +514,7 @@ export async function renderFlatlayWithCustomPositions(
     console.error('Failed to load logo:', error);
   }
 
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error('Failed to create image blob'));
-        }
-      },
-      'image/png',
-      0.95
-    );
-  });
+  return compressCanvasToTarget(canvas, 300);
 }
 
 export async function generateAndSaveFlatlay(
@@ -518,13 +526,13 @@ export async function generateAndSaveFlatlay(
 
   const timestamp = Date.now();
 
-  const cleanFileName = `flatlay_clean_${outfitId}_${timestamp}.png`;
+  const cleanFileName = `flatlay_clean_${outfitId}_${timestamp}.webp`;
   const cleanFilePath = `outfits/${cleanFileName}`;
 
   const { error: cleanUploadError } = await supabase.storage
     .from('product-images')
     .upload(cleanFilePath, cleanBlob, {
-      contentType: 'image/png',
+      contentType: 'image/webp',
       cacheControl: '3600',
     });
 
@@ -534,13 +542,13 @@ export async function generateAndSaveFlatlay(
     .from('product-images')
     .getPublicUrl(cleanFilePath);
 
-  const fileName = `flatlay_${outfitId}_${timestamp}.png`;
+  const fileName = `flatlay_${outfitId}_${timestamp}.webp`;
   const filePath = `outfits/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('product-images')
     .upload(filePath, imageBlob, {
-      contentType: 'image/png',
+      contentType: 'image/webp',
       cacheControl: '3600',
     });
 

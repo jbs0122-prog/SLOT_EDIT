@@ -41,6 +41,53 @@ export async function generateModelPhoto(
   };
 }
 
+async function compressImageFromUrl(
+  imageUrl: string,
+  targetSizeKB: number
+): Promise<Blob> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('Failed to load model image for compression'));
+    el.src = imageUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas context not available');
+  ctx.drawImage(img, 0, 0);
+
+  const targetBytes = targetSizeKB * 1024;
+  let quality = 0.85;
+
+  while (quality >= 0.3) {
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => b ? resolve(b) : reject(new Error('Failed to create blob')),
+        'image/webp',
+        quality
+      );
+    });
+
+    if (blob.size <= targetBytes) {
+      return blob;
+    }
+
+    quality -= 0.08;
+  }
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => b ? resolve(b) : reject(new Error('Failed to create blob')),
+      'image/webp',
+      0.3
+    );
+  });
+}
+
 export async function generateAndSaveModelPhoto(
   outfitId: string,
   flatlayImageUrl: string
@@ -54,21 +101,46 @@ export async function generateAndSaveModelPhoto(
   if (outfitError) throw outfitError;
   if (!outfit) throw new Error('Outfit not found');
 
-  const { imageUrl } = await generateModelPhoto({
+  const { imageUrl: rawImageUrl } = await generateModelPhoto({
     flatlayImageUrl,
     gender: outfit.gender,
     bodyType: outfit.body_type,
     occasion: outfit.tpo || undefined,
   });
 
+  let finalUrl = rawImageUrl;
+
+  try {
+    const compressedBlob = await compressImageFromUrl(rawImageUrl, 300);
+
+    const fileName = `model-photo-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+    const filePath = `outfits/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('product-images')
+      .upload(filePath, compressedBlob, {
+        contentType: 'image/webp',
+        cacheControl: '3600',
+      });
+
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+      finalUrl = urlData.publicUrl;
+    }
+  } catch (compressError) {
+    console.error('Model photo compression failed, using original:', compressError);
+  }
+
   const { error: updateError } = await supabase
     .from('outfits')
     .update({
-      image_url_on_model: imageUrl,
+      image_url_on_model: finalUrl,
     })
     .eq('id', outfitId);
 
   if (updateError) throw updateError;
 
-  return imageUrl;
+  return finalUrl;
 }
