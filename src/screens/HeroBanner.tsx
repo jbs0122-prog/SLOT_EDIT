@@ -110,7 +110,7 @@ export default function HeroBanner({ desktopImages, mobileImages, autoPlayInterv
           >
             <img
               src={image}
-              alt={`Hero banner ${index + 1}`}
+              alt={`slot edit AI fashion curation - NYC outfit recommendations ${index + 1}`}
               className="w-full h-full object-cover"
               onError={(e) => {
                 console.error(`Failed to load banner image ${index + 1}:`, image);

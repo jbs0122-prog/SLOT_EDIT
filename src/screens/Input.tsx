@@ -243,7 +243,7 @@ export default function Input({ onGenerate }: InputProps) {
     <div className="min-h-screen bg-white flex flex-col">
       <header className="pt-4 pb-1.5 md:pb-3 px-6">
         <div className="flex justify-center">
-          <img src="/logo.png" alt="SLOT EDIT" className="h-24" />
+          <img src="/logo.png" alt="slot edit - AI-powered outfit curation for NYC" className="h-24" />
         </div>
       </header>
 
@@ -253,9 +253,12 @@ export default function Input({ onGenerate }: InputProps) {
 
       <main className="flex-1 flex flex-col justify-center px-6 py-4">
         <div className="mb-2">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-center mb-2">
             DON'T SEARCH—SELECT.
-          </h2>
+          </h1>
+          <p className="text-center text-sm md:text-base text-gray-600 max-w-2xl mx-auto">
+            slot edit uses AI to curate personalized outfits based on NYC weather, your style, and body type
+          </p>
         </div>
 
         <div className="max-w-4xl mx-auto w-full">
@@ -518,9 +521,26 @@ export default function Input({ onGenerate }: InputProps) {
           <div className="max-w-4xl mx-auto w-full mb-6">
             <img
               src="/sub-banner.png"
-              alt="Sub Banner"
+              alt="slot edit - weather-based outfit selection for NYC fashion"
               className="w-full h-auto"
             />
+          </div>
+        </div>
+
+        <div className="mt-12 max-w-3xl mx-auto">
+          <div className="bg-gray-50 p-6 md:p-8">
+            <h2 className="text-lg md:text-xl font-semibold mb-3 text-center">
+              What is slot edit?
+            </h2>
+            <p className="text-sm md:text-base text-gray-700 leading-relaxed mb-4">
+              <strong>slot edit</strong> is an AI-powered outfit recommendation platform designed for fashion-forward individuals in New York City. Instead of endless scrolling and searching, slot edit curates personalized outfit suggestions based on real-time NYC weather conditions, your body type, and personal style preferences.
+            </p>
+            <p className="text-sm md:text-base text-gray-700 leading-relaxed mb-4">
+              Our intelligent fashion AI analyzes current weather data and matches it with curated clothing items to create complete, weather-appropriate outfits. Whether you're looking for men's fashion in NYC or women's style recommendations, slot edit provides instant outfit inspiration tailored to your unique preferences.
+            </p>
+            <p className="text-sm md:text-base text-gray-700 leading-relaxed">
+              With slot edit, you don't have to spend hours browsing fashion sites. Simply select your gender, body type, and desired vibe, and our AI stylist will generate personalized outfit combinations perfect for today's weather. Experience the future of smart fashion curation with slot edit.
+            </p>
           </div>
         </div>
       </main>
