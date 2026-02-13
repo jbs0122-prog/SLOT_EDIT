@@ -323,12 +323,14 @@ function drawPriceLabel(
 
 async function compressCanvasToTarget(
   canvas: HTMLCanvasElement,
-  targetSizeKB: number
+  targetSizeKB: number,
+  isForAI: boolean = false
 ): Promise<Blob> {
   const targetBytes = targetSizeKB * 1024;
-  let quality = 0.85;
+  let quality = isForAI ? 0.90 : 0.85;
+  const minQuality = isForAI ? 0.75 : 0.3;
 
-  while (quality >= 0.3) {
+  while (quality >= minQuality) {
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
         (b) => b ? resolve(b) : reject(new Error('Failed to create blob')),
@@ -341,14 +343,14 @@ async function compressCanvasToTarget(
       return blob;
     }
 
-    quality -= 0.08;
+    quality -= 0.05;
   }
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (b) => b ? resolve(b) : reject(new Error('Failed to create blob')),
       'image/webp',
-      0.3
+      minQuality
     );
   });
 }
@@ -440,13 +442,13 @@ export async function renderFlatlay(
     y: ((pos.y + pos.height / 2) / opts.canvasHeight) * 100,
   }));
 
-  const cleanBlob = await compressCanvasToTarget(canvas, 300);
+  const cleanBlob = await compressCanvasToTarget(canvas, 600, true);
 
   for (const position of positions) {
     drawPriceLabel(ctx, position, opts.canvasWidth);
   }
 
-  const imageBlob = await compressCanvasToTarget(canvas, 300);
+  const imageBlob = await compressCanvasToTarget(canvas, 300, false);
 
   return { imageBlob, cleanBlob, positions: pinsWithPercentages };
 }
@@ -514,7 +516,7 @@ export async function renderFlatlayWithCustomPositions(
     console.error('Failed to load logo:', error);
   }
 
-  return compressCanvasToTarget(canvas, 300);
+  return compressCanvasToTarget(canvas, 300, false);
 }
 
 export async function generateAndSaveFlatlay(

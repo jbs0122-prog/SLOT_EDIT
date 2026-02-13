@@ -88,6 +88,11 @@ Deno.serve(async (req: Request) => {
     const imageBuffer = await fetchImageResponse.arrayBuffer();
     const base64Image = uint8ArrayToBase64(new Uint8Array(imageBuffer));
 
+    const contentType = fetchImageResponse.headers.get("content-type") || "image/png";
+    const mimeType = contentType.includes("webp") ? "image/webp" :
+                     contentType.includes("jpeg") || contentType.includes("jpg") ? "image/jpeg" :
+                     "image/png";
+
     const genderDescription = genderText === "male"
       ? "a MAN (male, masculine). The model MUST be clearly a MALE person with masculine features."
       : "a WOMAN (female, feminine). The model MUST be clearly a FEMALE person with feminine features.";
@@ -131,7 +136,7 @@ REMINDER: The model in the photo MUST be a ${genderText} person. This is a ${gen
                 },
                 {
                   inline_data: {
-                    mime_type: "image/png",
+                    mime_type: mimeType,
                     data: base64Image,
                   },
                 },

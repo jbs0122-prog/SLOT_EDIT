@@ -61,9 +61,9 @@ async function compressImageFromUrl(
   ctx.drawImage(img, 0, 0);
 
   const targetBytes = targetSizeKB * 1024;
-  let quality = 0.85;
+  let quality = 0.88;
 
-  while (quality >= 0.3) {
+  while (quality >= 0.65) {
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
         (b) => b ? resolve(b) : reject(new Error('Failed to create blob')),
@@ -76,14 +76,14 @@ async function compressImageFromUrl(
       return blob;
     }
 
-    quality -= 0.08;
+    quality -= 0.05;
   }
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (b) => b ? resolve(b) : reject(new Error('Failed to create blob')),
       'image/webp',
-      0.3
+      0.65
     );
   });
 }
@@ -111,7 +111,7 @@ export async function generateAndSaveModelPhoto(
   let finalUrl = rawImageUrl;
 
   try {
-    const compressedBlob = await compressImageFromUrl(rawImageUrl, 300);
+    const compressedBlob = await compressImageFromUrl(rawImageUrl, 400);
 
     const fileName = `model-photo-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
     const filePath = `outfits/${fileName}`;
