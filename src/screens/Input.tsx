@@ -252,12 +252,13 @@ export default function Input({ onGenerate }: InputProps) {
       </div>
 
       <main className="flex-1 flex flex-col justify-center px-6 py-4">
-        <div className="mb-2">
+        <div className="mb-6 md:mb-10">
           <h1 className="text-2xl md:text-3xl font-bold text-center mb-2">
             DON'T SEARCH—SELECT.
           </h1>
-          <p className="text-center text-sm md:text-base text-gray-600 max-w-2xl mx-auto">
-            slot edit uses AI to curate personalized outfits based on NYC weather, your style, and body type
+          <p className="text-center text-2xl md:text-3xl font-bold text-black max-w-2xl mx-auto leading-snug">
+            Your context, refined into a single edit.<br />
+            Pick a slot—get one clean, considered look.
           </p>
         </div>
 
