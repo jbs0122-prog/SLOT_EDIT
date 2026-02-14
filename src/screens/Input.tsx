@@ -256,7 +256,7 @@ export default function Input({ onGenerate }: InputProps) {
           <h1 className="text-2xl md:text-3xl font-bold text-center mb-2">
             DON'T SEARCH—SELECT.
           </h1>
-          <p className="text-center text-2xl md:text-3xl font-bold text-black max-w-2xl mx-auto leading-snug">
+          <p className="text-center text-sm md:text-base text-gray-600 font-light max-w-2xl mx-auto leading-snug">
             slot edit uses AI to curate personalized outfits based on NYC weather, your style, and body type
           </p>
         </div>
