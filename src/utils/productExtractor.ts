@@ -36,11 +36,14 @@ export async function detectItemsInPhoto(imageUrl: string): Promise<DetectedItem
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to detect items');
+    if (response.status === 403) {
+      throw new Error('관리자 권한이 필요합니다. 로그아웃 후 관리자 계정으로 다시 로그인해주세요.');
+    }
+    throw new Error(err.error || `요청 실패 (상태: ${response.status})`);
   }
 
   const data = await response.json();
-  if (!data.success) throw new Error('Detection failed');
+  if (!data.success) throw new Error('아이템 감지에 실패했습니다');
   return data.items;
 }
 
@@ -58,10 +61,13 @@ export async function extractProductImage(
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to extract product');
+    if (response.status === 403) {
+      throw new Error('관리자 권한이 필요합니다. 로그아웃 후 관리자 계정으로 다시 로그인해주세요.');
+    }
+    throw new Error(err.error || `제품 추출 실패 (상태: ${response.status})`);
   }
 
   const data = await response.json();
-  if (!data.success) throw new Error('Extraction failed');
+  if (!data.success) throw new Error('제품 추출에 실패했습니다');
   return { imageUrl: data.imageUrl, slot: data.slot, label: data.label };
 }
