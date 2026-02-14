@@ -36,8 +36,8 @@ export async function detectItemsInPhoto(imageUrl: string): Promise<DetectedItem
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    if (response.status === 403) {
-      throw new Error('관리자 권한이 필요합니다. 로그아웃 후 관리자 계정으로 다시 로그인해주세요.');
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('관리자 권한이 필요합니다. 이메일 주소가 @admin.com으로 끝나는 계정으로 로그인해주세요.');
     }
     throw new Error(err.error || `요청 실패 (상태: ${response.status})`);
   }
@@ -61,8 +61,8 @@ export async function extractProductImage(
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    if (response.status === 403) {
-      throw new Error('관리자 권한이 필요합니다. 로그아웃 후 관리자 계정으로 다시 로그인해주세요.');
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('관리자 권한이 필요합니다. 이메일 주소가 @admin.com으로 끝나는 계정으로 로그인해주세요.');
     }
     throw new Error(err.error || `제품 추출 실패 (상태: ${response.status})`);
   }
