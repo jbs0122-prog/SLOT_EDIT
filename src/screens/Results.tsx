@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, TouchEvent } from 'react';
-import { Bookmark } from 'lucide-react';
+import { useState, useEffect, useRef, TouchEvent, useCallback } from 'react';
+import { Bookmark, Share2, Check } from 'lucide-react';
 import { Outfit, Product } from '../data/outfits';
 import { WeatherData, getWeatherEmoji } from '../utils/weather';
 import ImageSlider from './ImageSlider';
@@ -54,6 +54,8 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   const [savedOutfitIds, setSavedOutfitIds] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const firstOutfitRef = useRef<HTMLDivElement>(null);
+  const outfitRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [copiedOutfitId, setCopiedOutfitId] = useState<string | null>(null);
 
   const [newGender, setNewGender] = useState<string>(gender);
   const [newBodyType, setNewBodyType] = useState<string>(bodyType);
@@ -72,6 +74,21 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   const wheelTimeoutRef = useRef<{ [key: string]: number }>({});
 
   const minSwipeDistance = 100;
+
+  const handleShare = useCallback(async (outfitId: string, lookIndex: number) => {
+    const url = `${window.location.origin}${window.location.pathname}#results/look/${lookIndex}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Look ${lookIndex}`, url });
+        return;
+      } catch { /* user cancelled or not supported */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedOutfitId(outfitId);
+      setTimeout(() => setCopiedOutfitId(null), 2000);
+    } catch { /* clipboard not available */ }
+  }, []);
 
   useEffect(() => {
     setLocalOutfits(outfits);
@@ -240,6 +257,31 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
     });
     setSortedOutfits(sorted);
   }, [localOutfits, feedbackCounts, sortOrder]);
+
+  useEffect(() => {
+    if (sortedOutfits.length === 0) return;
+    const hash = window.location.hash.replace('#', '');
+    const match = hash.match(/^results\/look\/(\d+)$/);
+    if (!match) return;
+    const lookIndex = parseInt(match[1], 10);
+    const outfitId = sortedOutfits[lookIndex - 1]?.id;
+    if (!outfitId) return;
+
+    const timer = setTimeout(() => {
+      const el = outfitRefs.current.get(outfitId);
+      if (el) {
+        const scrollContainer = containerRef.current?.querySelector('.overflow-y-auto');
+        if (scrollContainer) {
+          const containerTop = scrollContainer.getBoundingClientRect().top;
+          const elTop = el.getBoundingClientRect().top;
+          scrollContainer.scrollTo({ top: scrollContainer.scrollTop + (elTop - containerTop) - 20, behavior: 'smooth' });
+        } else {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [sortedOutfits]);
 
   const loadFeedbackCounts = async () => {
     const sessionId = getOrCreateSessionId();
@@ -599,7 +641,12 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
             const isSaved = savedOutfitIds.has(outfit.id);
 
             return (
-              <div key={outfit.id} ref={index === 0 ? firstOutfitRef : null}
+              <div key={outfit.id}
+                id={`look-${index + 1}`}
+                ref={(el) => {
+                  if (el) outfitRefs.current.set(outfit.id, el);
+                  if (index === 0) (firstOutfitRef as any).current = el;
+                }}
                 className={`mb-12 flex flex-col md:flex-row md:items-start md:justify-center md:gap-8 md:px-12 ${index === 0 ? 'md:mt-8' : ''}`}>
                 <div className="flex-shrink-0 w-full md:w-[500px] mb-6 md:mb-0">
                   <ImageSlider
@@ -611,17 +658,35 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                 <div className="w-full md:w-[500px] px-6 md:px-0 flex flex-col">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-xs md:text-xl font-bold tracking-widest text-black uppercase">AI INSIGHT</div>
-                    <button
-                      onClick={() => handleSave(outfit.id)}
-                      className={`flex items-center gap-2 px-4 py-2 border text-xs md:text-sm tracking-wider uppercase transition-all ${
-                        isSaved
-                          ? 'bg-black text-white border-black'
-                          : 'bg-white text-black border-gray-300 hover:border-black'
-                      }`}
-                    >
-                      <Bookmark size={14} fill={isSaved ? 'currentColor' : 'none'} />
-                      {isSaved ? 'Saved' : 'Save This Look'}
-                    </button>
+                    <div className="flex flex-col items-end gap-2">
+                      <button
+                        onClick={() => handleSave(outfit.id)}
+                        className={`flex items-center gap-2 px-4 py-2 border text-xs md:text-sm tracking-wider uppercase transition-all ${
+                          isSaved
+                            ? 'bg-black text-white border-black'
+                            : 'bg-white text-black border-gray-300 hover:border-black'
+                        }`}
+                      >
+                        <Bookmark size={14} fill={isSaved ? 'currentColor' : 'none'} />
+                        {isSaved ? 'Saved' : 'Save This Look'}
+                      </button>
+                      <button
+                        onClick={() => handleShare(outfit.id, index + 1)}
+                        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-black transition-colors tracking-wider uppercase"
+                      >
+                        {copiedOutfitId === outfit.id ? (
+                          <>
+                            <Check size={12} />
+                            <span>Link Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Share2 size={12} />
+                            <span>Share This Look</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                   {getOutfitTotalPrice(outfit.id) > 0 && (
                     <div className="mb-3">
