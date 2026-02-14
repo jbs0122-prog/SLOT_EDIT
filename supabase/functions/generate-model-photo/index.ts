@@ -38,19 +38,25 @@ function isAllowedUrl(url: string): boolean {
 }
 
 async function verifyAuth(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return null;
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return null;
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user || null;
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) return null;
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {
