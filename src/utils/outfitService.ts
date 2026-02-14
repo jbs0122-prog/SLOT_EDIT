@@ -136,6 +136,42 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
   }
 };
 
+export const fetchOutfitById = async (outfitId: string): Promise<Outfit | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('outfits')
+      .select('*')
+      .eq('id', outfitId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    const itemsMap = await fetchOutfitItems([data.id]);
+
+    return {
+      id: data.id,
+      gender: data.gender,
+      body_type: data.body_type,
+      vibe: data.vibe,
+      image_url_flatlay: data.image_url_flatlay || '',
+      image_url_on_model: data.image_url_on_model || '',
+      insight_text: data['AI insight'] || '',
+      flatlay_pins: data.flatlay_pins || [],
+      on_model_pins: data.on_model_pins || [],
+      tpo: data.tpo || '',
+      status: data.status || '',
+      prompt_flatlay: data.prompt_flatlay || '',
+      created_at: data.created_at || '',
+      updated_at: data.updated_at || '',
+      items: itemsMap.get(data.id) || [],
+    };
+  } catch (error) {
+    console.error('Error fetching outfit by id:', error);
+    return null;
+  }
+};
+
 export const fetchRankingOutfits = async (gender: 'MALE' | 'FEMALE'): Promise<Outfit[]> => {
   try {
     const { data: outfitsData, error: outfitsError } = await supabase

@@ -20,7 +20,7 @@ import AffiliateDisclosure from './screens/AffiliateDisclosure';
 import DMCAPolicy from './screens/DMCAPolicy';
 import Accessibility from './screens/Accessibility';
 import { Outfit } from './data/outfits';
-import { fetchOutfits } from './utils/outfitService';
+import { fetchOutfits, fetchOutfitById } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature, getTargetWarmth } from './utils/weather';
 
 type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'admin-extract' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
@@ -55,6 +55,11 @@ function tabFromHash(h: string): NavTab {
 
 function accountViewFromHash(h: string): 'menu' | 'saved' {
   return h.includes('account/saved') ? 'saved' : 'menu';
+}
+
+function sharedLookIdFromHash(h: string): string | null {
+  const match = h.match(/^results\/look\/(.+)$/);
+  return match ? match[1] : null;
 }
 
 function hashForTab(tab: NavTab): string {
@@ -159,6 +164,29 @@ function App() {
 
         const h = getHash();
         if (h.startsWith('results')) {
+          const sharedId = sharedLookIdFromHash(h);
+          if (sharedId) {
+            const existing = data.find(o => o.id === sharedId);
+            if (existing) {
+              setSelectedOutfits([existing]);
+              setContext({ gender: existing.gender, bodyType: existing.body_type, vibe: existing.vibe, weather: null });
+              setCurrentScreen('results');
+              setActiveTab('home');
+              return;
+            }
+            const outfit = await fetchOutfitById(sharedId);
+            if (outfit) {
+              setSelectedOutfits([outfit]);
+              setContext({ gender: outfit.gender, bodyType: outfit.body_type, vibe: outfit.vibe, weather: null });
+              setCurrentScreen('results');
+              setActiveTab('home');
+              return;
+            }
+            window.location.hash = '';
+            setCurrentScreen('input');
+            return;
+          }
+
           const saved = restoreResults();
           if (saved) {
             setSelectedOutfits(saved.outfits);
@@ -182,11 +210,25 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const handler = () => {
+    const handler = async () => {
       const h = getHash();
       const screen = screenFromHash(h);
 
       if (screen === 'results') {
+        const sharedId = sharedLookIdFromHash(h);
+        if (sharedId && selectedOutfitsRef.current.every(o => o.id !== sharedId)) {
+          const outfit = await fetchOutfitById(sharedId);
+          if (outfit) {
+            setSelectedOutfits([outfit]);
+            setContext({ gender: outfit.gender, bodyType: outfit.body_type, vibe: outfit.vibe, weather: null });
+            setActiveTab('home');
+            setCurrentScreen('results');
+            return;
+          }
+          window.location.hash = '';
+          return;
+        }
+
         if (selectedOutfitsRef.current.length === 0) {
           const saved = restoreResults();
           if (saved) {

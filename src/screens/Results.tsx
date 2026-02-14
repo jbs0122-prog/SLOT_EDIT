@@ -75,11 +75,11 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
 
   const minSwipeDistance = 100;
 
-  const handleShare = useCallback(async (outfitId: string, lookIndex: number) => {
-    const url = `${window.location.origin}${window.location.pathname}#results/look/${lookIndex}`;
+  const handleShare = useCallback(async (outfitId: string) => {
+    const url = `${window.location.origin}${window.location.pathname}#results/look/${outfitId}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: `Look ${lookIndex}`, url });
+        await navigator.share({ title: 'Check out this look', url });
         return;
       } catch { /* user cancelled or not supported */ }
     }
@@ -261,14 +261,14 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   useEffect(() => {
     if (sortedOutfits.length === 0) return;
     const hash = window.location.hash.replace('#', '');
-    const match = hash.match(/^results\/look\/(\d+)$/);
+    const match = hash.match(/^results\/look\/(.+)$/);
     if (!match) return;
-    const lookIndex = parseInt(match[1], 10);
-    const outfitId = sortedOutfits[lookIndex - 1]?.id;
-    if (!outfitId) return;
+    const targetId = match[1];
+    const exists = sortedOutfits.some(o => o.id === targetId);
+    if (!exists) return;
 
     const timer = setTimeout(() => {
-      const el = outfitRefs.current.get(outfitId);
+      const el = outfitRefs.current.get(targetId);
       if (el) {
         const scrollContainer = containerRef.current?.querySelector('.overflow-y-auto');
         if (scrollContainer) {
@@ -671,7 +671,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                         {isSaved ? 'Saved' : 'Save This Look'}
                       </button>
                       <button
-                        onClick={() => handleShare(outfit.id, index + 1)}
+                        onClick={() => handleShare(outfit.id)}
                         className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-black transition-colors tracking-wider uppercase"
                       >
                         {copiedOutfitId === outfit.id ? (
