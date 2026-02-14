@@ -3,13 +3,60 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const PIXIAN_AUTH =
-  "Basic cHhyaWd5aXh2cjR4OTNnOnRlbXBmaXNma244Y2t1ZjBlZDg0OWg2YnF2MjZwcDcwc29icjVqYWhydXV1ajlhMjk4Y2Q=";
+function isAllowedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const h = parsed.hostname;
+    if (
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h.startsWith("10.") ||
+      h.startsWith("192.168.") ||
+      h.startsWith("172.") ||
+      h === "169.254.169.254" ||
+      h === "[::1]" ||
+      h.endsWith(".internal")
+    )
+      return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyAdmin(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return null;
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data } = await adminClient
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return data ? user : null;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -17,6 +64,17 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const { imageUrl, productId } = await req.json();
 
     if (!imageUrl) {
@@ -24,6 +82,27 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "imageUrl is required" }),
         {
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!isAllowedUrl(imageUrl)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid image URL" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const pixianAuth = Deno.env.get("PIXIAN_API_KEY");
+    if (!pixianAuth) {
+      return new Response(
+        JSON.stringify({ error: "Background removal service not configured" }),
+        {
+          status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -37,18 +116,14 @@ Deno.serve(async (req: Request) => {
       "https://api.pixian.ai/api/v2/remove-background",
       {
         method: "POST",
-        headers: { Authorization: PIXIAN_AUTH },
+        headers: { Authorization: `Basic ${pixianAuth}` },
         body: formData,
       }
     );
 
     if (!pixianResponse.ok) {
-      const errorText = await pixianResponse.text();
       return new Response(
-        JSON.stringify({
-          error: "Background removal failed",
-          details: errorText,
-        }),
+        JSON.stringify({ error: "Background removal failed" }),
         {
           status: pixianResponse.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -112,11 +187,9 @@ Deno.serve(async (req: Request) => {
       }
     );
   } catch (error) {
+    console.error("remove-bg error:", error);
     return new Response(
-      JSON.stringify({
-        error: "Internal server error",
-        message: error instanceof Error ? error.message : "Unknown error",
-      }),
+      JSON.stringify({ error: "Internal server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

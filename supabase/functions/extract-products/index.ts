@@ -8,6 +8,56 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+function isAllowedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const h = parsed.hostname;
+    if (
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h.startsWith("10.") ||
+      h.startsWith("192.168.") ||
+      h.startsWith("172.") ||
+      h === "169.254.169.254" ||
+      h === "[::1]" ||
+      h.endsWith(".internal")
+    )
+      return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyAdmin(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return null;
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data } = await adminClient
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return data ? user : null;
+}
+
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 8192;
@@ -23,7 +73,7 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 async function fetchImageAsBase64(url: string): Promise<string> {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.statusText}`);
+    throw new Error("Failed to fetch image");
   }
   const buffer = await response.arrayBuffer();
   return uint8ArrayToBase64(new Uint8Array(buffer));
@@ -59,8 +109,7 @@ async function callGemini(
   );
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    throw new Error("Gemini API request failed");
   }
 
   return response.json();
@@ -94,8 +143,7 @@ async function callGeminiImageGen(
   );
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini Image API error: ${response.status} - ${errorText}`);
+    throw new Error("Gemini Image API request failed");
   }
 
   return response.json();
@@ -107,13 +155,38 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) throw new Error("GEMINI_API_KEY not found");
+    if (!geminiApiKey) {
+      return new Response(
+        JSON.stringify({ error: "AI service not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error("Supabase credentials not found");
+      return new Response(
+        JSON.stringify({ error: "Storage service not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const body = await req.json();
@@ -122,7 +195,20 @@ Deno.serve(async (req: Request) => {
     if (!imageUrl) {
       return new Response(
         JSON.stringify({ error: "imageUrl is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!isAllowedUrl(imageUrl)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid image URL" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
@@ -151,13 +237,18 @@ JSON 배열 형식으로 답변해주세요:
 - 각 카테고리당 하나만 (가장 눈에 띄는 것)
 - JSON만 반환, 다른 텍스트 없이`;
 
-      const result = await callGemini(geminiApiKey, detectPrompt, imageBase64, mimeType);
+      const result = await callGemini(
+        geminiApiKey,
+        detectPrompt,
+        imageBase64,
+        mimeType
+      );
 
       const textPart = result.candidates?.[0]?.content?.parts?.find(
         (p: Record<string, unknown>) => p.text
       );
       if (!textPart?.text) {
-        throw new Error("No detection result from Gemini");
+        throw new Error("No detection result");
       }
 
       const cleanedText = textPart.text
@@ -167,18 +258,23 @@ JSON 배열 형식으로 답변해주세요:
 
       const items = JSON.parse(cleanedText);
 
-      return new Response(
-        JSON.stringify({ success: true, items }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: true, items }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (mode === "extract") {
       const { slot, label } = body;
       if (!slot || !label) {
         return new Response(
-          JSON.stringify({ error: "slot and label are required for extract mode" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            error: "slot and label are required for extract mode",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
         );
       }
 
@@ -192,7 +288,10 @@ JSON 배열 형식으로 답변해주세요:
         accessory: "액세서리",
       };
 
-      const extractPrompt = `이 모델 착용 사진에서 "${label}" (${slotNames[slot] || slot})만 추출하여 깨끗한 제품 단독 이미지로 변환해주세요.
+      const safeLabel = label.substring(0, 100);
+      const safeSlotName = slotNames[slot] || slot.substring(0, 50);
+
+      const extractPrompt = `이 모델 착용 사진에서 "${safeLabel}" (${safeSlotName})만 추출하여 깨끗한 제품 단독 이미지로 변환해주세요.
 
 요구사항:
 - 모델의 신체를 완전히 제거하고 해당 의류/제품만 남겨주세요
@@ -201,7 +300,7 @@ JSON 배열 형식으로 답변해주세요:
 - 제품의 실제 형태와 디테일을 최대한 보존
 - 플랫레이(평면 배치) 스타일로 자연스럽게 펼쳐놓은 형태
 - 그림자는 최소한으로, 고화질
-- 다른 아이템은 절대 포함하지 마세요, 오직 "${label}"만`;
+- 다른 아이템은 절대 포함하지 마세요, 오직 "${safeLabel}"만`;
 
       const imageResult = await callGeminiImageGen(
         geminiApiKey,
@@ -211,8 +310,7 @@ JSON 배열 형식으로 답변해주세요:
       );
 
       if (!imageResult.candidates?.[0]?.content?.parts) {
-        const reason = imageResult.candidates?.[0]?.finishReason;
-        throw new Error(`No content generated. Reason: ${reason || "unknown"}`);
+        throw new Error("No content generated");
       }
 
       let generatedImageData = null;
@@ -228,13 +326,7 @@ JSON 배열 형식으로 답변해주세요:
       }
 
       if (!generatedImageData) {
-        const textParts = imageResult.candidates[0].content.parts
-          .filter((p: Record<string, unknown>) => p.text)
-          .map((p: Record<string, unknown>) => p.text)
-          .join(" ");
-        throw new Error(
-          `No image data in response. Text: ${(textParts as string).substring(0, 200)}`
-        );
+        throw new Error("No image data in response");
       }
 
       const imageBytes = Uint8Array.from(atob(generatedImageData), (c) =>
@@ -253,7 +345,7 @@ JSON 배열 형식으로 답변해주세요:
         });
 
       if (uploadError) {
-        throw new Error(`Failed to upload: ${uploadError.message}`);
+        throw new Error("Failed to upload image");
       }
 
       const { data: urlData } = supabase.storage
@@ -267,21 +359,28 @@ JSON 배열 형식으로 답변해주세요:
           slot,
           label,
         }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
     return new Response(
       JSON.stringify({ error: "Invalid mode. Use 'detect' or 'extract'" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   } catch (error) {
     console.error("Extract products error:", error);
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error",
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: "Internal server error" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   }
 });

@@ -1,18 +1,13 @@
 import { useState } from 'react';
 import { AlertCircle, CheckCircle, Loader2, Key } from 'lucide-react';
+import { supabase } from '../utils/supabase';
 
 interface TestResult {
   success: boolean;
   message?: string;
   error?: string;
-  details?: string;
-  apiKeyPreview?: string;
   testResponse?: string;
   model?: string;
-  billingStatus?: string;
-  instructions?: string[];
-  status?: number;
-  fullResponse?: any;
 }
 
 export default function GeminiKeyTest() {
@@ -24,23 +19,27 @@ export default function GeminiKeyTest() {
     setResult(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setResult({ success: false, error: '관리자 로그인이 필요합니다.' });
+        return;
+      }
+
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const response = await fetch(`${supabaseUrl}/functions/v1/test-gemini-key`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${anonKey}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
       });
 
       const data = await response.json();
       setResult(data);
-    } catch (error) {
+    } catch {
       setResult({
         success: false,
         error: '테스트 실행 실패',
-        details: error instanceof Error ? error.message : 'Unknown error',
       });
     } finally {
       setTesting(false);
@@ -60,7 +59,6 @@ export default function GeminiKeyTest() {
 
           <p className="text-gray-600 mb-6">
             Supabase Edge Functions에 설정된 GEMINI_API_KEY가 정상적으로 작동하는지 확인합니다.
-            결제 상태, API 유효성, 모델 접근 권한 등을 검사합니다.
           </p>
 
           <button
@@ -97,7 +95,7 @@ export default function GeminiKeyTest() {
                   <h3 className={`text-xl font-bold mb-2 ${
                     result.success ? 'text-green-900' : 'text-red-900'
                   }`}>
-                    {result.success ? '✓ 성공' : '✗ 실패'}
+                    {result.success ? 'Success' : 'Failed'}
                   </h3>
                   <p className={`text-sm ${
                     result.success ? 'text-green-800' : 'text-red-800'
@@ -106,15 +104,6 @@ export default function GeminiKeyTest() {
                   </p>
                 </div>
               </div>
-
-              {result.apiKeyPreview && (
-                <div className="mb-4 p-3 bg-white rounded border">
-                  <p className="text-xs text-gray-500 mb-1">API Key (preview)</p>
-                  <code className="text-sm font-mono text-gray-800">
-                    {result.apiKeyPreview}
-                  </code>
-                </div>
-              )}
 
               {result.model && (
                 <div className="mb-4 p-3 bg-white rounded border">
@@ -125,74 +114,16 @@ export default function GeminiKeyTest() {
                 </div>
               )}
 
-              {result.billingStatus && (
-                <div className="mb-4 p-3 bg-white rounded border">
-                  <p className="text-xs text-gray-500 mb-1">결제 상태</p>
-                  <code className="text-sm font-mono text-green-700">
-                    {result.billingStatus}
-                  </code>
-                </div>
-              )}
-
               {result.testResponse && (
                 <div className="mb-4 p-3 bg-white rounded border">
-                  <p className="text-xs text-gray-500 mb-1">모델 응답</p>
+                  <p className="text-xs text-gray-500 mb-1">Model Response</p>
                   <p className="text-sm text-gray-700">
                     {result.testResponse}
                   </p>
                 </div>
               )}
-
-              {result.details && (
-                <div className="mb-4 p-3 bg-red-100 rounded border border-red-300">
-                  <p className="text-xs text-red-500 mb-1">오류 상세</p>
-                  <code className="text-xs font-mono text-red-800 whitespace-pre-wrap">
-                    {result.details}
-                  </code>
-                </div>
-              )}
-
-              {result.instructions && result.instructions.length > 0 && (
-                <div className="mt-4 p-4 bg-yellow-50 rounded border border-yellow-300">
-                  <p className="text-sm font-semibold text-yellow-900 mb-2">
-                    해결 방법:
-                  </p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    {result.instructions.map((instruction, idx) => (
-                      <li key={idx} className="text-sm text-yellow-800">
-                        {instruction}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-
-              {result.status && (
-                <div className="mt-4 text-xs text-gray-500">
-                  HTTP Status: {result.status}
-                </div>
-              )}
             </div>
           )}
-
-          <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h4 className="font-semibold text-blue-900 mb-2">설정 방법:</h4>
-            <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
-              <li>Supabase Dashboard 접속</li>
-              <li>Edge Functions → Secrets 탭 이동</li>
-              <li>새 Secret 추가: GEMINI_API_KEY = your_api_key</li>
-              <li>API Key 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600">https://aistudio.google.com/apikey</a></li>
-            </ol>
-          </div>
-
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h4 className="font-semibold text-gray-900 mb-2">Free Tier 제한:</h4>
-            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-              <li>분당 15 요청</li>
-              <li>일일 1,500 요청</li>
-              <li>더 높은 제한이 필요하면 결제 설정 필요</li>
-            </ul>
-          </div>
         </div>
       </div>
     </div>

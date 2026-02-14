@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
@@ -35,8 +35,8 @@ Deno.serve(async (req: Request) => {
     const {
       data: { user: caller },
     } = await anonClient.auth.getUser();
-    if (!caller || !caller.email?.endsWith("@admin.com")) {
-      return jsonResponse({ error: "Forbidden" }, 403);
+    if (!caller) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
     const adminClient = createClient(
@@ -44,12 +44,25 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    const { data: adminRecord } = await adminClient
+      .from("admin_users")
+      .select("user_id")
+      .eq("user_id", caller.id)
+      .maybeSingle();
+
+    if (!adminRecord) {
+      return jsonResponse({ error: "Forbidden" }, 403);
+    }
+
     const url = new URL(req.url);
     const action = url.searchParams.get("action") || "list";
 
     if (action === "list") {
       const page = parseInt(url.searchParams.get("page") || "1");
-      const perPage = parseInt(url.searchParams.get("per_page") || "1000");
+      const perPage = Math.min(
+        parseInt(url.searchParams.get("per_page") || "100"),
+        500
+      );
       const search = url.searchParams.get("search") || "";
 
       const {
@@ -61,7 +74,7 @@ Deno.serve(async (req: Request) => {
       });
 
       if (error) {
-        return jsonResponse({ error: error.message }, 500);
+        return jsonResponse({ error: "Failed to list users" }, 500);
       }
 
       let filtered = users.filter(
@@ -119,7 +132,10 @@ Deno.serve(async (req: Request) => {
     if (action === "stats") {
       const {
         data: { users: allUsers },
-      } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      } = await adminClient.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
 
       const regularUsers = (allUsers || []).filter(
         (u) => !u.email?.endsWith("@admin.com")
@@ -203,10 +219,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return jsonResponse({ error: "Unknown action" }, 400);
-  } catch (err) {
-    return jsonResponse(
-      { error: err instanceof Error ? err.message : "Internal error" },
-      500
-    );
+  } catch {
+    return jsonResponse({ error: "Internal server error" }, 500);
   }
 });

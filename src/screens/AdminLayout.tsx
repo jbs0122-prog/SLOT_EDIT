@@ -11,6 +11,7 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children, currentPage }: AdminLayoutProps) {
   const [session, setSession] = useState<Session | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const menuItems = [
@@ -21,13 +22,31 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
   ];
 
   useEffect(() => {
+    async function checkAdmin(s: Session | null) {
+      if (!s?.user) {
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('admin_users')
+        .select('user_id')
+        .eq('user_id', s.user.id)
+        .maybeSingle();
+
+      setIsAdmin(!!data);
+      setLoading(false);
+    }
+
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      setLoading(false);
+      checkAdmin(s);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
+      checkAdmin(s);
     });
 
     return () => subscription.unsubscribe();
@@ -36,6 +55,7 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setIsAdmin(false);
   };
 
   if (loading) {
@@ -46,7 +66,7 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
     );
   }
 
-  if (!session) {
+  if (!session || !isAdmin) {
     return <AdminLogin onLoginSuccess={() => {}} />;
   }
 

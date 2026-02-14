@@ -1,14 +1,66 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+function isAllowedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const h = parsed.hostname;
+    if (
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h.startsWith("10.") ||
+      h.startsWith("192.168.") ||
+      h.startsWith("172.") ||
+      h === "169.254.169.254" ||
+      h === "[::1]" ||
+      h.endsWith(".internal")
+    )
+      return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyAdmin(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return null;
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data } = await adminClient
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return data ? user : null;
+}
 
 interface AnalysisRequest {
   imageUrl: string;
-  analysisType?: 'product' | 'outfit' | 'style';
+  analysisType?: "product" | "outfit" | "style";
 }
 
 interface ProductAnalysis {
@@ -37,16 +89,44 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not configured");
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    const { imageUrl, analysisType = 'product' }: AnalysisRequest = await req.json();
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "AI service not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const { imageUrl, analysisType = "product" }: AnalysisRequest =
+      await req.json();
 
     if (!imageUrl) {
       return new Response(
         JSON.stringify({ error: "imageUrl is required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!isAllowedUrl(imageUrl)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid image URL" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -64,8 +144,9 @@ Deno.serve(async (req: Request) => {
       String.fromCharCode(...new Uint8Array(imageBuffer))
     );
 
-    const prompt = analysisType === 'product'
-      ? `Analyze this fashion product image and provide detailed information in JSON format.
+    const prompt =
+      analysisType === "product"
+        ? `Analyze this fashion product image and provide detailed information in JSON format.
 
 Return ONLY valid JSON (no markdown, no code blocks) with these exact fields:
 {
@@ -86,15 +167,13 @@ Return ONLY valid JSON (no markdown, no code blocks) with these exact fields:
 }
 
 IMPORTANT: Be precise with color_family. Use specific values like burgundy instead of red for dark reds, olive instead of green for muted greens, cream instead of white for off-whites, charcoal instead of grey for dark greys, denim for denim blue, camel/tan for light browns.`
-      : `Analyze this outfit combination and provide styling insights in Korean.`;
+        : `Analyze this outfit combination and provide styling insights in Korean.`;
 
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
             {
@@ -120,25 +199,26 @@ IMPORTANT: Be precise with color_family. Use specific values like burgundy inste
     );
 
     if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error("Gemini API error:", errorText);
-      throw new Error(`Gemini API error: ${geminiResponse.status}`);
+      throw new Error("AI analysis failed");
     }
 
     const geminiData = await geminiResponse.json();
-    const analysisText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    const analysisText =
+      geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!analysisText) {
-      throw new Error("No analysis text received from Gemini");
+      throw new Error("No analysis result");
     }
 
     let analysis: ProductAnalysis;
 
     try {
-      const cleanedText = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const cleanedText = analysisText
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
       analysis = JSON.parse(cleanedText);
-    } catch (parseError) {
-      console.error("Failed to parse Gemini response:", analysisText);
+    } catch {
       throw new Error("Failed to parse analysis result");
     }
 
@@ -149,25 +229,16 @@ IMPORTANT: Be precise with color_family. Use specific values like burgundy inste
         model: "gemini-2.5-flash-image",
       }),
       {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-
   } catch (error) {
     console.error("Error in analyze-fashion-image:", error);
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error",
-      }),
+      JSON.stringify({ error: "Failed to analyze image" }),
       {
         status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }

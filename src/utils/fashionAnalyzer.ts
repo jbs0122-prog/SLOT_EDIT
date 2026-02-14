@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 export interface ProductAnalysis {
   category: string;
   sub_category: string;
@@ -19,16 +21,19 @@ export async function analyzeFashionImage(
   imageUrl: string,
   analysisType: 'product' | 'outfit' | 'style' = 'product'
 ): Promise<ProductAnalysis> {
-  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-fashion-image`;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Admin authentication required');
+  }
 
-  const headers = {
-    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-    'Content-Type': 'application/json',
-  };
+  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-fashion-image`;
 
   const response = await fetch(apiUrl, {
     method: 'POST',
-    headers,
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ imageUrl, analysisType }),
   });
 

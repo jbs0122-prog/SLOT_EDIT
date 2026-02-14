@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 export interface DetectedItem {
   slot: string;
   label: string;
@@ -13,12 +15,19 @@ export interface ExtractedProduct {
 
 const API_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-products`;
 
-const headers = {
-  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-  'Content-Type': 'application/json',
-};
+async function getAdminHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Admin authentication required');
+  }
+  return {
+    'Authorization': `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  };
+}
 
 export async function detectItemsInPhoto(imageUrl: string): Promise<DetectedItem[]> {
+  const headers = await getAdminHeaders();
   const response = await fetch(API_URL, {
     method: 'POST',
     headers,
@@ -40,6 +49,7 @@ export async function extractProductImage(
   slot: string,
   label: string
 ): Promise<ExtractedProduct> {
+  const headers = await getAdminHeaders();
   const response = await fetch(API_URL, {
     method: 'POST',
     headers,

@@ -2,10 +2,32 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+function isAllowedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const h = parsed.hostname;
+    if (
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h.startsWith("10.") ||
+      h.startsWith("192.168.") ||
+      h.startsWith("172.") ||
+      h === "169.254.169.254" ||
+      h === "[::1]" ||
+      h.endsWith(".internal")
+    )
+      return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 interface OutfitItem {
   slot_type: string;
@@ -36,10 +58,13 @@ async function fetchImageAsBase64(
   url: string
 ): Promise<{ base64: string; mimeType: string } | null> {
   try {
+    if (!isAllowedUrl(url)) return null;
     const response = await fetch(url);
     if (!response.ok) return null;
 
     const contentType = response.headers.get("content-type") || "image/png";
+    if (!contentType.startsWith("image/")) return null;
+
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
@@ -50,10 +75,13 @@ async function fetchImageAsBase64(
     const base64 = btoa(binary);
 
     return { base64, mimeType: contentType.split(";")[0] };
-  } catch (err) {
-    console.error("Failed to fetch image:", err);
+  } catch {
     return null;
   }
+}
+
+function sanitizeText(str: string, maxLen = 100): string {
+  return str.replace(/[<>"'&]/g, "").substring(0, maxLen);
 }
 
 Deno.serve(async (req: Request) => {
@@ -67,7 +95,13 @@ Deno.serve(async (req: Request) => {
   try {
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({ error: "AI service not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const {
@@ -88,22 +122,29 @@ Deno.serve(async (req: Request) => {
     }
 
     const itemDescriptions = items
+      .slice(0, 10)
       .map(
         (item) =>
-          `- ${item.slot_type}: ${item.brand ? item.brand + " " : ""}${item.name} (${item.sub_category || item.category}, ${item.color}, ${item.material || "unknown material"}, ${item.pattern || "solid"}, ${item.silhouette || "regular"} fit)`
+          `- ${sanitizeText(item.slot_type, 30)}: ${sanitizeText(item.brand || "", 50)} ${sanitizeText(item.name, 50)} (${sanitizeText(item.sub_category || item.category, 30)}, ${sanitizeText(item.color, 30)}, ${sanitizeText(item.material || "unknown material", 30)}, ${sanitizeText(item.pattern || "solid", 20)}, ${sanitizeText(item.silhouette || "regular", 20)} fit)`
       )
       .join("\n");
 
     const hasImage = !!flatlayImageUrl;
 
+    const safeGender = sanitizeText(gender || "", 20);
+    const safeBodyType = sanitizeText(bodyType || "", 20);
+    const safeVibe = sanitizeText(vibe || "", 50);
+    const safeSeason = season ? sanitizeText(season, 20) : "";
+    const safeScore = Math.min(Math.max(Math.round(matchScore || 0), 0), 100);
+
     const prompt = `You are a fashion styling expert. Analyze this outfit combination and write a concise, insightful styling commentary in English.
 
 ${hasImage ? "A flatlay image of the outfit is attached. Use the visual details (actual colors, textures, proportions, layering) to enhance your analysis beyond the metadata alone.\n" : ""}Outfit Context:
-- Gender: ${gender}
-- Body Type: ${bodyType}
-- Style Vibe: ${vibe.replace(/_/g, " ")}
-- Match Score: ${matchScore}/100
-${season ? `- Season: ${season}` : ""}
+- Gender: ${safeGender}
+- Body Type: ${safeBodyType}
+- Style Vibe: ${safeVibe.replace(/_/g, " ")}
+- Match Score: ${safeScore}/100
+${safeSeason ? `- Season: ${safeSeason}` : ""}
 
 Items:
 ${itemDescriptions}
@@ -151,9 +192,7 @@ No bullet points, no lists. Flowing prose only. Do NOT start with "This outfit".
     );
 
     if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error("Gemini API error:", errorText);
-      throw new Error(`Gemini API error: ${geminiResponse.status}`);
+      throw new Error("AI insight generation failed");
     }
 
     const geminiData = await geminiResponse.json();
@@ -161,7 +200,7 @@ No bullet points, no lists. Flowing prose only. Do NOT start with "This outfit".
       geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
     if (!insightText) {
-      throw new Error("No insight text received from Gemini");
+      throw new Error("No insight generated");
     }
 
     return new Response(
@@ -173,9 +212,7 @@ No bullet points, no lists. Flowing prose only. Do NOT start with "This outfit".
   } catch (error) {
     console.error("Error in generate-outfit-insight:", error);
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error",
-      }),
+      JSON.stringify({ error: "Failed to generate insight" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
