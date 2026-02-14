@@ -296,10 +296,15 @@ export default function RankingPage({ gender, onRequestLogin }: RankingPageProps
               />
             </div>
             <div className="w-full md:w-[500px] px-6 md:px-0 flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl md:text-3xl font-bold text-black">#{index + 1}</span>
-                  <span className="text-xs md:text-xl font-bold tracking-widest text-black uppercase">AI INSIGHT</span>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl md:text-3xl font-bold text-black">#{index + 1}</span>
+                    <span className="text-xs md:text-xl font-bold tracking-widest text-black uppercase">AI INSIGHT</span>
+                  </div>
+                  <span className="text-[10px] md:text-xs text-gray-400 font-light tracking-wider uppercase ml-1">
+                    {outfit.gender} · {(outfit.body_type || '').replace(/_/g, ' ')} · {(outfit.vibe || '').replace(/_/g, ' ')}
+                  </span>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <button
