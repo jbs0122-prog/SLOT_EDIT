@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Outfit, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { fetchRankingOutfits } from '../utils/outfitService';
 import ImageSlider from './ImageSlider';
-import { Bookmark } from 'lucide-react';
+import { Bookmark, Share2, Check } from 'lucide-react';
 import { useAuth } from '../utils/AuthContext';
 
 interface RankingPageProps {
@@ -18,6 +18,8 @@ interface FeedbackCounts {
     userFeedback: 'like' | 'dislike' | null;
   };
 }
+
+const MAX_RANKING = 30;
 
 function getOrCreateSessionId(): string {
   let sessionId = localStorage.getItem('session_id');
@@ -35,6 +37,8 @@ export default function RankingPage({ gender, onRequestLogin }: RankingPageProps
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
   const [outfitProducts, setOutfitProducts] = useState<{ [id: string]: Product[] }>({});
   const [savedOutfitIds, setSavedOutfitIds] = useState<Set<string>>(new Set());
+  const [copiedOutfitId, setCopiedOutfitId] = useState<string | null>(null);
+  const [outfitDescriptions, setOutfitDescriptions] = useState<{ [id: string]: string }>({});
 
   useEffect(() => {
     loadRanking();
@@ -51,10 +55,19 @@ export default function RankingPage({ gender, onRequestLogin }: RankingPageProps
     if (user) loadSavedOutfits();
   }, [user]);
 
+  useEffect(() => {
+    const descriptions: { [id: string]: string } = {};
+    outfits.forEach(outfit => {
+      const products = outfitProducts[outfit.id] || [];
+      if (products.length > 0) descriptions[outfit.id] = generateOutfitDescription(products, outfit);
+    });
+    setOutfitDescriptions(descriptions);
+  }, [outfitProducts, outfits]);
+
   const loadRanking = async () => {
     setLoading(true);
     const data = await fetchRankingOutfits(gender);
-    setOutfits(data);
+    setOutfits(data.slice(0, MAX_RANKING));
     setLoading(false);
   };
 
@@ -155,6 +168,21 @@ export default function RankingPage({ gender, onRequestLogin }: RankingPageProps
     }
   };
 
+  const handleShare = useCallback(async (outfitId: string) => {
+    const url = `${window.location.origin}${window.location.pathname}#results/look/${outfitId}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Check out this look', url });
+        return;
+      } catch { /* user cancelled or not supported */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedOutfitId(outfitId);
+      setTimeout(() => setCopiedOutfitId(null), 2000);
+    } catch { /* clipboard not available */ }
+  }, []);
+
   const handleFeedback = async (outfitId: string, feedbackType: 'like' | 'dislike') => {
     const sessionId = getOrCreateSessionId();
     const current = feedbackCounts[outfitId]?.userFeedback;
@@ -185,6 +213,28 @@ export default function RankingPage({ gender, onRequestLogin }: RankingPageProps
     nobg_image_url: p.nobg_image_url || '',
     created_at: p.created_at, updated_at: p.updated_at,
   });
+
+  const generateOutfitDescription = (products: Product[], outfit: Outfit): string => {
+    if (products.length === 0) return '';
+    const slotOrder: Record<string, number> = { outer: 0, mid: 1, top: 2, bottom: 3, shoes: 4, bag: 5, accessory: 6 };
+    const sorted = [...products].sort((a, b) => (slotOrder[a.category] ?? 99) - (slotOrder[b.category] ?? 99));
+    const brandSet = new Set(sorted.map(p => p.brand).filter(Boolean));
+    const brands = Array.from(brandSet);
+    const vibeLabel = (outfit.vibe || '').replace(/_/g, ' ').toLowerCase();
+    const itemDescriptions = sorted.map(p => `${p.brand ? p.brand + ' ' : ''}${p.name}`);
+
+    let desc = vibeLabel ? `A ${vibeLabel} look` : 'A curated look';
+    if (brands.length > 0) {
+      desc += ` featuring ${brands.length <= 2 ? brands.join(' and ') : `${brands.slice(0, 2).join(', ')} and more`}`;
+    }
+    desc += '. ';
+    if (itemDescriptions.length <= 3) {
+      desc += `Styled with ${itemDescriptions.join(', ')}.`;
+    } else {
+      desc += `Styled with ${itemDescriptions.slice(0, 3).join(', ')}, and ${itemDescriptions.length - 3} more piece${itemDescriptions.length - 3 > 1 ? 's' : ''}.`;
+    }
+    return desc;
+  };
 
   const getTotalPrice = (outfitId: string): number => {
     return (outfitProducts[outfitId] || []).reduce((s, p) => s + (p.price || 0), 0);
@@ -230,8 +280,8 @@ export default function RankingPage({ gender, onRequestLogin }: RankingPageProps
         const totalPrice = getTotalPrice(outfit.id);
 
         return (
-          <div key={outfit.id} className="mb-10 flex flex-col md:flex-row md:items-start md:justify-center md:gap-8 md:px-12">
-            <div className="flex-shrink-0 w-full md:w-[500px] mb-4 md:mb-0 relative">
+          <div key={outfit.id} className="mb-12 flex flex-col md:flex-row md:items-start md:justify-center md:gap-8 md:px-12">
+            <div className="flex-shrink-0 w-full md:w-[500px] mb-6 md:mb-0 relative">
               <ImageSlider
                 images={images}
                 alt={`Rank ${index + 1}`}
@@ -242,32 +292,56 @@ export default function RankingPage({ gender, onRequestLogin }: RankingPageProps
                 dislikeCount={feedback.dislikes}
                 userFeedback={feedback.userFeedback}
                 outfit={outfit}
-                showOutfitInfo
                 products={outfitProducts[outfit.id] || []}
               />
             </div>
-            <div className="w-full md:w-[500px] px-6 md:px-0">
-              <div className="flex items-center justify-between mb-3">
+            <div className="w-full md:w-[500px] px-6 md:px-0 flex flex-col">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl md:text-3xl font-bold text-black">#{index + 1}</span>
-                  <div className="text-xs text-gray-500 font-light uppercase tracking-wider">
-                    {outfit.gender} · {(outfit.body_type || '').replace(/_/g, ' ')} · {(outfit.vibe || '').replace(/_/g, ' ')}
-                  </div>
+                  <span className="text-xs md:text-xl font-bold tracking-widest text-black uppercase">AI INSIGHT</span>
                 </div>
-                <button
-                  onClick={() => handleSave(outfit.id)}
-                  className={`p-2 transition-all ${isSaved ? 'text-black' : 'text-gray-300 hover:text-gray-600'}`}
-                  title={isSaved ? 'Remove from saved' : 'Save outfit'}
-                >
-                  <Bookmark size={20} fill={isSaved ? 'currentColor' : 'none'} />
-                </button>
+                <div className="flex flex-col items-end gap-2">
+                  <button
+                    onClick={() => handleSave(outfit.id)}
+                    className={`flex items-center gap-2 px-4 py-2 border text-xs md:text-sm tracking-wider uppercase transition-all ${
+                      isSaved
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-black border-gray-300 hover:border-black'
+                    }`}
+                  >
+                    <Bookmark size={14} fill={isSaved ? 'currentColor' : 'none'} />
+                    {isSaved ? 'Saved' : 'Save This Look'}
+                  </button>
+                  <button
+                    onClick={() => handleShare(outfit.id)}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-black transition-colors tracking-wider uppercase"
+                  >
+                    {copiedOutfitId === outfit.id ? (
+                      <>
+                        <Check size={12} />
+                        <span>Link Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Share2 size={12} />
+                        <span>Share This Look</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
               {totalPrice > 0 && (
-                <div className="mb-2">
-                  <span className="text-xs uppercase tracking-wider text-gray-500">Total Price</span>
-                  <p className="text-lg font-semibold text-black">${totalPrice.toFixed(2)}</p>
+                <div className="mb-3">
+                  <span className="text-xs md:text-sm uppercase tracking-wider text-gray-500">Total Price</span>
+                  <p className="text-lg md:text-2xl font-semibold text-black">${totalPrice.toFixed(2)}</p>
                 </div>
               )}
+              <p className="text-sm md:text-base leading-relaxed font-light text-gray-800">
+                {(outfit.insight_text && !outfit.insight_text.startsWith('매칭 점수'))
+                  ? outfit.insight_text
+                  : outfitDescriptions[outfit.id] || outfit.insight_text}
+              </p>
             </div>
           </div>
         );
