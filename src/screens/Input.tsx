@@ -257,8 +257,7 @@ export default function Input({ onGenerate }: InputProps) {
             DON'T SEARCH—SELECT.
           </h1>
           <p className="text-center text-2xl md:text-3xl font-bold text-black max-w-2xl mx-auto leading-snug">
-            Your context, refined into a single edit.<br />
-            Pick a slot—get one clean, considered look.
+            slot edit uses AI to curate personalized outfits based on NYC weather, your style, and body type
           </p>
         </div>
 
