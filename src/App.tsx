@@ -290,7 +290,7 @@ function App() {
   };
 
   const handleBack = () => {
-    window.history.back();
+    window.location.hash = '';
   };
 
   const handleTabChange = (tab: NavTab) => {
