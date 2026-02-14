@@ -92,7 +92,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
       const renderItems = validItems.map(item => ({
         slot_type: item.slot_type,
         product_id: item.product_id,
-        image_url: item.product!.image_url,
+        image_url: item.product!.nobg_image_url || item.product!.image_url,
         price: item.product!.price,
         name: item.product!.name,
       }));
