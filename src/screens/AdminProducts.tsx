@@ -6,7 +6,7 @@ import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
-import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users, Key, Scissors } from 'lucide-react';
+import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users, Key, Scissors, CheckSquare, Square, XSquare } from 'lucide-react';
 
 type ViewMode = 'products' | 'outfits';
 
@@ -33,6 +33,7 @@ export default function AdminProducts() {
   const [outfitFilterBodyType, setOutfitFilterBodyType] = useState('');
   const [outfitFilterVibe, setOutfitFilterVibe] = useState('');
   const [productUsageCounts, setProductUsageCounts] = useState<Record<string, number>>({});
+  const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadProducts();
@@ -203,6 +204,47 @@ export default function AdminProducts() {
     } catch (error) {
       console.error('Failed to delete outfit:', error);
       alert('코디 삭제 실패: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleOutfitSelection = (outfitId: string) => {
+    setSelectedOutfitIds(prev => {
+      const next = new Set(prev);
+      if (next.has(outfitId)) next.delete(outfitId);
+      else next.add(outfitId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllOutfits = () => {
+    if (selectedOutfitIds.size === filteredOutfits.length) {
+      setSelectedOutfitIds(new Set());
+    } else {
+      setSelectedOutfitIds(new Set(filteredOutfits.map(o => o.id)));
+    }
+  };
+
+  const handleBulkDeleteOutfits = async () => {
+    const count = selectedOutfitIds.size;
+    if (count === 0) return;
+    if (!confirm(`선택한 ${count}개의 코디를 삭제하시겠습니까? 연결된 제품 정보도 함께 삭제됩니다.`)) return;
+
+    setLoading(true);
+    try {
+      const ids = Array.from(selectedOutfitIds);
+      await supabase.from('outfit_items').delete().in('outfit_id', ids);
+      const { error } = await supabase.from('outfits').delete().in('id', ids);
+      if (error) throw error;
+
+      setSelectedOutfitIds(new Set());
+      await loadOutfits();
+      await loadProductUsageCounts();
+      alert(`${count}개 코디가 삭제되었습니다.`);
+    } catch (error) {
+      console.error('Bulk delete failed:', error);
+      alert('삭제 실패: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -462,12 +504,51 @@ export default function AdminProducts() {
                 </div>
                 <button
                   onClick={() => setShowAutoGenerator(true)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md"
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-cyan-700 shadow-md"
                 >
                   <Sparkles size={18} />
                   자동 생성
                 </button>
               </div>
+              {filteredOutfits.length > 0 && (
+                <div className="mb-4 flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                  <button
+                    onClick={toggleSelectAllOutfits}
+                    className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                  >
+                    {selectedOutfitIds.size === filteredOutfits.length && filteredOutfits.length > 0 ? (
+                      <CheckSquare size={18} className="text-blue-600" />
+                    ) : (
+                      <Square size={18} />
+                    )}
+                    {selectedOutfitIds.size === filteredOutfits.length && filteredOutfits.length > 0
+                      ? '전체 해제'
+                      : '전체 선택'}
+                  </button>
+                  {selectedOutfitIds.size > 0 && (
+                    <>
+                      <span className="text-sm text-gray-500">
+                        {selectedOutfitIds.size}개 선택됨
+                      </span>
+                      <button
+                        onClick={() => setSelectedOutfitIds(new Set())}
+                        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                      >
+                        <XSquare size={16} />
+                        선택 해제
+                      </button>
+                      <div className="flex-1" />
+                      <button
+                        onClick={handleBulkDeleteOutfits}
+                        className="flex items-center gap-2 bg-red-500 text-white px-4 py-1.5 rounded-lg hover:bg-red-600 transition-colors text-sm font-medium shadow-sm"
+                      >
+                        <Trash2 size={16} />
+                        {selectedOutfitIds.size}개 삭제
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
               {filteredOutfits.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   {outfits.length === 0 ? '등록된 코디가 없습니다' : '검색 결과가 없습니다'}
@@ -477,8 +558,22 @@ export default function AdminProducts() {
                   {filteredOutfits.map((outfit) => (
                   <div
                     key={outfit.id}
-                    className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden relative"
+                    className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-all border-2 overflow-hidden relative ${
+                      selectedOutfitIds.has(outfit.id)
+                        ? 'border-blue-500 ring-2 ring-blue-200'
+                        : 'border-gray-200'
+                    }`}
                   >
+                    <button
+                      onClick={() => toggleOutfitSelection(outfit.id)}
+                      className="absolute top-2 left-2 z-10"
+                    >
+                      {selectedOutfitIds.has(outfit.id) ? (
+                        <CheckSquare size={22} className="text-blue-600 drop-shadow-md" />
+                      ) : (
+                        <Square size={22} className="text-white drop-shadow-md" />
+                      )}
+                    </button>
                     <button
                       onClick={() => handleDeleteOutfit(outfit.id)}
                       className="absolute top-2 right-2 z-10 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors shadow-md"
