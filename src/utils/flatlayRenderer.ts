@@ -29,6 +29,20 @@ export interface RenderOptions {
   useProxy?: boolean;
 }
 
+export interface EditorProductData {
+  product_id: string;
+  processedImageUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  slot_type: string;
+  price?: number | null;
+  name?: string;
+  aspectRatio: number;
+}
+
 const DEFAULT_OPTIONS: Required<RenderOptions> = {
   canvasWidth: 1200,
   canvasHeight: 1400,
@@ -515,4 +529,191 @@ export async function generateAndSaveFlatlay(
     cleanImageUrl: cleanUrlData.publicUrl,
     positions,
   };
+}
+
+export async function prepareFlatlayForEditor(
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string; skipBgRemoval?: boolean }>,
+  options: RenderOptions = {},
+  onProgress?: (step: string) => void
+): Promise<EditorProductData[]> {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+
+  onProgress?.('레이아웃 계산 중...');
+  const positions = await calculateLayoutWithImages(
+    items, opts.canvasWidth, opts.canvasHeight, opts.padding, opts.useProxy
+  );
+
+  onProgress?.('배경 제거 중...');
+  const processedUrls = new Map<string, string>();
+  for (const position of positions) {
+    if (!position.skipBgRemoval) {
+      const nobgUrl = await removeWhiteBackgroundViaApi(position.image_url, position.product_id);
+      processedUrls.set(position.product_id, nobgUrl);
+    }
+  }
+
+  onProgress?.('에디터 준비 중...');
+  const editorData: EditorProductData[] = [];
+  for (const position of positions) {
+    const imageUrl = position.skipBgRemoval
+      ? position.image_url
+      : (processedUrls.get(position.product_id) || position.image_url);
+
+    let aspectRatio = position.width / position.height;
+    try {
+      const img = await loadImageWithProxy(imageUrl, opts.useProxy);
+      aspectRatio = img.width / img.height;
+    } catch { /* use calculated ratio */ }
+
+    editorData.push({
+      product_id: position.product_id,
+      processedImageUrl: imageUrl,
+      x: position.x,
+      y: position.y,
+      width: position.width,
+      height: position.height,
+      rotation: position.rotation,
+      slot_type: position.slot_type,
+      price: position.price,
+      name: position.name,
+      aspectRatio,
+    });
+  }
+
+  return editorData;
+}
+
+export async function renderFlatlayFromEditorData(
+  editorData: EditorProductData[],
+  options: RenderOptions = {}
+): Promise<{ imageBlob: Blob; cleanBlob: Blob; positions: ProductPosition[] }> {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+
+  const canvas = document.createElement('canvas');
+  canvas.width = opts.canvasWidth;
+  canvas.height = opts.canvasHeight;
+
+  const ctx = canvas.getContext('2d', { alpha: true });
+  if (!ctx) throw new Error('Canvas context not available');
+
+  if (opts.backgroundColor !== 'transparent') {
+    ctx.fillStyle = opts.backgroundColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  const slotZOrder: Record<string, number> = {
+    outer: 1, top: 2, mid: 3, bottom: 4, shoes: 5, bag: 6, accessory: 7, accessory_2: 8,
+  };
+
+  const sorted = [...editorData].sort(
+    (a, b) => (slotZOrder[a.slot_type] || 99) - (slotZOrder[b.slot_type] || 99)
+  );
+
+  for (const item of sorted) {
+    try {
+      const img = await loadImageWithProxy(item.processedImageUrl, opts.useProxy);
+      ctx.save();
+
+      if (item.rotation) {
+        const cx = item.x + item.width / 2;
+        const cy = item.y + item.height / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate((item.rotation * Math.PI) / 180);
+        ctx.translate(-cx, -cy);
+      }
+
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+      ctx.shadowBlur = 25;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 6;
+
+      ctx.drawImage(img, item.x, item.y, item.width, item.height);
+      ctx.restore();
+    } catch (error) {
+      console.error(`Failed to render ${item.slot_type}:`, error);
+      ctx.fillStyle = '#e5e7eb';
+      ctx.fillRect(item.x, item.y, item.width, item.height);
+    }
+  }
+
+  try {
+    const logoImg = await loadImageWithProxy('/logo(white).png', false);
+    const logoWidth = 616;
+    const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
+    const logoX = (canvas.width - logoWidth) / 2;
+    const logoY = (canvas.height - logoHeight) / 2;
+    ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
+  } catch { /* skip logo */ }
+
+  const positions: ProductPosition[] = sorted.map(item => ({
+    product_id: item.product_id,
+    image_url: item.processedImageUrl,
+    x: ((item.x + item.width / 2) / opts.canvasWidth) * 100,
+    y: ((item.y + item.height / 2) / opts.canvasHeight) * 100,
+    width: item.width,
+    height: item.height,
+    rotation: item.rotation,
+    slot_type: item.slot_type,
+    price: item.price,
+    name: item.name,
+    skipBgRemoval: true,
+  }));
+
+  const cleanBlob = await compressCanvasToTarget(canvas, 600, true);
+
+  for (const item of sorted) {
+    drawPriceLabel(ctx, {
+      product_id: item.product_id,
+      image_url: item.processedImageUrl,
+      x: item.x, y: item.y,
+      width: item.width, height: item.height,
+      slot_type: item.slot_type,
+      price: item.price, name: item.name,
+    }, opts.canvasWidth);
+  }
+
+  const imageBlob = await compressCanvasToTarget(canvas, 300, false);
+
+  return { imageBlob, cleanBlob, positions };
+}
+
+export async function saveFlatlayToStorage(
+  outfitId: string,
+  imageBlob: Blob,
+  cleanBlob: Blob,
+  positions: ProductPosition[]
+): Promise<{ imageUrl: string; cleanImageUrl: string }> {
+  const timestamp = Date.now();
+
+  const cleanFilePath = `outfits/flatlay_clean_${outfitId}_${timestamp}.webp`;
+  const { error: cleanUploadError } = await supabase.storage
+    .from('product-images')
+    .upload(cleanFilePath, cleanBlob, { contentType: 'image/webp', cacheControl: '3600' });
+  if (cleanUploadError) throw cleanUploadError;
+
+  const { data: cleanUrlData } = supabase.storage
+    .from('product-images')
+    .getPublicUrl(cleanFilePath);
+
+  const filePath = `outfits/flatlay_${outfitId}_${timestamp}.webp`;
+  const { error: uploadError } = await supabase.storage
+    .from('product-images')
+    .upload(filePath, imageBlob, { contentType: 'image/webp', cacheControl: '3600' });
+  if (uploadError) throw uploadError;
+
+  const { data: urlData } = supabase.storage
+    .from('product-images')
+    .getPublicUrl(filePath);
+
+  const { error: updateError } = await supabase
+    .from('outfits')
+    .update({
+      image_url_flatlay: urlData.publicUrl,
+      flatlay_pins: positions,
+      status: 'completed',
+    })
+    .eq('id', outfitId);
+  if (updateError) throw updateError;
+
+  return { imageUrl: urlData.publicUrl, cleanImageUrl: cleanUrlData.publicUrl };
 }

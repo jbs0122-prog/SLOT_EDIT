@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, AlertCircle, CheckCircle, Loader, Send, RefreshCw } from 'lucide-react';
 import { supabase } from '../utils/supabase';
-import { generateAndSaveFlatlay } from '../utils/flatlayRenderer';
+import {
+  prepareFlatlayForEditor,
+  renderFlatlayFromEditorData,
+  saveFlatlayToStorage,
+  type EditorProductData,
+} from '../utils/flatlayRenderer';
 import { generateAndSaveModelPhoto, reviseModelPhoto } from '../utils/modelPhotoGenerator';
+import FlatLayEditor from './FlatLayEditor';
 
 interface FlatlayRendererProps {
   outfitId: string;
@@ -23,20 +29,22 @@ interface OutfitItem {
   };
 }
 
+type Phase = 'idle' | 'preparing' | 'editing' | 'rendering' | 'success';
+
 export default function FlatlayRenderer({ outfitId, onClose, onRendered }: FlatlayRendererProps) {
   const [items, setItems] = useState<OutfitItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rendering, setRendering] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [editorData, setEditorData] = useState<EditorProductData[] | null>(null);
+  const [renderingStep, setRenderingStep] = useState('');
   const [renderedImageUrl, setRenderedImageUrl] = useState('');
+  const [cleanImageUrl, setCleanImageUrl] = useState('');
   const [modelImageUrl, setModelImageUrl] = useState('');
   const [modelPhotoError, setModelPhotoError] = useState('');
-  const [renderingStep, setRenderingStep] = useState('');
   const [revisionText, setRevisionText] = useState('');
   const [revising, setRevising] = useState(false);
   const [revisionError, setRevisionError] = useState('');
-  const [cleanImageUrl, setCleanImageUrl] = useState('');
 
   useEffect(() => {
     loadOutfitItems();
@@ -45,27 +53,19 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
   const loadOutfitItems = async () => {
     try {
       setLoading(true);
-
       const { data: itemsData, error: itemsError } = await supabase
         .from('outfit_items')
         .select(`
           slot_type,
           product_id,
           product:products (
-            id,
-            name,
-            brand,
-            image_url,
-            nobg_image_url,
-            price
+            id, name, brand, image_url, nobg_image_url, price
           )
         `)
         .eq('outfit_id', outfitId);
 
       if (itemsError) throw itemsError;
-
       setItems(itemsData || []);
-
       if (!itemsData || itemsData.length === 0) {
         setError('이 코디에 연결된 제품이 없습니다. 먼저 제품을 연결해주세요.');
       }
@@ -77,17 +77,16 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
     }
   };
 
-  const handleRender = async () => {
+  const handlePrepareEditor = async () => {
     if (items.length === 0) {
       setError('렌더링할 제품이 없습니다.');
       return;
     }
 
-    setRendering(true);
+    setPhase('preparing');
     setError('');
     setModelPhotoError('');
-    setSuccess(false);
-    setRenderingStep('플랫레이 이미지 생성 중...');
+    setRenderingStep('레이아웃 계산 및 배경 제거 중...');
 
     try {
       const validItems = items.filter(item => item.product?.image_url);
@@ -104,12 +103,36 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         name: item.product!.name,
       }));
 
-      const { imageUrl, cleanImageUrl: cleanUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
+      const data = await prepareFlatlayForEditor(renderItems, {}, setRenderingStep);
+      setEditorData(data);
+      setPhase('editing');
+    } catch (err) {
+      console.error('Prepare error:', err);
+      setError((err as Error).message);
+      setPhase('idle');
+    } finally {
+      setRenderingStep('');
+    }
+  };
+
+  const handleEditorConfirm = async (updatedItems: EditorProductData[]) => {
+    setPhase('rendering');
+    setEditorData(null);
+    setError('');
+    setRenderingStep('플랫레이 이미지 렌더링 중...');
+
+    try {
+      const { imageBlob, cleanBlob, positions } = await renderFlatlayFromEditorData(updatedItems);
+
+      setRenderingStep('이미지 저장 중...');
+      const { imageUrl, cleanImageUrl: cleanUrl } = await saveFlatlayToStorage(
+        outfitId, imageBlob, cleanBlob, positions
+      );
 
       setRenderedImageUrl(imageUrl);
       setCleanImageUrl(cleanUrl);
-      setRenderingStep('AI 모델컷 생성 중... (최대 30초 소요)');
 
+      setRenderingStep('AI 모델컷 생성 중... (최대 30초 소요)');
       try {
         const modelUrl = await generateAndSaveModelPhoto(outfitId, cleanUrl);
         setModelImageUrl(modelUrl);
@@ -118,15 +141,19 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         setModelPhotoError((modelError as Error).message);
       }
 
-      setSuccess(true);
-      setRenderingStep('');
+      setPhase('success');
     } catch (err) {
       console.error('Render error:', err);
       setError((err as Error).message);
+      setPhase('idle');
     } finally {
-      setRendering(false);
       setRenderingStep('');
     }
+  };
+
+  const handleEditorCancel = () => {
+    setEditorData(null);
+    setPhase('idle');
   };
 
   const handleRevision = async () => {
@@ -137,10 +164,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
 
     try {
       const newModelUrl = await reviseModelPhoto(
-        outfitId,
-        cleanImageUrl,
-        modelImageUrl,
-        revisionText.trim()
+        outfitId, cleanImageUrl, modelImageUrl, revisionText.trim()
       );
       setModelImageUrl(newModelUrl);
       setRevisionText('');
@@ -161,8 +185,14 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
               <ImageIcon size={20} className="text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">플랫레이 렌더링</h2>
-              <p className="text-sm text-gray-600">코디를 플랫레이 이미지로 생성합니다</p>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {phase === 'editing' ? '플랫레이 레이아웃 편집' : '플랫레이 렌더링'}
+              </h2>
+              <p className="text-sm text-gray-600">
+                {phase === 'editing'
+                  ? '제품 크기와 위치를 조정하세요'
+                  : '코디를 플랫레이 이미지로 생성합니다'}
+              </p>
             </div>
           </div>
           <button
@@ -180,7 +210,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
             </div>
           ) : (
             <>
-              {error && !success && (
+              {error && phase !== 'success' && (
                 <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
                   <div className="flex gap-3">
                     <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
@@ -192,36 +222,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                 </div>
               )}
 
-              {success && (
-                <div className="mb-4 space-y-3">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex gap-3">
-                      <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-green-900">플랫레이 생성 완료!</p>
-                        <p className="text-sm text-green-700">
-                          {modelImageUrl
-                            ? '플랫레이 이미지와 AI 모델컷이 모두 성공적으로 생성되었습니다.'
-                            : '플랫레이 이미지가 생성되었습니다.'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  {modelPhotoError && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                      <div className="flex gap-3">
-                        <AlertCircle size={20} className="text-amber-600 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-amber-900">모델컷 생성 실패</p>
-                          <p className="text-sm text-amber-700">{modelPhotoError}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {!success && items.length > 0 && (
+              {phase === 'idle' && items.length > 0 && (
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">
@@ -229,10 +230,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       {items.map((item) => (
-                        <div
-                          key={item.product_id}
-                          className="border border-gray-200 rounded-lg p-3"
-                        >
+                        <div key={item.product_id} className="border border-gray-200 rounded-lg p-3">
                           {item.product?.image_url ? (
                             <img
                               src={item.product.image_url}
@@ -265,87 +263,119 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                         <p className="font-medium mb-1">렌더링 안내</p>
                         <ul className="list-disc list-inside space-y-1 text-xs">
                           <li>제품 이미지의 흰 배경이 자동으로 제거됩니다</li>
-                          <li>뉴트럴 톤 배경과 자연스러운 레이어링 효과를 적용합니다</li>
-                          <li>AI가 플랫레이 기반으로 모델컷을 자동 생성합니다 (서양인 모델)</li>
-                          <li>생성된 이미지는 Supabase Storage에 자동 저장됩니다</li>
-                          <li>각 제품에 쇼핑 버튼이 자동으로 추가됩니다</li>
+                          <li>레이아웃 편집기에서 제품 크기와 위치를 직접 조정할 수 있습니다</li>
+                          <li>모서리를 드래그하면 비율을 유지하며 크기가 조정됩니다</li>
+                          <li>레이아웃 확정 후 AI 모델컷이 자동 생성됩니다</li>
                         </ul>
                       </div>
                     </div>
                   </div>
 
                   <button
-                    onClick={handleRender}
-                    disabled={rendering}
-                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-4 rounded-lg hover:from-green-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-lg shadow-lg"
+                    onClick={handlePrepareEditor}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-4 rounded-lg hover:from-green-700 hover:to-teal-700 font-medium text-lg shadow-lg"
                   >
-                    {rendering ? (
-                      <>
-                        <Loader className="animate-spin" size={20} />
-                        {renderingStep || '플랫레이 렌더링 중...'}
-                      </>
-                    ) : (
-                      <>
-                        <ImageIcon size={20} />
-                        플랫레이 & 모델컷 생성
-                      </>
-                    )}
+                    <ImageIcon size={20} />
+                    플랫레이 레이아웃 편집
                   </button>
                 </div>
               )}
 
-              {success && renderedImageUrl && (
+              {(phase === 'preparing' || phase === 'rendering') && (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <Loader className="animate-spin text-teal-600 mb-4" size={40} />
+                  <p className="text-gray-700 font-medium text-lg">
+                    {renderingStep || '처리 중...'}
+                  </p>
+                  <p className="text-gray-400 text-sm mt-2">잠시만 기다려주세요</p>
+                </div>
+              )}
+
+              {phase === 'editing' && editorData && (
+                <FlatLayEditor
+                  items={editorData}
+                  canvasWidth={1200}
+                  canvasHeight={1400}
+                  backgroundColor="#e8e0d5"
+                  onConfirm={handleEditorConfirm}
+                  onCancel={handleEditorCancel}
+                />
+              )}
+
+              {phase === 'success' && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                        플랫레이
-                      </h3>
-                      <div className="bg-gray-50 rounded-lg p-3">
-                        <img
-                          src={renderedImageUrl}
-                          alt="Rendered flatlay"
-                          className="w-full rounded-lg shadow-md"
-                        />
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex gap-3">
+                      <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-green-900">플랫레이 생성 완료!</p>
+                        <p className="text-sm text-green-700">
+                          {modelImageUrl
+                            ? '플랫레이 이미지와 AI 모델컷이 모두 성공적으로 생성되었습니다.'
+                            : '플랫레이 이미지가 생성되었습니다.'}
+                        </p>
                       </div>
                     </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                        AI 모델컷
-                      </h3>
-                      {modelImageUrl ? (
-                        <div className="bg-gray-50 rounded-lg p-3 relative">
-                          {revising && (
-                            <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center z-10">
-                              <div className="flex items-center gap-2 text-gray-700">
-                                <Loader className="animate-spin" size={20} />
-                                <span className="text-sm font-medium">수정 중...</span>
-                              </div>
-                            </div>
-                          )}
+                  </div>
+
+                  {modelPhotoError && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <div className="flex gap-3">
+                        <AlertCircle size={20} className="text-amber-600 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-amber-900">모델컷 생성 실패</p>
+                          <p className="text-sm text-amber-700">{modelPhotoError}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {renderedImageUrl && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900 mb-2">플랫레이</h3>
+                        <div className="bg-gray-50 rounded-lg p-3">
                           <img
-                            src={modelImageUrl}
-                            alt="AI model photo"
+                            src={renderedImageUrl}
+                            alt="Rendered flatlay"
                             className="w-full rounded-lg shadow-md"
                           />
                         </div>
-                      ) : (
-                        <div className="bg-gray-100 rounded-lg p-6 flex items-center justify-center h-full min-h-[200px]">
-                          <p className="text-sm text-gray-500 text-center">
-                            {modelPhotoError ? '생성 실패' : '생성되지 않음'}
-                          </p>
-                        </div>
-                      )}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900 mb-2">AI 모델컷</h3>
+                        {modelImageUrl ? (
+                          <div className="bg-gray-50 rounded-lg p-3 relative">
+                            {revising && (
+                              <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center z-10">
+                                <div className="flex items-center gap-2 text-gray-700">
+                                  <Loader className="animate-spin" size={20} />
+                                  <span className="text-sm font-medium">수정 중...</span>
+                                </div>
+                              </div>
+                            )}
+                            <img
+                              src={modelImageUrl}
+                              alt="AI model photo"
+                              className="w-full rounded-lg shadow-md"
+                            />
+                          </div>
+                        ) : (
+                          <div className="bg-gray-100 rounded-lg p-6 flex items-center justify-center h-full min-h-[200px]">
+                            <p className="text-sm text-gray-500 text-center">
+                              {modelPhotoError ? '생성 실패' : '생성되지 않음'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {modelImageUrl && (
                     <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <RefreshCw size={16} className="text-gray-600" />
-                        <h4 className="text-sm font-semibold text-gray-900">
-                          모델컷 수정 요청
-                        </h4>
+                        <h4 className="text-sm font-semibold text-gray-900">모델컷 수정 요청</h4>
                       </div>
                       <div className="flex gap-2">
                         <input
@@ -362,11 +392,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                           disabled={revising || !revisionText.trim()}
                           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
                         >
-                          {revising ? (
-                            <Loader className="animate-spin" size={16} />
-                          ) : (
-                            <Send size={16} />
-                          )}
+                          {revising ? <Loader className="animate-spin" size={16} /> : <Send size={16} />}
                           수정
                         </button>
                       </div>
