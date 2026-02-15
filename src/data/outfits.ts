@@ -1,7 +1,7 @@
 export interface ImagePin {
   x: number;
   y: number;
-  item: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'accessory_2' | 'necktie';
+  item: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'accessory_2';
   url?: string;
   product_id?: string;
 }
@@ -38,7 +38,7 @@ export interface OutfitItem {
   id: string;
   outfit_id: string;
   product_id: string;
-  slot_type: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'accessory_2' | 'necktie';
+  slot_type: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'accessory_2';
   created_at: string;
   product?: Product;
 }

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { removeBackground } from './backgroundRemoval';
 
 export interface ProductPosition {
   product_id: string;
@@ -53,142 +54,14 @@ async function loadImageWithProxy(url: string, useProxy: boolean): Promise<HTMLI
   });
 }
 
-function computeEdgeMap(data: Uint8ClampedArray, w: number, h: number): Float32Array {
-  const gray = new Float32Array(w * h);
-  for (let i = 0; i < w * h; i++) {
-    const idx = i * 4;
-    gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+async function removeWhiteBackgroundViaApi(imageUrl: string, productId: string): Promise<string> {
+  try {
+    const nobgUrl = await removeBackground(imageUrl, productId);
+    return nobgUrl;
+  } catch (error) {
+    console.error('Pixian API bg removal failed, using original:', error);
+    return imageUrl;
   }
-
-  const edges = new Float32Array(w * h);
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const tl = gray[(y - 1) * w + (x - 1)];
-      const tc = gray[(y - 1) * w + x];
-      const tr = gray[(y - 1) * w + (x + 1)];
-      const ml = gray[y * w + (x - 1)];
-      const mr = gray[y * w + (x + 1)];
-      const bl = gray[(y + 1) * w + (x - 1)];
-      const bc = gray[(y + 1) * w + x];
-      const br = gray[(y + 1) * w + (x + 1)];
-
-      const gx = -tl + tr - 2 * ml + 2 * mr - bl + br;
-      const gy = -tl - 2 * tc - tr + bl + 2 * bc + br;
-      edges[y * w + x] = Math.sqrt(gx * gx + gy * gy);
-    }
-  }
-  return edges;
-}
-
-function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
-  const tempCanvas = document.createElement('canvas');
-  const w = img.width;
-  const h = img.height;
-  tempCanvas.width = w;
-  tempCanvas.height = h;
-  const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })!;
-  tempCtx.drawImage(img, 0, 0);
-
-  const imageData = tempCtx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-
-  const whiteThreshold = 230;
-  const edgeSoftness = 25;
-  const edgeStrengthThreshold = 30;
-
-  const edgeMap = computeEdgeMap(data, w, h);
-
-  const isWhitish = (idx: number) => {
-    const r = data[idx];
-    const g = data[idx + 1];
-    const b = data[idx + 2];
-    const a = data[idx + 3];
-    if (a < 10) return true;
-    return r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold;
-  };
-
-  const isSemiWhite = (idx: number) => {
-    const r = data[idx];
-    const g = data[idx + 1];
-    const b = data[idx + 2];
-    const brightness = (r + g + b) / 3;
-    const minCh = Math.min(r, g, b);
-    return brightness > (whiteThreshold - edgeSoftness) && minCh > (whiteThreshold - edgeSoftness * 2);
-  };
-
-  const visited = new Uint8Array(w * h);
-  const background = new Uint8Array(w * h);
-
-  const queue: number[] = [];
-
-  for (let x = 0; x < w; x++) {
-    const topIdx = x * 4;
-    const botIdx = ((h - 1) * w + x) * 4;
-    if (isWhitish(topIdx)) { queue.push(x); visited[x] = 1; background[x] = 1; }
-    const botPx = (h - 1) * w + x;
-    if (isWhitish(botIdx)) { queue.push(botPx); visited[botPx] = 1; background[botPx] = 1; }
-  }
-  for (let y = 1; y < h - 1; y++) {
-    const leftPx = y * w;
-    const rightPx = y * w + (w - 1);
-    if (isWhitish(leftPx * 4)) { queue.push(leftPx); visited[leftPx] = 1; background[leftPx] = 1; }
-    if (isWhitish(rightPx * 4)) { queue.push(rightPx); visited[rightPx] = 1; background[rightPx] = 1; }
-  }
-
-  while (queue.length > 0) {
-    const px = queue.shift()!;
-    const x = px % w;
-    const y = (px - x) / w;
-
-    const neighbors = [
-      y > 0 ? px - w : -1,
-      y < h - 1 ? px + w : -1,
-      x > 0 ? px - 1 : -1,
-      x < w - 1 ? px + 1 : -1,
-    ];
-
-    for (const npx of neighbors) {
-      if (npx < 0 || visited[npx]) continue;
-      visited[npx] = 1;
-
-      if (edgeMap[npx] > edgeStrengthThreshold) continue;
-
-      const idx = npx * 4;
-      if (isWhitish(idx)) {
-        background[npx] = 1;
-        queue.push(npx);
-      }
-    }
-  }
-
-  for (let px = 0; px < w * h; px++) {
-    const idx = px * 4;
-    if (background[px]) {
-      data[idx + 3] = 0;
-    } else if (isSemiWhite(idx)) {
-      const x = px % w;
-      const y = (px - x) / w;
-      let nearBg = false;
-      for (let dy = -2; dy <= 2 && !nearBg; dy++) {
-        for (let dx = -2; dx <= 2 && !nearBg; dx++) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx >= 0 && nx < w && ny >= 0 && ny < h && background[ny * w + nx]) {
-            nearBg = true;
-          }
-        }
-      }
-      if (nearBg) {
-        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        const dist = whiteThreshold - brightness;
-        const alpha = Math.min(255, Math.max(0, Math.round((dist / edgeSoftness) * 255)));
-        data[idx + 3] = Math.min(data[idx + 3], alpha);
-      }
-    }
-  }
-
-  tempCtx.putImageData(imageData, 0, 0);
-  return tempCanvas;
 }
 
 interface SlotBoundingBox {
@@ -205,15 +78,14 @@ function getSlotConfigs(canvasWidth: number, canvasHeight: number): Record<strin
   const h = canvasHeight;
 
   return {
-    outer:       { cx: w * 0.26, cy: h * 0.28, maxWidth: w * 0.48, maxHeight: h * 0.50, rotation: 0, zIndex: 1 },
-    top:         { cx: w * 0.68, cy: h * 0.22, maxWidth: w * 0.39, maxHeight: h * 0.35, rotation: 0, zIndex: 2 },
-    mid:         { cx: w * 0.50, cy: h * 0.26, maxWidth: w * 0.41, maxHeight: h * 0.37, rotation: 0, zIndex: 3 },
-    bottom:      { cx: w * 0.65, cy: h * 0.58, maxWidth: w * 0.41, maxHeight: h * 0.44, rotation: 0, zIndex: 4 },
-    shoes:       { cx: w * 0.22, cy: h * 0.74, maxWidth: w * 0.35, maxHeight: h * 0.25, rotation: 0, zIndex: 5 },
-    bag:         { cx: w * 0.78, cy: h * 0.78, maxWidth: w * 0.30, maxHeight: h * 0.30, rotation: 0, zIndex: 6 },
-    accessory:   { cx: w * 0.18, cy: h * 0.54, maxWidth: w * 0.21, maxHeight: h * 0.16, rotation: 0, zIndex: 7 },
-    accessory_2: { cx: w * 0.46, cy: h * 0.88, maxWidth: w * 0.18, maxHeight: h * 0.14, rotation: 0, zIndex: 8 },
-    necktie:     { cx: w * 0.88, cy: h * 0.42, maxWidth: w * 0.14, maxHeight: h * 0.25, rotation: 0, zIndex: 9 },
+    outer:       { cx: w * 0.26, cy: h * 0.28, maxWidth: w * 0.56, maxHeight: h * 0.58, rotation: 0, zIndex: 1 },
+    top:         { cx: w * 0.68, cy: h * 0.22, maxWidth: w * 0.46, maxHeight: h * 0.42, rotation: 0, zIndex: 2 },
+    mid:         { cx: w * 0.50, cy: h * 0.26, maxWidth: w * 0.48, maxHeight: h * 0.44, rotation: 0, zIndex: 3 },
+    bottom:      { cx: w * 0.65, cy: h * 0.58, maxWidth: w * 0.48, maxHeight: h * 0.52, rotation: 0, zIndex: 4 },
+    shoes:       { cx: w * 0.22, cy: h * 0.74, maxWidth: w * 0.40, maxHeight: h * 0.30, rotation: 0, zIndex: 5 },
+    bag:         { cx: w * 0.78, cy: h * 0.78, maxWidth: w * 0.36, maxHeight: h * 0.36, rotation: 0, zIndex: 6 },
+    accessory:   { cx: w * 0.18, cy: h * 0.54, maxWidth: w * 0.24, maxHeight: h * 0.20, rotation: 0, zIndex: 7 },
+    accessory_2: { cx: w * 0.46, cy: h * 0.88, maxWidth: w * 0.22, maxHeight: h * 0.18, rotation: 0, zIndex: 8 },
   };
 }
 
@@ -306,7 +178,6 @@ const SLOT_CATEGORY_LABELS: Record<string, string> = {
   bag: 'Bag',
   accessory: 'Accessory',
   accessory_2: 'Accessory',
-  necktie: 'Necktie',
 };
 
 function drawPriceLabel(
@@ -429,10 +300,20 @@ export async function renderFlatlay(
     opts.useProxy
   );
 
+  const processedUrls = new Map<string, string>();
+  for (const position of positions) {
+    if (!position.skipBgRemoval) {
+      const nobgUrl = await removeWhiteBackgroundViaApi(position.image_url, position.product_id);
+      processedUrls.set(position.product_id, nobgUrl);
+    }
+  }
+
   for (const position of positions) {
     try {
-      const img = await loadImageWithProxy(position.image_url, opts.useProxy);
-      const drawSource = position.skipBgRemoval ? img : removeWhiteBackground(img);
+      const imageUrl = position.skipBgRemoval
+        ? position.image_url
+        : (processedUrls.get(position.product_id) || position.image_url);
+      const img = await loadImageWithProxy(imageUrl, opts.useProxy);
 
       ctx.save();
 
@@ -449,7 +330,7 @@ export async function renderFlatlay(
       ctx.shadowOffsetX = 4;
       ctx.shadowOffsetY = 6;
 
-      ctx.drawImage(drawSource, position.x, position.y, position.width, position.height);
+      ctx.drawImage(img, position.x, position.y, position.width, position.height);
 
       ctx.restore();
     } catch (error) {
@@ -519,10 +400,20 @@ export async function renderFlatlayWithCustomPositions(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
+  const processedUrls = new Map<string, string>();
+  for (const position of positions) {
+    if (!position.skipBgRemoval) {
+      const nobgUrl = await removeWhiteBackgroundViaApi(position.image_url, position.product_id);
+      processedUrls.set(position.product_id, nobgUrl);
+    }
+  }
+
   for (const position of positions) {
     try {
-      const img = await loadImageWithProxy(position.image_url, opts.useProxy);
-      const drawSource = position.skipBgRemoval ? img : removeWhiteBackground(img);
+      const imageUrl = position.skipBgRemoval
+        ? position.image_url
+        : (processedUrls.get(position.product_id) || position.image_url);
+      const img = await loadImageWithProxy(imageUrl, opts.useProxy);
 
       ctx.save();
 
@@ -539,7 +430,7 @@ export async function renderFlatlayWithCustomPositions(
       ctx.shadowOffsetX = 4;
       ctx.shadowOffsetY = 6;
 
-      ctx.drawImage(drawSource, position.x, position.y, position.width, position.height);
+      ctx.drawImage(img, position.x, position.y, position.width, position.height);
 
       ctx.restore();
     } catch (error) {

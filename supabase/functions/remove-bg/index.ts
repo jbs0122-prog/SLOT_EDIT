@@ -102,16 +102,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const pixianAuth = Deno.env.get("PIXIAN_API_KEY");
-    if (!pixianAuth) {
-      return new Response(
-        JSON.stringify({ error: "Background removal service not configured" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    const pixianAuth = Deno.env.get("PIXIAN_API_KEY") ||
+      "cHhyaWd5aXh2cjR4OTNnOnRlbXBmaXNma244Y2t1ZjBlZDg0OWg2YnF2MjZwcDcwc29icjVqYWhydXV1ajlhMjk4Y2Q=";
 
     const formData = new FormData();
     formData.append("image.url", imageUrl);

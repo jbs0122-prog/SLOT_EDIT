@@ -19,7 +19,6 @@ const SLOT_TYPES = [
   { value: 'bag', label: '가방' },
   { value: 'accessory', label: '액세서리 1' },
   { value: 'accessory_2', label: '액세서리 2' },
-  { value: 'necktie', label: '넥타이' },
 ];
 
 const PRODUCT_CATEGORIES = [

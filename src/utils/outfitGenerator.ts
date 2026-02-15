@@ -148,9 +148,6 @@ export async function generateOutfitsAutomatically(
     if (outfit.accessory_2) {
       items.push({ slot_type: 'accessory_2', product_id: outfit.accessory_2.id });
     }
-    if (outfit.necktie) {
-      items.push({ slot_type: 'necktie', product_id: outfit.necktie.id });
-    }
 
     if (items.length > 0) {
       const itemsToInsert = items.map(item => ({
@@ -189,7 +186,7 @@ async function processBackgroundRemoval(
   const uniqueProductIds = new Set<string>();
 
   for (const { outfit } of outfits) {
-    const items = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2, outfit.necktie];
+    const items = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2];
     for (const item of items) {
       if (item) uniqueProductIds.add(item.id);
     }
@@ -251,7 +248,6 @@ async function generateInsightsForOutfits(
         { key: 'bag', label: 'bag' },
         { key: 'accessory', label: 'accessory' },
         { key: 'accessory_2', label: 'accessory_2' },
-        { key: 'necktie', label: 'necktie' },
       ];
 
       const items = slots

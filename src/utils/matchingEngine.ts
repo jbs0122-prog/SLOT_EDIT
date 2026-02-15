@@ -28,7 +28,6 @@ export interface OutfitCandidate {
   bag?: Product;
   accessory?: Product;
   accessory_2?: Product;
-  necktie?: Product;
 }
 
 export { scoreOutfit } from './matchingScoring';
@@ -65,7 +64,7 @@ function passesHardConstraints(
   const coreItems = [outfit.top, outfit.bottom, outfit.shoes].filter(Boolean);
   if (coreItems.length < 3) return false;
 
-  const allItems = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2, outfit.necktie]
+  const allItems = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
     .filter(Boolean) as Product[];
   const formalities = allItems.map(getFormality).filter((f): f is number => typeof f === 'number');
 
@@ -104,7 +103,7 @@ function shouldIncludeMid(targetWarmth?: number): boolean {
 }
 
 function getOutfitColorKey(outfit: OutfitCandidate): string {
-  return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.necktie]
+  return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.accessory]
     .filter(Boolean)
     .map(item => getColorFamily(item as Product))
     .filter(Boolean)
@@ -142,15 +141,13 @@ export function generateOutfitCombinations(
   const bottoms = filterProducts('bottom');
   const shoes = filterProducts('shoes');
   const bags = filterProducts('bag');
-  const allAccessories = filterProducts('accessory');
-  const accessories = allAccessories.filter(p => p.sub_category !== 'necktie');
-  const neckties = allAccessories.filter(p => p.sub_category === 'necktie');
+  const accessories = filterProducts('accessory');
 
   if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) {
     return [];
   }
 
-  return generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, neckties, filters);
+  return generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters);
 }
 
 function generateSampled(
@@ -161,7 +158,6 @@ function generateSampled(
   shoes: Product[],
   bags: Product[],
   accessories: Product[],
-  neckties: Product[],
   filters: { targetSeason?: string }
 ): OutfitCandidate[] {
   const MAX_SAMPLES = 10000;
@@ -176,7 +172,6 @@ function generateSampled(
     const mid = mids.length > 0 ? (Math.random() < 0.85 ? pickRandom(mids) : undefined) : undefined;
     const bag = bags.length > 0 ? (Math.random() < 0.8 ? pickRandom(bags) : undefined) : undefined;
     const accessory = accessories.length > 0 ? (Math.random() < 0.7 ? pickRandom(accessories) : undefined) : undefined;
-    const necktie = neckties.length > 0 ? (Math.random() < 0.5 ? pickRandom(neckties) : undefined) : undefined;
 
     let accessory2: Product | undefined;
     if (accessory && accessories.length > 1 && Math.random() < 0.4) {
@@ -186,7 +181,7 @@ function generateSampled(
 
     const key = [
       outer?.id || '', mid?.id || '', top.id, bottom.id, shoe.id,
-      bag?.id || '', accessory?.id || '', accessory2?.id || '', necktie?.id || '',
+      bag?.id || '', accessory?.id || '', accessory2?.id || '',
     ].join('|');
     if (seen.has(key)) continue;
     seen.add(key);
@@ -197,7 +192,6 @@ function generateSampled(
     if (bag) outfit.bag = bag;
     if (accessory) outfit.accessory = accessory;
     if (accessory2) outfit.accessory_2 = accessory2;
-    if (necktie) outfit.necktie = necktie;
 
     if (passesHardConstraints(outfit, { targetSeason: filters.targetSeason })) {
       combinations.push(outfit);

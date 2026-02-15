@@ -212,7 +212,6 @@ export default function AdminPins() {
       bag: '가방',
       accessory: '액세서리 1',
       accessory_2: '액세서리 2',
-      necktie: '넥타이',
     };
     return labels[item] || item;
   };
