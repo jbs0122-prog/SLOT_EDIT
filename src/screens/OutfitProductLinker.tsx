@@ -40,6 +40,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showRenderer, setShowRenderer] = useState(false);
+  const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef<number | null>(null);
 
@@ -165,6 +166,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   const handleDragEnd = () => {
     setDraggedProduct(null);
+    setDragOverSlot(null);
     stopAutoScroll();
   };
 
@@ -284,22 +286,24 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                       onDragOver={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        if (dragOverSlot !== slot.value) setDragOverSlot(slot.value);
                       }}
                       onDrop={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        setDragOverSlot(null);
                         handleDrop(slot.value);
                       }}
                       onDragEnter={(e) => {
                         e.preventDefault();
-                        e.currentTarget.classList.add('drag-over');
+                        setDragOverSlot(slot.value);
                       }}
                       onDragLeave={(e) => {
                         e.preventDefault();
-                        e.currentTarget.classList.remove('drag-over');
+                        if (dragOverSlot === slot.value) setDragOverSlot(null);
                       }}
                       className={`border-2 border-dashed rounded-lg p-4 transition-all ${
-                        draggedProduct
+                        dragOverSlot === slot.value
                           ? 'border-blue-500 bg-blue-50'
                           : 'border-gray-300'
                       }`}
