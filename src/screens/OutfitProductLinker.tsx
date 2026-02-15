@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outfit, Product, OutfitItem } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { X, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
@@ -40,6 +40,45 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showRenderer, setShowRenderer] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef<number | null>(null);
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollRef.current !== null) {
+      cancelAnimationFrame(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+  }, []);
+
+  const handleContainerDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const edgeZone = 80;
+    const y = e.clientY;
+
+    stopAutoScroll();
+
+    if (y < rect.top + edgeZone) {
+      const intensity = 1 - (y - rect.top) / edgeZone;
+      const speed = Math.max(4, intensity * 20);
+      const scroll = () => {
+        container.scrollTop -= speed;
+        autoScrollRef.current = requestAnimationFrame(scroll);
+      };
+      autoScrollRef.current = requestAnimationFrame(scroll);
+    } else if (y > rect.bottom - edgeZone) {
+      const intensity = 1 - (rect.bottom - y) / edgeZone;
+      const speed = Math.max(4, intensity * 20);
+      const scroll = () => {
+        container.scrollTop += speed;
+        autoScrollRef.current = requestAnimationFrame(scroll);
+      };
+      autoScrollRef.current = requestAnimationFrame(scroll);
+    }
+  }, [stopAutoScroll]);
 
   useEffect(() => {
     loadData();
@@ -126,6 +165,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   const handleDragEnd = () => {
     setDraggedProduct(null);
+    stopAutoScroll();
   };
 
   const handleDrop = async (slotType: string) => {
@@ -205,7 +245,13 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div
+        ref={scrollContainerRef}
+        onDragOver={handleContainerDragOver}
+        onDragLeave={stopAutoScroll}
+        onDrop={stopAutoScroll}
+        className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+      >
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">코디 - 제품 연결</h2>
