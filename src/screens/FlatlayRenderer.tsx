@@ -5,7 +5,9 @@ import {
   prepareFlatlayForEditor,
   renderFlatlayFromEditorData,
   saveFlatlayToStorage,
+  reconstructEditorDataFromPins,
   type EditorProductData,
+  type ProductPosition,
 } from '../utils/flatlayRenderer';
 import { generateAndSaveModelPhoto, reviseModelPhoto } from '../utils/modelPhotoGenerator';
 import FlatLayEditor from './FlatLayEditor';
@@ -86,7 +88,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
     setPhase('preparing');
     setError('');
     setModelPhotoError('');
-    setRenderingStep('레이아웃 계산 및 배경 제거 중...');
+    setRenderingStep('레이아웃 준비 중...');
 
     try {
       const validItems = items.filter(item => item.product?.image_url);
@@ -94,18 +96,39 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         throw new Error('이미지가 있는 제품이 없습니다.');
       }
 
-      const renderItems = validItems.map(item => ({
-        slot_type: item.slot_type,
-        product_id: item.product_id,
-        image_url: item.product!.nobg_image_url || item.product!.image_url,
-        skipBgRemoval: !!item.product!.nobg_image_url,
-        price: item.product!.price,
-        name: item.product!.name,
-      }));
+      const { data: outfitData } = await supabase
+        .from('outfits')
+        .select('flatlay_pins')
+        .eq('id', outfitId)
+        .maybeSingle();
 
-      const data = await prepareFlatlayForEditor(renderItems, {}, setRenderingStep);
-      setEditorData(data);
-      setPhase('editing');
+      const savedPins = outfitData?.flatlay_pins as ProductPosition[] | null;
+      const currentProductIds = new Set(validItems.map(i => i.product_id));
+
+      const pinsMatch = savedPins && savedPins.length > 0 &&
+        savedPins.length === currentProductIds.size &&
+        savedPins.every(pin => currentProductIds.has(pin.product_id));
+
+      if (pinsMatch && savedPins) {
+        setRenderingStep('저장된 레이아웃 불러오는 중...');
+        const data = reconstructEditorDataFromPins(savedPins);
+        setEditorData(data);
+        setPhase('editing');
+      } else {
+        setRenderingStep('레이아웃 계산 및 배경 제거 중...');
+        const renderItems = validItems.map(item => ({
+          slot_type: item.slot_type,
+          product_id: item.product_id,
+          image_url: item.product!.nobg_image_url || item.product!.image_url,
+          skipBgRemoval: !!item.product!.nobg_image_url,
+          price: item.product!.price,
+          name: item.product!.name,
+        }));
+
+        const data = await prepareFlatlayForEditor(renderItems, {}, setRenderingStep);
+        setEditorData(data);
+        setPhase('editing');
+      }
     } catch (err) {
       console.error('Prepare error:', err);
       setError((err as Error).message);

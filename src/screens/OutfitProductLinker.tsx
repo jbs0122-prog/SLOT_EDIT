@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outfit, Product, OutfitItem } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
+import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader } from 'lucide-react';
+import { reviseModelPhoto } from '../utils/modelPhotoGenerator';
 import FlatlayRenderer from './FlatlayRenderer';
 
 interface OutfitProductLinkerProps {
@@ -41,6 +42,11 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showRenderer, setShowRenderer] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
+  const [modelRevisionText, setModelRevisionText] = useState('');
+  const [modelRevising, setModelRevising] = useState(false);
+  const [modelRevisionError, setModelRevisionError] = useState('');
+  const [currentModelUrl, setCurrentModelUrl] = useState(outfit.image_url_on_model);
+  const [currentCleanUrl, setCurrentCleanUrl] = useState(outfit.image_url_flatlay_clean || '');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef<number | null>(null);
 
@@ -224,6 +230,39 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     }
   };
 
+  const refreshOutfitImages = async () => {
+    const { data } = await supabase
+      .from('outfits')
+      .select('image_url_on_model, image_url_flatlay_clean')
+      .eq('id', outfit.id)
+      .maybeSingle();
+    if (data) {
+      setCurrentModelUrl(data.image_url_on_model || '');
+      setCurrentCleanUrl(data.image_url_flatlay_clean || '');
+    }
+  };
+
+  const handleModelRevision = async () => {
+    if (!modelRevisionText.trim() || !currentModelUrl || !currentCleanUrl) return;
+
+    setModelRevising(true);
+    setModelRevisionError('');
+
+    try {
+      const newModelUrl = await reviseModelPhoto(
+        outfit.id, currentCleanUrl, currentModelUrl, modelRevisionText.trim()
+      );
+      setCurrentModelUrl(newModelUrl);
+      setModelRevisionText('');
+      onLinksUpdated();
+    } catch (err) {
+      console.error('Model revision error:', err);
+      setModelRevisionError((err as Error).message);
+    } finally {
+      setModelRevising(false);
+    }
+  };
+
   const getSlotItem = (slotType: string): OutfitItem | undefined => {
     return linkedItems.find(item => item.slot_type === slotType);
   };
@@ -353,7 +392,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                 })}
               </div>
 
-              {(outfit.image_url_flatlay || outfit.image_url_on_model) && (
+              {(outfit.image_url_flatlay || currentModelUrl) && (
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">생성된 이미지</h4>
                   <div className="grid grid-cols-2 gap-3">
@@ -367,17 +406,56 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                         />
                       </div>
                     )}
-                    {outfit.image_url_on_model && (
-                      <div className="bg-gray-50 rounded-lg p-2">
+                    {currentModelUrl && (
+                      <div className="bg-gray-50 rounded-lg p-2 relative">
                         <p className="text-xs text-gray-500 mb-1.5 text-center font-medium">모델컷</p>
+                        {modelRevising && (
+                          <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center z-10">
+                            <div className="flex items-center gap-2 text-gray-700">
+                              <Loader className="animate-spin" size={18} />
+                              <span className="text-xs font-medium">수정 중...</span>
+                            </div>
+                          </div>
+                        )}
                         <img
-                          src={outfit.image_url_on_model}
+                          src={currentModelUrl}
                           alt="Model"
                           className="w-full rounded object-contain"
                         />
                       </div>
                     )}
                   </div>
+
+                  {currentModelUrl && currentCleanUrl && (
+                    <div className="mt-3 bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <RefreshCw size={14} className="text-gray-600" />
+                        <h5 className="text-xs font-semibold text-gray-700">모델컷 AI 수정</h5>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={modelRevisionText}
+                          onChange={(e) => setModelRevisionText(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !modelRevising) handleModelRevision(); }}
+                          placeholder="예: 포즈를 바꿔줘, 코트를 열어줘..."
+                          disabled={modelRevising}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                        />
+                        <button
+                          onClick={handleModelRevision}
+                          disabled={modelRevising || !modelRevisionText.trim()}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+                        >
+                          {modelRevising ? <Loader className="animate-spin" size={14} /> : <Send size={14} />}
+                          수정
+                        </button>
+                      </div>
+                      {modelRevisionError && (
+                        <p className="text-xs text-red-600 mt-1.5">{modelRevisionError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -494,6 +572,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
           onClose={() => setShowRenderer(false)}
           onRendered={() => {
             setShowRenderer(false);
+            refreshOutfitImages();
             onLinksUpdated();
           }}
         />

@@ -100,6 +100,7 @@ export default function AdminProducts() {
         body_type: row.body_type,
         vibe: row.vibe,
         image_url_flatlay: row.image_url_flatlay || '',
+        image_url_flatlay_clean: row.image_url_flatlay_clean || '',
         image_url_on_model: row.image_url_on_model || '',
         insight_text: row['AI insight'] || '',
         flatlay_pins: row.flatlay_pins || [],

@@ -49,6 +49,7 @@ export interface Outfit {
   body_type: string;
   vibe: string;
   image_url_flatlay: string;
+  image_url_flatlay_clean?: string;
   image_url_on_model: string;
   insight_text: string;
   flatlay_pins?: ImagePin[];

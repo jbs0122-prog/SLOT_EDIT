@@ -709,6 +709,7 @@ export async function saveFlatlayToStorage(
     .from('outfits')
     .update({
       image_url_flatlay: urlData.publicUrl,
+      image_url_flatlay_clean: cleanUrlData.publicUrl,
       flatlay_pins: positions,
       status: 'completed',
     })
@@ -716,4 +717,24 @@ export async function saveFlatlayToStorage(
   if (updateError) throw updateError;
 
   return { imageUrl: urlData.publicUrl, cleanImageUrl: cleanUrlData.publicUrl };
+}
+
+export function reconstructEditorDataFromPins(
+  savedPins: ProductPosition[],
+  canvasWidth: number = 1200,
+  canvasHeight: number = 1400
+): EditorProductData[] {
+  return savedPins.map(pin => ({
+    product_id: pin.product_id,
+    processedImageUrl: pin.image_url,
+    x: (pin.x / 100) * canvasWidth - pin.width / 2,
+    y: (pin.y / 100) * canvasHeight - pin.height / 2,
+    width: pin.width,
+    height: pin.height,
+    rotation: pin.rotation,
+    slot_type: pin.slot_type,
+    price: pin.price,
+    name: pin.name,
+    aspectRatio: pin.width / pin.height,
+  }));
 }
