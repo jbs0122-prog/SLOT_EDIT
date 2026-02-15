@@ -70,8 +70,8 @@ Uniqlo,슬림핏 청바지,bottom,FEMALE,"slim,average","casual,minimal",blue,"s
           if (!row.image_url) {
             newErrors.push(`행 ${index + 2}: 이미지 URL이 필요합니다`);
           }
-          if (!row.category || !['outer', 'mid', 'top', 'bottom', 'shoes', 'bag', 'accessory'].includes(row.category)) {
-            newErrors.push(`행 ${index + 2}: 유효하지 않은 카테고리 (outer, mid, top, bottom, shoes, bag, accessory 중 하나)`);
+          if (!row.category || !['outer', 'mid', 'top', 'bottom', 'shoes', 'bag', 'accessory', 'necktie'].includes(row.category)) {
+            newErrors.push(`행 ${index + 2}: 유효하지 않은 카테고리 (outer, mid, top, bottom, shoes, bag, accessory, necktie 중 하나)`);
           }
           if (!row.gender || !['MALE', 'FEMALE', 'UNISEX'].includes(row.gender)) {
             newErrors.push(`행 ${index + 2}: 유효하지 않은 성별 (MALE, FEMALE, UNISEX 중 하나)`);

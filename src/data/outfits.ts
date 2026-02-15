@@ -1,7 +1,7 @@
 export interface ImagePin {
   x: number;
   y: number;
-  item: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
+  item: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'accessory_2' | 'necktie';
   url?: string;
   product_id?: string;
 }
@@ -10,7 +10,7 @@ export interface Product {
   id: string;
   brand: string;
   name: string;
-  category: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
+  category: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'necktie';
   gender: string;
   body_type: string[];
   vibe: string[];
@@ -38,7 +38,7 @@ export interface OutfitItem {
   id: string;
   outfit_id: string;
   product_id: string;
-  slot_type: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
+  slot_type: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'accessory_2' | 'necktie';
   created_at: string;
   product?: Product;
 }

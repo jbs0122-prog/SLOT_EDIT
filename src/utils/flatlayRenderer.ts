@@ -158,165 +158,105 @@ function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
   return tempCanvas;
 }
 
+interface SlotBoundingBox {
+  cx: number;
+  cy: number;
+  maxWidth: number;
+  maxHeight: number;
+  rotation: number;
+  zIndex: number;
+}
+
+function getSlotConfigs(canvasWidth: number, canvasHeight: number): Record<string, SlotBoundingBox> {
+  const w = canvasWidth;
+  const h = canvasHeight;
+
+  return {
+    outer:       { cx: w * 0.26, cy: h * 0.28, maxWidth: w * 0.42, maxHeight: h * 0.44, rotation: 0, zIndex: 1 },
+    top:         { cx: w * 0.68, cy: h * 0.22, maxWidth: w * 0.34, maxHeight: h * 0.30, rotation: 0, zIndex: 2 },
+    mid:         { cx: w * 0.50, cy: h * 0.26, maxWidth: w * 0.36, maxHeight: h * 0.32, rotation: 0, zIndex: 3 },
+    bottom:      { cx: w * 0.65, cy: h * 0.58, maxWidth: w * 0.36, maxHeight: h * 0.38, rotation: 0, zIndex: 4 },
+    shoes:       { cx: w * 0.22, cy: h * 0.74, maxWidth: w * 0.30, maxHeight: h * 0.22, rotation: 0, zIndex: 5 },
+    bag:         { cx: w * 0.78, cy: h * 0.78, maxWidth: w * 0.26, maxHeight: h * 0.26, rotation: 0, zIndex: 6 },
+    accessory:   { cx: w * 0.18, cy: h * 0.54, maxWidth: w * 0.18, maxHeight: h * 0.14, rotation: 0, zIndex: 7 },
+    accessory_2: { cx: w * 0.46, cy: h * 0.88, maxWidth: w * 0.16, maxHeight: h * 0.12, rotation: 0, zIndex: 8 },
+    necktie:     { cx: w * 0.88, cy: h * 0.42, maxWidth: w * 0.12, maxHeight: h * 0.22, rotation: 0, zIndex: 9 },
+  };
+}
+
+function fitImageToBox(
+  imgWidth: number,
+  imgHeight: number,
+  box: SlotBoundingBox
+): { x: number; y: number; width: number; height: number } {
+  const scaleX = box.maxWidth / imgWidth;
+  const scaleY = box.maxHeight / imgHeight;
+  const scale = Math.min(scaleX, scaleY);
+
+  const width = imgWidth * scale;
+  const height = imgHeight * scale;
+
+  return {
+    x: box.cx - width / 2,
+    y: box.cy - height / 2,
+    width,
+    height,
+  };
+}
+
 async function calculateLayoutWithImages(
   items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string; skipBgRemoval?: boolean }>,
   canvasWidth: number,
   canvasHeight: number,
-  padding: number,
+  _padding: number,
   useProxy: boolean
 ): Promise<ProductPosition[]> {
   const positions: ProductPosition[] = [];
+  const slotConfigs = getSlotConfigs(canvasWidth, canvasHeight);
 
-  const centerX = canvasWidth / 2;
-  const centerY = canvasHeight / 2;
-
-  const availableWidth = canvasWidth - padding * 2;
-  const availableHeight = canvasHeight - padding * 2;
-
-  const slotConfigs: {
-    [key: string]: {
-      maxSize: number;
-      offsetX: number;
-      offsetY: number;
-      rotation: number;
-      zIndex: number;
-    };
-  } = {
-    outer: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.65,
-      offsetX: -availableWidth * 0.20,
-      offsetY: -availableHeight * 0.18,
-      rotation: 0,
-      zIndex: 1,
-    },
-    top: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.48,
-      offsetX: availableWidth * 0.18,
-      offsetY: -availableHeight * 0.22,
-      rotation: 0,
-      zIndex: 2,
-    },
-    mid: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.55,
-      offsetX: -availableWidth * 0.02,
-      offsetY: -availableHeight * 0.16,
-      rotation: 0,
-      zIndex: 3,
-    },
-    bottom: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.60,
-      offsetX: availableWidth * 0.22,
-      offsetY: availableHeight * 0.10,
-      rotation: 0,
-      zIndex: 4,
-    },
-    shoes: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.42,
-      offsetX: -availableWidth * 0.22,
-      offsetY: availableHeight * 0.28,
-      rotation: 0,
-      zIndex: 5,
-    },
-    bag: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.42,
-      offsetX: availableWidth * 0.25,
-      offsetY: availableHeight * 0.30,
-      rotation: 0,
-      zIndex: 6,
-    },
-    accessory: {
-      maxSize: Math.min(availableWidth, availableHeight) * 0.30,
-      offsetX: -availableWidth * 0.30,
-      offsetY: availableHeight * 0.15,
-      rotation: 0,
-      zIndex: 7,
-    },
-  };
-
-  const sortedItems = items.sort((a, b) => {
-    const aConfig = slotConfigs[a.slot_type] || { zIndex: 999 };
-    const bConfig = slotConfigs[b.slot_type] || { zIndex: 999 };
-    return aConfig.zIndex - bConfig.zIndex;
+  const sortedItems = [...items].sort((a, b) => {
+    const aZ = slotConfigs[a.slot_type]?.zIndex ?? 999;
+    const bZ = slotConfigs[b.slot_type]?.zIndex ?? 999;
+    return aZ - bZ;
   });
 
   for (const item of sortedItems) {
-    const config = slotConfigs[item.slot_type];
+    const box = slotConfigs[item.slot_type];
 
     try {
       const img = await loadImageWithProxy(item.image_url, useProxy);
-      const aspectRatio = img.width / img.height;
 
-      let width: number;
-      let height: number;
-
-      if (!config) {
-        const fallbackMaxSize = Math.min(availableWidth, availableHeight) * 0.2;
-        if (aspectRatio > 1) {
-          width = fallbackMaxSize;
-          height = fallbackMaxSize / aspectRatio;
-        } else {
-          height = fallbackMaxSize;
-          width = fallbackMaxSize * aspectRatio;
-        }
-
+      if (!box) {
+        const fallback: SlotBoundingBox = {
+          cx: canvasWidth / 2, cy: canvasHeight / 2,
+          maxWidth: canvasWidth * 0.18, maxHeight: canvasHeight * 0.14,
+          rotation: 0, zIndex: 999,
+        };
+        const fit = fitImageToBox(img.width, img.height, fallback);
         positions.push({
-          product_id: item.product_id,
-          image_url: item.image_url,
-          slot_type: item.slot_type,
-          x: centerX - width / 2,
-          y: centerY - height / 2,
-          width,
-          height,
-          rotation: 0,
-          price: item.price,
-          name: item.name,
-          skipBgRemoval: item.skipBgRemoval,
+          product_id: item.product_id, image_url: item.image_url, slot_type: item.slot_type,
+          ...fit, rotation: 0, price: item.price, name: item.name, skipBgRemoval: item.skipBgRemoval,
         });
         continue;
       }
 
-      if (aspectRatio > 1) {
-        width = config.maxSize;
-        height = config.maxSize / aspectRatio;
-      } else {
-        height = config.maxSize;
-        width = config.maxSize * aspectRatio;
-      }
-
-      const x = centerX + config.offsetX - width / 2;
-      const y = centerY + config.offsetY - height / 2;
-
+      const fit = fitImageToBox(img.width, img.height, box);
       positions.push({
-        product_id: item.product_id,
-        image_url: item.image_url,
-        slot_type: item.slot_type,
-        x,
-        y,
-        width,
-        height,
-        rotation: config.rotation,
-        price: item.price,
-        name: item.name,
-        skipBgRemoval: item.skipBgRemoval,
+        product_id: item.product_id, image_url: item.image_url, slot_type: item.slot_type,
+        ...fit, rotation: box.rotation, price: item.price, name: item.name, skipBgRemoval: item.skipBgRemoval,
       });
     } catch (error) {
       console.error(`Failed to load image for ${item.slot_type}:`, error);
-      const fallbackSize = config ? config.maxSize : Math.min(availableWidth, availableHeight) * 0.2;
-      const x = centerX + (config?.offsetX || 0) - fallbackSize / 2;
-      const y = centerY + (config?.offsetY || 0) - fallbackSize / 2;
-
+      const fallbackBox = box || {
+        cx: canvasWidth / 2, cy: canvasHeight / 2,
+        maxWidth: canvasWidth * 0.18, maxHeight: canvasHeight * 0.14,
+        rotation: 0, zIndex: 999,
+      };
       positions.push({
-        product_id: item.product_id,
-        image_url: item.image_url,
-        slot_type: item.slot_type,
-        x,
-        y,
-        width: fallbackSize,
-        height: fallbackSize,
-        rotation: config?.rotation || 0,
-        price: item.price,
-        name: item.name,
-        skipBgRemoval: item.skipBgRemoval,
+        product_id: item.product_id, image_url: item.image_url, slot_type: item.slot_type,
+        x: fallbackBox.cx - fallbackBox.maxWidth / 2, y: fallbackBox.cy - fallbackBox.maxHeight / 2,
+        width: fallbackBox.maxWidth, height: fallbackBox.maxHeight,
+        rotation: fallbackBox.rotation, price: item.price, name: item.name, skipBgRemoval: item.skipBgRemoval,
       });
     }
   }
@@ -332,6 +272,8 @@ const SLOT_CATEGORY_LABELS: Record<string, string> = {
   shoes: 'Shoes',
   bag: 'Bag',
   accessory: 'Accessory',
+  accessory_2: 'Accessory',
+  necktie: 'Necktie',
 };
 
 function drawPriceLabel(

@@ -16,7 +16,7 @@ import {
 } from './matchingData';
 
 function getAllItems(outfit: OutfitCandidate): Product[] {
-  return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory]
+  return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2, outfit.necktie]
     .filter(Boolean) as Product[];
 }
 
@@ -359,7 +359,7 @@ function scoreMoodCoherenceAxis(outfit: OutfitCandidate): AxisResult {
 }
 
 function scoreAccessoryHarmonyAxis(outfit: OutfitCandidate): AxisResult {
-  const accessories = [outfit.bag, outfit.accessory].filter(Boolean) as Product[];
+  const accessories = [outfit.bag, outfit.accessory, outfit.accessory_2, outfit.necktie].filter(Boolean) as Product[];
   if (accessories.length === 0) return { score: 70, hasData: false };
 
   const mainItems = getCoreItems(outfit);

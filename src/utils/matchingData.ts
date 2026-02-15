@@ -286,6 +286,7 @@ export const SUB_CATEGORY_STYLE: Record<string, string> = {
   sneaker: 'casual', sandal: 'casual', canvas: 'casual', runner: 'casual',
   backpack: 'casual', crossbody: 'casual', cap: 'casual', beanie: 'casual',
   belt: 'casual', scarf: 'casual', glove: 'casual', duffle: 'casual',
+  necktie: 'formal', bowtie: 'formal',
 
   track_jacket: 'sporty', windbreaker: 'sporty', puffer: 'sporty',
   legging: 'sporty', track_pants: 'sporty', biker_shorts: 'sporty',

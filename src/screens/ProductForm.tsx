@@ -18,7 +18,8 @@ const CATEGORIES = [
   { value: 'bottom', label: '하의' },
   { value: 'shoes', label: '신발' },
   { value: 'bag', label: '가방' },
-  { value: 'accessory', label: '액세서리' }
+  { value: 'accessory', label: '액세서리' },
+  { value: 'necktie', label: '넥타이' },
 ];
 
 const GENDERS = [
@@ -269,7 +270,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         '미드레이어': 'mid',
         '신발': 'shoes',
         '가방': 'bag',
-        '액세서리': 'accessory'
+        '액세서리': 'accessory',
+        '넥타이': 'necktie',
       };
 
       const genderMap: Record<string, string> = {

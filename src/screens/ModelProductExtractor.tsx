@@ -150,7 +150,7 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
         const analysis = await analyzeFashionImage(item.extractedImageUrl);
         const categoryMap: Record<string, string> = {
           '상의': 'top', '하의': 'bottom', '아우터': 'outer',
-          '미드레이어': 'mid', '신발': 'shoes', '가방': 'bag', '액세서리': 'accessory',
+          '미드레이어': 'mid', '신발': 'shoes', '가방': 'bag', '액세서리': 'accessory', '넥타이': 'necktie',
         };
         const genderMap: Record<string, string> = {
           '남성': 'MALE', '여성': 'FEMALE', '공용': 'UNISEX',

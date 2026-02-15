@@ -205,11 +205,14 @@ export default function AdminPins() {
   const getItemLabel = (item: string) => {
     const labels: Record<string, string> = {
       outer: '아우터',
+      mid: '미드레이어',
       top: '상의',
       bottom: '하의',
       shoes: '신발',
       bag: '가방',
-      accessory: '액세서리'
+      accessory: '액세서리 1',
+      accessory_2: '액세서리 2',
+      necktie: '넥타이',
     };
     return labels[item] || item;
   };
