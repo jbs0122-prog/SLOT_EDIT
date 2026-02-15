@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, Image as ImageIcon, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { X, Image as ImageIcon, AlertCircle, CheckCircle, Loader, Send, RefreshCw } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { generateAndSaveFlatlay } from '../utils/flatlayRenderer';
-import { generateAndSaveModelPhoto } from '../utils/modelPhotoGenerator';
+import { generateAndSaveModelPhoto, reviseModelPhoto } from '../utils/modelPhotoGenerator';
 
 interface FlatlayRendererProps {
   outfitId: string;
@@ -33,6 +33,10 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
   const [modelImageUrl, setModelImageUrl] = useState('');
   const [modelPhotoError, setModelPhotoError] = useState('');
   const [renderingStep, setRenderingStep] = useState('');
+  const [revisionText, setRevisionText] = useState('');
+  const [revising, setRevising] = useState(false);
+  const [revisionError, setRevisionError] = useState('');
+  const [cleanImageUrl, setCleanImageUrl] = useState('');
 
   useEffect(() => {
     loadOutfitItems();
@@ -100,13 +104,14 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         name: item.product!.name,
       }));
 
-      const { imageUrl, cleanImageUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
+      const { imageUrl, cleanImageUrl: cleanUrl } = await generateAndSaveFlatlay(outfitId, renderItems);
 
       setRenderedImageUrl(imageUrl);
+      setCleanImageUrl(cleanUrl);
       setRenderingStep('AI 모델컷 생성 중... (최대 30초 소요)');
 
       try {
-        const modelUrl = await generateAndSaveModelPhoto(outfitId, cleanImageUrl);
+        const modelUrl = await generateAndSaveModelPhoto(outfitId, cleanUrl);
         setModelImageUrl(modelUrl);
       } catch (modelError) {
         console.error('Model photo generation error:', modelError);
@@ -121,6 +126,29 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
     } finally {
       setRendering(false);
       setRenderingStep('');
+    }
+  };
+
+  const handleRevision = async () => {
+    if (!revisionText.trim() || !modelImageUrl || !cleanImageUrl) return;
+
+    setRevising(true);
+    setRevisionError('');
+
+    try {
+      const newModelUrl = await reviseModelPhoto(
+        outfitId,
+        cleanImageUrl,
+        modelImageUrl,
+        revisionText.trim()
+      );
+      setModelImageUrl(newModelUrl);
+      setRevisionText('');
+    } catch (err) {
+      console.error('Revision error:', err);
+      setRevisionError((err as Error).message);
+    } finally {
+      setRevising(false);
     }
   };
 
@@ -286,7 +314,15 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                         AI 모델컷
                       </h3>
                       {modelImageUrl ? (
-                        <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="bg-gray-50 rounded-lg p-3 relative">
+                          {revising && (
+                            <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center z-10">
+                              <div className="flex items-center gap-2 text-gray-700">
+                                <Loader className="animate-spin" size={20} />
+                                <span className="text-sm font-medium">수정 중...</span>
+                              </div>
+                            </div>
+                          )}
                           <img
                             src={modelImageUrl}
                             alt="AI model photo"
@@ -302,6 +338,47 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                       )}
                     </div>
                   </div>
+
+                  {modelImageUrl && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <RefreshCw size={16} className="text-gray-600" />
+                        <h4 className="text-sm font-semibold text-gray-900">
+                          모델컷 수정 요청
+                        </h4>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={revisionText}
+                          onChange={(e) => setRevisionText(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !revising) handleRevision(); }}
+                          placeholder="예: 포즈를 바꿔줘, 셔츠를 넣어서 입혀줘, 코트를 열어줘..."
+                          disabled={revising}
+                          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                        />
+                        <button
+                          onClick={handleRevision}
+                          disabled={revising || !revisionText.trim()}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+                        >
+                          {revising ? (
+                            <Loader className="animate-spin" size={16} />
+                          ) : (
+                            <Send size={16} />
+                          )}
+                          수정
+                        </button>
+                      </div>
+                      {revisionError && (
+                        <p className="text-xs text-red-600 mt-2">{revisionError}</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        AI에게 모델컷의 수정사항을 요청하세요. 기존 이미지를 기반으로 수정됩니다.
+                      </p>
+                    </div>
+                  )}
+
                   <button
                     onClick={() => { onRendered(); onClose(); }}
                     className="w-full bg-gray-900 text-white px-6 py-3 rounded-lg hover:bg-gray-800 font-medium"

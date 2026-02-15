@@ -19,7 +19,6 @@ const CATEGORIES = [
   { value: 'shoes', label: '신발' },
   { value: 'bag', label: '가방' },
   { value: 'accessory', label: '액세서리' },
-  { value: 'necktie', label: '넥타이' },
 ];
 
 const GENDERS = [
@@ -145,6 +144,7 @@ const SUB_CATEGORIES: Record<string, { value: string; label: string }[]> = {
   ],
   accessory: [
     { value: '', label: '선택 안함' },
+    { value: 'necktie', label: 'Necktie (넥타이)' },
     { value: 'belt', label: 'Belt (벨트)' },
     { value: 'cap', label: 'Cap (모자)' },
     { value: 'scarf', label: 'Scarf (스카프)' },
@@ -271,7 +271,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         '신발': 'shoes',
         '가방': 'bag',
         '액세서리': 'accessory',
-        '넥타이': 'necktie',
+        '넥타이': 'accessory',
       };
 
       const genderMap: Record<string, string> = {
@@ -287,10 +287,12 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       const validSeasons = ['spring', 'summer', 'fall', 'winter'];
       const validVibes = ['ELEVATED_COOL', 'EFFORTLESS_NATURAL', 'ARTISTIC_MINIMAL', 'RETRO_LUXE', 'SPORT_MODERN', 'CREATIVE_LAYERED'];
 
+      const isNecktie = analysis.category === '넥타이';
+
       setFormData(prev => ({
         ...prev,
         name: analysis.description || prev.name,
-        category: categoryMap[analysis.category] as Product['category'] || prev.category,
+        category: (categoryMap[analysis.category] as Product['category']) || prev.category,
         gender: genderMap[analysis.gender] || prev.gender,
         color: analysis.color || prev.color,
         material: analysis.material || prev.material,
@@ -299,7 +301,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         season: analysis.season?.filter(s => validSeasons.includes(s)).length > 0 ? analysis.season.filter(s => validSeasons.includes(s)) : prev.season,
         color_family: validColorFamilies.includes(analysis.color_family) ? analysis.color_family : prev.color_family,
         color_tone: validColorTones.includes(analysis.color_tone) ? analysis.color_tone : prev.color_tone,
-        sub_category: analysis.sub_category || prev.sub_category,
+        sub_category: isNecktie ? 'necktie' : (analysis.sub_category || prev.sub_category),
         pattern: validPatterns.includes(analysis.pattern) ? analysis.pattern : prev.pattern,
         formality: analysis.formality ? Math.max(1, Math.min(5, Math.round(analysis.formality))) : prev.formality,
         warmth: analysis.warmth ? Math.max(1, Math.min(5, Math.round(analysis.warmth))) : prev.warmth

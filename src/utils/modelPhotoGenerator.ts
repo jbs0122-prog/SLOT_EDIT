@@ -5,6 +5,8 @@ export interface ModelPhotoOptions {
   gender: string;
   bodyType: string;
   occasion?: string;
+  revisionImageUrl?: string;
+  revisionPrompt?: string;
 }
 
 export async function generateModelPhoto(
@@ -131,6 +133,67 @@ export async function generateAndSaveModelPhoto(
     }
   } catch (compressError) {
     console.error('Model photo compression failed, using original:', compressError);
+  }
+
+  const { error: updateError } = await supabase
+    .from('outfits')
+    .update({
+      image_url_on_model: finalUrl,
+    })
+    .eq('id', outfitId);
+
+  if (updateError) throw updateError;
+
+  return finalUrl;
+}
+
+export async function reviseModelPhoto(
+  outfitId: string,
+  flatlayImageUrl: string,
+  currentModelImageUrl: string,
+  revisionPrompt: string
+): Promise<string> {
+  const { data: outfit, error: outfitError } = await supabase
+    .from('outfits')
+    .select('gender, body_type, tpo')
+    .eq('id', outfitId)
+    .single();
+
+  if (outfitError) throw outfitError;
+  if (!outfit) throw new Error('Outfit not found');
+
+  const { imageUrl: rawImageUrl } = await generateModelPhoto({
+    flatlayImageUrl,
+    gender: outfit.gender,
+    bodyType: outfit.body_type,
+    occasion: outfit.tpo || undefined,
+    revisionImageUrl: currentModelImageUrl,
+    revisionPrompt,
+  });
+
+  let finalUrl = rawImageUrl;
+
+  try {
+    const compressedBlob = await compressImageFromUrl(rawImageUrl, 400);
+
+    const fileName = `model-photo-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+    const filePath = `outfits/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('product-images')
+      .upload(filePath, compressedBlob, {
+        contentType: 'image/webp',
+        cacheControl: '3600',
+      });
+
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+      finalUrl = urlData.publicUrl;
+    }
+  } catch (compressError) {
+    console.error('Model photo revision compression failed, using original:', compressError);
   }
 
   const { error: updateError } = await supabase

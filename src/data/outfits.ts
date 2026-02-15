@@ -10,7 +10,7 @@ export interface Product {
   id: string;
   brand: string;
   name: string;
-  category: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'necktie';
+  category: 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory';
   gender: string;
   body_type: string[];
   vibe: string[];

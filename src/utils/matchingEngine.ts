@@ -142,8 +142,9 @@ export function generateOutfitCombinations(
   const bottoms = filterProducts('bottom');
   const shoes = filterProducts('shoes');
   const bags = filterProducts('bag');
-  const accessories = filterProducts('accessory');
-  const neckties = filterProducts('necktie');
+  const allAccessories = filterProducts('accessory');
+  const accessories = allAccessories.filter(p => p.sub_category !== 'necktie');
+  const neckties = allAccessories.filter(p => p.sub_category === 'necktie');
 
   if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) {
     return [];

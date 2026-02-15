@@ -22,6 +22,16 @@ const SLOT_TYPES = [
   { value: 'necktie', label: '넥타이' },
 ];
 
+const PRODUCT_CATEGORIES = [
+  { value: 'outer', label: '아우터' },
+  { value: 'mid', label: '미드레이어' },
+  { value: 'top', label: '상의' },
+  { value: 'bottom', label: '하의' },
+  { value: 'shoes', label: '신발' },
+  { value: 'bag', label: '가방' },
+  { value: 'accessory', label: '액세서리' },
+];
+
 export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }: OutfitProductLinkerProps) {
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [linkedItems, setLinkedItems] = useState<OutfitItem[]>([]);
@@ -319,8 +329,8 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">전체 카테고리</option>
-                  {SLOT_TYPES.map(slot => (
-                    <option key={slot.value} value={slot.value}>{slot.label}</option>
+                  {PRODUCT_CATEGORIES.map(cat => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
                   ))}
                 </select>
               </div>
@@ -361,7 +371,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                             </p>
                           </div>
                           <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded whitespace-nowrap">
-                            {SLOT_TYPES.find(s => s.value === product.category)?.label}
+                            {PRODUCT_CATEGORIES.find(c => c.value === product.category)?.label}
                           </span>
                         </div>
                         {product.price && (

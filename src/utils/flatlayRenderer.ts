@@ -53,6 +53,33 @@ async function loadImageWithProxy(url: string, useProxy: boolean): Promise<HTMLI
   });
 }
 
+function computeEdgeMap(data: Uint8ClampedArray, w: number, h: number): Float32Array {
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const idx = i * 4;
+    gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+  }
+
+  const edges = new Float32Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const tl = gray[(y - 1) * w + (x - 1)];
+      const tc = gray[(y - 1) * w + x];
+      const tr = gray[(y - 1) * w + (x + 1)];
+      const ml = gray[y * w + (x - 1)];
+      const mr = gray[y * w + (x + 1)];
+      const bl = gray[(y + 1) * w + (x - 1)];
+      const bc = gray[(y + 1) * w + x];
+      const br = gray[(y + 1) * w + (x + 1)];
+
+      const gx = -tl + tr - 2 * ml + 2 * mr - bl + br;
+      const gy = -tl - 2 * tc - tr + bl + 2 * bc + br;
+      edges[y * w + x] = Math.sqrt(gx * gx + gy * gy);
+    }
+  }
+  return edges;
+}
+
 function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
   const tempCanvas = document.createElement('canvas');
   const w = img.width;
@@ -67,6 +94,9 @@ function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
 
   const whiteThreshold = 230;
   const edgeSoftness = 25;
+  const edgeStrengthThreshold = 30;
+
+  const edgeMap = computeEdgeMap(data, w, h);
 
   const isWhitish = (idx: number) => {
     const r = data[idx];
@@ -120,6 +150,9 @@ function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
     for (const npx of neighbors) {
       if (npx < 0 || visited[npx]) continue;
       visited[npx] = 1;
+
+      if (edgeMap[npx] > edgeStrengthThreshold) continue;
+
       const idx = npx * 4;
       if (isWhitish(idx)) {
         background[npx] = 1;
@@ -172,15 +205,15 @@ function getSlotConfigs(canvasWidth: number, canvasHeight: number): Record<strin
   const h = canvasHeight;
 
   return {
-    outer:       { cx: w * 0.26, cy: h * 0.28, maxWidth: w * 0.42, maxHeight: h * 0.44, rotation: 0, zIndex: 1 },
-    top:         { cx: w * 0.68, cy: h * 0.22, maxWidth: w * 0.34, maxHeight: h * 0.30, rotation: 0, zIndex: 2 },
-    mid:         { cx: w * 0.50, cy: h * 0.26, maxWidth: w * 0.36, maxHeight: h * 0.32, rotation: 0, zIndex: 3 },
-    bottom:      { cx: w * 0.65, cy: h * 0.58, maxWidth: w * 0.36, maxHeight: h * 0.38, rotation: 0, zIndex: 4 },
-    shoes:       { cx: w * 0.22, cy: h * 0.74, maxWidth: w * 0.30, maxHeight: h * 0.22, rotation: 0, zIndex: 5 },
-    bag:         { cx: w * 0.78, cy: h * 0.78, maxWidth: w * 0.26, maxHeight: h * 0.26, rotation: 0, zIndex: 6 },
-    accessory:   { cx: w * 0.18, cy: h * 0.54, maxWidth: w * 0.18, maxHeight: h * 0.14, rotation: 0, zIndex: 7 },
-    accessory_2: { cx: w * 0.46, cy: h * 0.88, maxWidth: w * 0.16, maxHeight: h * 0.12, rotation: 0, zIndex: 8 },
-    necktie:     { cx: w * 0.88, cy: h * 0.42, maxWidth: w * 0.12, maxHeight: h * 0.22, rotation: 0, zIndex: 9 },
+    outer:       { cx: w * 0.26, cy: h * 0.28, maxWidth: w * 0.48, maxHeight: h * 0.50, rotation: 0, zIndex: 1 },
+    top:         { cx: w * 0.68, cy: h * 0.22, maxWidth: w * 0.39, maxHeight: h * 0.35, rotation: 0, zIndex: 2 },
+    mid:         { cx: w * 0.50, cy: h * 0.26, maxWidth: w * 0.41, maxHeight: h * 0.37, rotation: 0, zIndex: 3 },
+    bottom:      { cx: w * 0.65, cy: h * 0.58, maxWidth: w * 0.41, maxHeight: h * 0.44, rotation: 0, zIndex: 4 },
+    shoes:       { cx: w * 0.22, cy: h * 0.74, maxWidth: w * 0.35, maxHeight: h * 0.25, rotation: 0, zIndex: 5 },
+    bag:         { cx: w * 0.78, cy: h * 0.78, maxWidth: w * 0.30, maxHeight: h * 0.30, rotation: 0, zIndex: 6 },
+    accessory:   { cx: w * 0.18, cy: h * 0.54, maxWidth: w * 0.21, maxHeight: h * 0.16, rotation: 0, zIndex: 7 },
+    accessory_2: { cx: w * 0.46, cy: h * 0.88, maxWidth: w * 0.18, maxHeight: h * 0.14, rotation: 0, zIndex: 8 },
+    necktie:     { cx: w * 0.88, cy: h * 0.42, maxWidth: w * 0.14, maxHeight: h * 0.25, rotation: 0, zIndex: 9 },
   };
 }
 

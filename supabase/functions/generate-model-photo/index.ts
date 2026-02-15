@@ -13,6 +13,8 @@ interface RequestBody {
   gender: string;
   bodyType: string;
   occasion?: string;
+  revisionImageUrl?: string;
+  revisionPrompt?: string;
 }
 
 function isAllowedUrl(url: string): boolean {
@@ -114,7 +116,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { flatlayImageUrl, gender, bodyType, occasion }: RequestBody =
+    const { flatlayImageUrl, gender, bodyType, occasion, revisionImageUrl, revisionPrompt }: RequestBody =
       await req.json();
 
     if (!flatlayImageUrl || !gender || !bodyType) {
@@ -130,6 +132,18 @@ Deno.serve(async (req: Request) => {
     if (!isAllowedUrl(flatlayImageUrl)) {
       return new Response(
         JSON.stringify({ error: "Invalid image URL" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const isRevision = !!(revisionImageUrl && revisionPrompt);
+
+    if (isRevision && !isAllowedUrl(revisionImageUrl!)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid revision image URL" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -181,7 +195,45 @@ Deno.serve(async (req: Request) => {
 
     const safeOccasion = occasion ? occasion.substring(0, 100) : "";
 
-    const prompt = `CRITICAL: The model MUST be ${genderText.toUpperCase()}. Generate a professional fashion editorial photo of ${genderDescription}
+    let prompt: string;
+    const contentParts: Array<Record<string, unknown>> = [];
+
+    if (isRevision) {
+      const safeRevision = revisionPrompt!.substring(0, 500);
+
+      const revisionFetchResponse = await fetch(revisionImageUrl!);
+      if (!revisionFetchResponse.ok) {
+        throw new Error("Failed to fetch revision image");
+      }
+      const revisionBuffer = await revisionFetchResponse.arrayBuffer();
+      const base64Revision = uint8ArrayToBase64(new Uint8Array(revisionBuffer));
+      const revisionContentType = revisionFetchResponse.headers.get("content-type") || "image/png";
+      const revisionMimeType = revisionContentType.includes("webp")
+        ? "image/webp"
+        : revisionContentType.includes("jpeg") || revisionContentType.includes("jpg")
+          ? "image/jpeg"
+          : "image/png";
+
+      prompt = `You are editing an existing model photo. Here is the current model photo and the original flatlay reference.
+
+REVISION REQUEST: ${safeRevision}
+
+IMPORTANT RULES:
+- Keep the same model (same person, same ethnicity, same body type)
+- Keep the same outfit items from the flatlay
+- The model MUST remain ${genderText.toUpperCase()}
+- Only apply the specific changes requested above
+- Maintain the same professional fashion editorial quality
+- Studio lighting with clean white or light gray background
+- Full body shot showing the complete outfit`;
+
+      contentParts.push(
+        { text: prompt },
+        { inline_data: { mime_type: revisionMimeType, data: base64Revision } },
+        { inline_data: { mime_type: mimeType, data: base64Image } }
+      );
+    } else {
+      prompt = `CRITICAL: The model MUST be ${genderText.toUpperCase()}. Generate a professional fashion editorial photo of ${genderDescription}
 
 The model is ${randomEthnicity}, wearing the exact outfit shown in the flatlay image.
 
@@ -204,6 +256,12 @@ ${safeOccasion ? `- Context: outfit for ${safeOccasion}` : ""}
 
 REMINDER: The model in the photo MUST be a ${genderText} person. This is a ${genderText === "male" ? "menswear" : "womenswear"} outfit.`;
 
+      contentParts.push(
+        { text: prompt },
+        { inline_data: { mime_type: mimeType, data: base64Image } }
+      );
+    }
+
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${geminiApiKey}`,
       {
@@ -212,10 +270,7 @@ REMINDER: The model in the photo MUST be a ${genderText} person. This is a ${gen
         body: JSON.stringify({
           contents: [
             {
-              parts: [
-                { text: prompt },
-                { inline_data: { mime_type: mimeType, data: base64Image } },
-              ],
+              parts: contentParts,
             },
           ],
           generationConfig: { temperature: 0.7 },
