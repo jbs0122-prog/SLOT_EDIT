@@ -11,6 +11,7 @@ export interface ProductPosition {
   slot_type: string;
   price?: number | null;
   name?: string;
+  skipBgRemoval?: boolean;
 }
 
 interface ImageDimensions {
@@ -54,32 +55,101 @@ async function loadImageWithProxy(url: string, useProxy: boolean): Promise<HTMLI
 
 function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
   const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = img.width;
-  tempCanvas.height = img.height;
+  const w = img.width;
+  const h = img.height;
+  tempCanvas.width = w;
+  tempCanvas.height = h;
   const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })!;
   tempCtx.drawImage(img, 0, 0);
 
-  const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+  const imageData = tempCtx.getImageData(0, 0, w, h);
   const data = imageData.data;
 
-  const whiteThreshold = 235;
-  const edgeSoftness = 20;
+  const whiteThreshold = 230;
+  const edgeSoftness = 25;
 
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
+  const isWhitish = (idx: number) => {
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    const a = data[idx + 3];
+    if (a < 10) return true;
+    return r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold;
+  };
 
-    if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) {
-      data[i + 3] = 0;
-    } else {
-      const minChannel = Math.min(r, g, b);
-      const brightness = (r + g + b) / 3;
+  const isSemiWhite = (idx: number) => {
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    const brightness = (r + g + b) / 3;
+    const minCh = Math.min(r, g, b);
+    return brightness > (whiteThreshold - edgeSoftness) && minCh > (whiteThreshold - edgeSoftness * 2);
+  };
 
-      if (brightness > (whiteThreshold - edgeSoftness) && minChannel > (whiteThreshold - edgeSoftness * 2)) {
-        const distFromThreshold = whiteThreshold - brightness;
-        const alpha = Math.min(255, Math.max(0, Math.round((distFromThreshold / edgeSoftness) * 255)));
-        data[i + 3] = Math.min(data[i + 3], alpha);
+  const visited = new Uint8Array(w * h);
+  const background = new Uint8Array(w * h);
+
+  const queue: number[] = [];
+
+  for (let x = 0; x < w; x++) {
+    const topIdx = x * 4;
+    const botIdx = ((h - 1) * w + x) * 4;
+    if (isWhitish(topIdx)) { queue.push(x); visited[x] = 1; background[x] = 1; }
+    const botPx = (h - 1) * w + x;
+    if (isWhitish(botIdx)) { queue.push(botPx); visited[botPx] = 1; background[botPx] = 1; }
+  }
+  for (let y = 1; y < h - 1; y++) {
+    const leftPx = y * w;
+    const rightPx = y * w + (w - 1);
+    if (isWhitish(leftPx * 4)) { queue.push(leftPx); visited[leftPx] = 1; background[leftPx] = 1; }
+    if (isWhitish(rightPx * 4)) { queue.push(rightPx); visited[rightPx] = 1; background[rightPx] = 1; }
+  }
+
+  while (queue.length > 0) {
+    const px = queue.shift()!;
+    const x = px % w;
+    const y = (px - x) / w;
+
+    const neighbors = [
+      y > 0 ? px - w : -1,
+      y < h - 1 ? px + w : -1,
+      x > 0 ? px - 1 : -1,
+      x < w - 1 ? px + 1 : -1,
+    ];
+
+    for (const npx of neighbors) {
+      if (npx < 0 || visited[npx]) continue;
+      visited[npx] = 1;
+      const idx = npx * 4;
+      if (isWhitish(idx)) {
+        background[npx] = 1;
+        queue.push(npx);
+      }
+    }
+  }
+
+  for (let px = 0; px < w * h; px++) {
+    const idx = px * 4;
+    if (background[px]) {
+      data[idx + 3] = 0;
+    } else if (isSemiWhite(idx)) {
+      const x = px % w;
+      const y = (px - x) / w;
+      let nearBg = false;
+      for (let dy = -2; dy <= 2 && !nearBg; dy++) {
+        for (let dx = -2; dx <= 2 && !nearBg; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < w && ny >= 0 && ny < h && background[ny * w + nx]) {
+            nearBg = true;
+          }
+        }
+      }
+      if (nearBg) {
+        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        const dist = whiteThreshold - brightness;
+        const alpha = Math.min(255, Math.max(0, Math.round((dist / edgeSoftness) * 255)));
+        data[idx + 3] = Math.min(data[idx + 3], alpha);
       }
     }
   }
@@ -89,7 +159,7 @@ function removeWhiteBackground(img: HTMLImageElement): HTMLCanvasElement {
 }
 
 async function calculateLayoutWithImages(
-  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string; skipBgRemoval?: boolean }>,
   canvasWidth: number,
   canvasHeight: number,
   padding: number,
@@ -200,6 +270,7 @@ async function calculateLayoutWithImages(
           rotation: 0,
           price: item.price,
           name: item.name,
+          skipBgRemoval: item.skipBgRemoval,
         });
         continue;
       }
@@ -226,6 +297,7 @@ async function calculateLayoutWithImages(
         rotation: config.rotation,
         price: item.price,
         name: item.name,
+        skipBgRemoval: item.skipBgRemoval,
       });
     } catch (error) {
       console.error(`Failed to load image for ${item.slot_type}:`, error);
@@ -244,6 +316,7 @@ async function calculateLayoutWithImages(
         rotation: config?.rotation || 0,
         price: item.price,
         name: item.name,
+        skipBgRemoval: item.skipBgRemoval,
       });
     }
   }
@@ -356,7 +429,7 @@ async function compressCanvasToTarget(
 }
 
 export async function renderFlatlay(
-  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string; skipBgRemoval?: boolean }>,
   options: RenderOptions = {}
 ): Promise<{ imageBlob: Blob; cleanBlob: Blob; positions: ProductPosition[] }> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -384,7 +457,7 @@ export async function renderFlatlay(
   for (const position of positions) {
     try {
       const img = await loadImageWithProxy(position.image_url, opts.useProxy);
-      const processedImg = removeWhiteBackground(img);
+      const drawSource = position.skipBgRemoval ? img : removeWhiteBackground(img);
 
       ctx.save();
 
@@ -401,7 +474,7 @@ export async function renderFlatlay(
       ctx.shadowOffsetX = 4;
       ctx.shadowOffsetY = 6;
 
-      ctx.drawImage(processedImg, position.x, position.y, position.width, position.height);
+      ctx.drawImage(drawSource, position.x, position.y, position.width, position.height);
 
       ctx.restore();
     } catch (error) {
@@ -474,7 +547,7 @@ export async function renderFlatlayWithCustomPositions(
   for (const position of positions) {
     try {
       const img = await loadImageWithProxy(position.image_url, opts.useProxy);
-      const processedImg = removeWhiteBackground(img);
+      const drawSource = position.skipBgRemoval ? img : removeWhiteBackground(img);
 
       ctx.save();
 
@@ -491,7 +564,7 @@ export async function renderFlatlayWithCustomPositions(
       ctx.shadowOffsetX = 4;
       ctx.shadowOffsetY = 6;
 
-      ctx.drawImage(processedImg, position.x, position.y, position.width, position.height);
+      ctx.drawImage(drawSource, position.x, position.y, position.width, position.height);
 
       ctx.restore();
     } catch (error) {
@@ -521,7 +594,7 @@ export async function renderFlatlayWithCustomPositions(
 
 export async function generateAndSaveFlatlay(
   outfitId: string,
-  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string }>,
+  items: Array<{ slot_type: string; image_url: string; product_id: string; price?: number | null; name?: string; skipBgRemoval?: boolean }>,
   options: RenderOptions = {}
 ): Promise<{ imageUrl: string; cleanImageUrl: string; positions: ProductPosition[] }> {
   const { imageBlob, cleanBlob, positions } = await renderFlatlay(items, options);
