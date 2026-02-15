@@ -225,15 +225,8 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">코디 슬롯</h3>
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <img
-                  src={outfit.image_url_flatlay}
-                  alt="Outfit"
-                  className="w-full h-64 object-cover rounded-lg mb-3"
-                />
-                <div className="text-sm text-gray-600">
-                  {outfit.gender} · {outfit.body_type} · {outfit.vibe}
-                </div>
+              <div className="text-sm text-gray-500 mb-3">
+                {outfit.gender} · {outfit.body_type} · {outfit.vibe}
               </div>
 
               <div className="space-y-3">
@@ -309,6 +302,34 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                   );
                 })}
               </div>
+
+              {(outfit.image_url_flatlay || outfit.image_url_on_model) && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">생성된 이미지</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {outfit.image_url_flatlay && (
+                      <div className="bg-gray-50 rounded-lg p-2">
+                        <p className="text-xs text-gray-500 mb-1.5 text-center font-medium">플랫레이</p>
+                        <img
+                          src={outfit.image_url_flatlay}
+                          alt="Flatlay"
+                          className="w-full rounded object-contain"
+                        />
+                      </div>
+                    )}
+                    {outfit.image_url_on_model && (
+                      <div className="bg-gray-50 rounded-lg p-2">
+                        <p className="text-xs text-gray-500 mb-1.5 text-center font-medium">모델컷</p>
+                        <img
+                          src={outfit.image_url_on_model}
+                          alt="Model"
+                          className="w-full rounded object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
