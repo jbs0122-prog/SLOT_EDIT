@@ -529,6 +529,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                   </div>
                 )}
               </div>
+              <span className="ml-1 text-[10px] tracking-wide uppercase animate-shimmer font-medium">Tap to remix</span>
             </div>
           </div>
 
@@ -601,6 +602,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                 </div>
               )}
             </div>
+            <span className="ml-2 text-xs tracking-wide uppercase animate-shimmer font-medium">Tap to remix</span>
           </div>
         </div>
         <div className="flex items-center gap-2 text-sm">
