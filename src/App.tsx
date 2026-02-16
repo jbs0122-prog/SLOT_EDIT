@@ -166,24 +166,31 @@ function App() {
         if (h.startsWith('results')) {
           const sharedId = sharedLookIdFromHash(h);
           if (sharedId) {
-            const existing = data.find(o => o.id === sharedId);
-            if (existing) {
-              setSelectedOutfits([existing]);
-              setContext({ gender: existing.gender, bodyType: existing.body_type, vibe: existing.vibe, weather: null });
-              setCurrentScreen('results');
-              setActiveTab('home');
-              return;
+            let target = data.find(o => o.id === sharedId);
+            if (!target) {
+              const fetched = await fetchOutfitById(sharedId);
+              if (!fetched) {
+                window.location.hash = '';
+                setCurrentScreen('input');
+                return;
+              }
+              target = fetched;
             }
-            const outfit = await fetchOutfitById(sharedId);
-            if (outfit) {
-              setSelectedOutfits([outfit]);
-              setContext({ gender: outfit.gender, bodyType: outfit.body_type, vibe: outfit.vibe, weather: null });
-              setCurrentScreen('results');
-              setActiveTab('home');
-              return;
+            const g = normalizeString(target.gender);
+            const b = normalizeString(target.body_type);
+            const v = normalizeString(target.vibe);
+            const allMatching = data.filter(o =>
+              normalizeString(o.gender) === g &&
+              normalizeString(o.body_type) === b &&
+              normalizeString(o.vibe) === v
+            );
+            if (!allMatching.find(o => o.id === target!.id)) {
+              allMatching.unshift(target);
             }
-            window.location.hash = '';
-            setCurrentScreen('input');
+            setSelectedOutfits(allMatching);
+            setContext({ gender: target.gender, bodyType: target.body_type, vibe: target.vibe, weather: null });
+            setCurrentScreen('results');
+            setActiveTab('home');
             return;
           }
 
@@ -217,10 +224,21 @@ function App() {
       if (screen === 'results') {
         const sharedId = sharedLookIdFromHash(h);
         if (sharedId && selectedOutfitsRef.current.every(o => o.id !== sharedId)) {
-          const outfit = await fetchOutfitById(sharedId);
-          if (outfit) {
-            setSelectedOutfits([outfit]);
-            setContext({ gender: outfit.gender, bodyType: outfit.body_type, vibe: outfit.vibe, weather: null });
+          const target = await fetchOutfitById(sharedId);
+          if (target) {
+            const g = normalizeString(target.gender);
+            const b = normalizeString(target.body_type);
+            const v = normalizeString(target.vibe);
+            const allMatching = outfits.filter(o =>
+              normalizeString(o.gender) === g &&
+              normalizeString(o.body_type) === b &&
+              normalizeString(o.vibe) === v
+            );
+            if (!allMatching.find(o => o.id === target.id)) {
+              allMatching.unshift(target);
+            }
+            setSelectedOutfits(allMatching);
+            setContext({ gender: target.gender, bodyType: target.body_type, vibe: target.vibe, weather: null });
             setActiveTab('home');
             setCurrentScreen('results');
             return;
