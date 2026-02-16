@@ -22,76 +22,75 @@ export async function compressImageToTarget(
     img.onload = async () => {
       try {
         const originalSize = await getImageSize(imageUrl);
-
-        let { width, height } = calculateDimensions(
-          img.width,
-          img.height,
-          maxWidth,
-          maxHeight
-        );
-
-        let quality = 0.92;
-        let blob: Blob | null = null;
-        let attempts = 0;
-        const maxAttempts = 15;
         const targetBytes = targetSizeKB * 1024;
         const minBytes = minSizeKB * 1024;
-        let format: 'image/webp' | 'image/png' = 'image/webp';
 
-        while (attempts < maxAttempts) {
-          blob = await createCompressedBlob(img, width, height, quality, format);
+        const { width, height } = calculateDimensions(
+          img.width, img.height, maxWidth, maxHeight
+        );
 
-          if (blob.size >= minBytes && blob.size <= targetBytes) {
-            break;
-          }
+        const formats: Array<{ mime: string; bg: string }> = [
+          { mime: 'image/webp', bg: 'transparent' },
+          { mime: 'image/png', bg: 'transparent' },
+          { mime: 'image/jpeg', bg: '#FFFFFF' },
+        ];
 
-          if (blob.size < minBytes && format === 'image/webp') {
-            format = 'image/png';
-            quality = 0.92;
+        let bestBlob: Blob | null = null;
+
+        for (const fmt of formats) {
+          let q = 0.92;
+          let w = width;
+          let h = height;
+          let attempts = 0;
+
+          while (attempts < 12) {
+            const blob = await createCompressedBlob(img, w, h, q, fmt.mime, fmt.bg);
+
+            if (blob.size >= minBytes && blob.size <= targetBytes) {
+              bestBlob = blob;
+              break;
+            }
+
+            if (blob.size < minBytes) {
+              if (!bestBlob || blob.size > bestBlob.size) {
+                bestBlob = blob;
+              }
+              break;
+            }
+
+            if (blob.size > targetBytes) {
+              if (attempts < 4) {
+                q -= 0.1;
+              } else if (attempts < 8) {
+                q -= 0.05;
+                w = Math.floor(w * 0.95);
+                h = Math.floor(h * 0.95);
+              } else {
+                w = Math.floor(w * 0.9);
+                h = Math.floor(h * 0.9);
+                q = Math.max(0.3, q - 0.05);
+              }
+            }
+
             attempts++;
-            continue;
           }
 
-          if (blob.size < minBytes && format === 'image/png') {
+          if (bestBlob && bestBlob.size >= minBytes && bestBlob.size <= targetBytes) {
             break;
           }
-
-          if (blob.size > targetBytes) {
-            if (format === 'image/png') {
-              format = 'image/webp';
-              quality = 0.92;
-              attempts++;
-              continue;
-            }
-            if (attempts < 5) {
-              quality -= 0.1;
-            } else if (attempts < 10) {
-              quality -= 0.05;
-              const scale = 0.95;
-              width = Math.floor(width * scale);
-              height = Math.floor(height * scale);
-            } else {
-              const scale = 0.9;
-              width = Math.floor(width * scale);
-              height = Math.floor(height * scale);
-              quality = Math.max(0.3, quality - 0.05);
-            }
-          }
-
-          attempts++;
         }
 
-        if (!blob) {
+        if (!bestBlob) {
           throw new Error('이미지 압축 실패');
         }
 
-        const url = URL.createObjectURL(blob);
-        const compressionRatio = originalSize > 0 ? (blob.size / originalSize) * 100 : 0;
+        const url = URL.createObjectURL(bestBlob);
+        const compressionRatio = originalSize > 0 ? (bestBlob.size / originalSize) * 100 : 0;
 
         resolve({
-          blob,
+          blob: bestBlob,
           url,
-          size: blob.size,
+          size: bestBlob.size,
           originalSize,
           compressionRatio,
         });
@@ -131,7 +130,8 @@ async function createCompressedBlob(
   width: number,
   height: number,
   quality: number,
-  format: string = 'image/webp'
+  format: string = 'image/webp',
+  bgColor: string = 'transparent'
 ): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -142,8 +142,10 @@ async function createCompressedBlob(
     throw new Error('Canvas context 생성 실패');
   }
 
-  ctx.fillStyle = 'transparent';
-  ctx.fillRect(0, 0, width, height);
+  if (bgColor !== 'transparent') {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, width, height);
+  }
   ctx.drawImage(img, 0, 0, width, height);
 
   return new Promise((resolve, reject) => {

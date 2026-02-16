@@ -147,8 +147,10 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
     try {
       const compressed = await compressImageToTarget(item.extractedImageUrl, 500, 2000, 2000, 200);
 
-      const isPng = compressed.blob.type === 'image/png';
-      const ext = isPng ? 'png' : 'webp';
+      const mimeToExt: Record<string, string> = {
+        'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpeg',
+      };
+      const ext = mimeToExt[compressed.blob.type] || 'webp';
       const filename = `${item.label.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_compressed.${ext}`;
       downloadBlob(compressed.blob, filename);
 
