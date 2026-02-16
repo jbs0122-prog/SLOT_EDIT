@@ -529,9 +529,11 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                   </div>
                 )}
               </div>
-              <span className="ml-1 inline-flex items-center gap-1 border border-gray-300 rounded px-2 py-0.5">
-                <span className="text-[10px] text-gray-400">&rarr;</span>
-                <span className="text-[10px] tracking-wide uppercase animate-shimmer font-medium">Tap to remix</span>
+              <span className="ml-1 inline-flex items-center gap-1">
+                <span className="text-[10px] text-gray-400">&larr;</span>
+                <span className="inline-flex items-center border border-gray-300 rounded px-2 py-0.5">
+                  <span className="text-[10px] tracking-wide uppercase animate-shimmer font-medium">Tap to remix</span>
+                </span>
               </span>
             </div>
           </div>
