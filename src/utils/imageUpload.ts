@@ -59,6 +59,33 @@ export const validateImageFile = (file: File): string | null => {
   return null;
 };
 
+export const uploadProductBlob = async (blob: Blob, extension: string = 'webp'): Promise<ImageUploadResult> => {
+  try {
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
+    const filePath = `products/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('product-images')
+      .upload(filePath, blob, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: `image/${extension}`,
+      });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('product-images')
+      .getPublicUrl(data.path);
+
+    return { success: true, url: publicUrlData.publicUrl };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+};
+
 export const deleteProductImage = async (imageUrl: string): Promise<boolean> => {
   try {
     const urlParts = imageUrl.split('/product-images/');

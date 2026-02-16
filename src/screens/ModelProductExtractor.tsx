@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { uploadProductImage, validateImageFile } from '../utils/imageUpload';
+import { uploadProductBlob, uploadProductImage, validateImageFile } from '../utils/imageUpload';
 import { detectItemsInPhoto, extractProductImage } from '../utils/productExtractor';
 import { analyzeFashionImage } from '../utils/fashionAnalyzer';
 import { supabase } from '../utils/supabase';
@@ -136,7 +136,7 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
     }
   };
 
-  const handleSaveAsProduct = async (index: number) => {
+  const handleCompressAndSave = async (index: number) => {
     const item = items[index];
     if (!item.extractedImageUrl) return;
 
@@ -145,9 +145,20 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
     );
 
     try {
+      const compressed = await compressImageToTarget(item.extractedImageUrl, 500, 1200, 1200);
+
+      const filename = `${item.label.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_compressed.webp`;
+      downloadBlob(compressed.blob, filename);
+
+      const uploadResult = await uploadProductBlob(compressed.blob, 'webp');
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error(uploadResult.error || '압축 이미지 업로드 실패');
+      }
+      const compressedImageUrl = uploadResult.url;
+
       let analysisData: Record<string, unknown> = {};
       try {
-        const analysis = await analyzeFashionImage(item.extractedImageUrl);
+        const analysis = await analyzeFashionImage(compressedImageUrl);
         const categoryMap: Record<string, string> = {
           '상의': 'top', '하의': 'bottom', '아우터': 'outer',
           '미드레이어': 'mid', '신발': 'shoes', '가방': 'bag', '액세서리': 'accessory', '넥타이': 'accessory',
@@ -177,7 +188,8 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
       const { error } = await supabase.from('products').insert([{
         name: item.label,
         brand: '',
-        image_url: item.extractedImageUrl,
+        image_url: compressedImageUrl,
+        nobg_image_url: item.extractedImageUrl,
         stock_status: 'in_stock',
         body_type: [],
         ...analysisData,
@@ -185,41 +197,18 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
 
       if (error) throw error;
 
+      const sizeKB = (compressed.size / 1024).toFixed(1);
+      const originalSizeKB = (compressed.originalSize / 1024).toFixed(1);
+
       setItems((prev) =>
         prev.map((it, i) => (i === index ? { ...it, saving: false, saved: true } : it))
       );
+
+      alert(`완료!\n압축: ${originalSizeKB}KB → ${sizeKB}KB\n다운로드 + 제품 저장 완료`);
     } catch (error) {
-      alert('제품 저장 실패: ' + (error as Error).message);
+      alert('처리 실패: ' + (error as Error).message);
       setItems((prev) =>
         prev.map((it, i) => (i === index ? { ...it, saving: false } : it))
-      );
-    }
-  };
-
-  const handleDownloadCompressed = async (index: number) => {
-    const item = items[index];
-    if (!item.extractedImageUrl) return;
-
-    setItems((prev) =>
-      prev.map((it, i) => (i === index ? { ...it, downloading: true } : it))
-    );
-
-    try {
-      const result = await compressImageToTarget(item.extractedImageUrl, 100, 1200, 1200);
-
-      const filename = `${item.label.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_compressed.webp`;
-      downloadBlob(result.blob, filename);
-
-      const sizeKB = (result.size / 1024).toFixed(1);
-      const originalSizeKB = (result.originalSize / 1024).toFixed(1);
-      alert(
-        `압축 완료!\n원본: ${originalSizeKB}KB → 압축: ${sizeKB}KB\n압축률: ${result.compressionRatio.toFixed(1)}%`
-      );
-    } catch (error) {
-      alert('압축 실패: ' + (error as Error).message);
-    } finally {
-      setItems((prev) =>
-        prev.map((it, i) => (i === index ? { ...it, downloading: false } : it))
       );
     }
   };
@@ -521,43 +510,26 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
                               <Download size={14} />
                               이미지 보기
                             </a>
-                            <button
-                              onClick={() => handleDownloadCompressed(index)}
-                              disabled={item.downloading}
-                              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 text-sm font-medium transition-colors shadow-sm"
-                            >
-                              {item.downloading ? (
-                                <>
-                                  <Loader2 size={14} className="animate-spin" />
-                                  압축 중...
-                                </>
-                              ) : (
-                                <>
-                                  <Download size={14} />
-                                  압축 다운로드 {'(<100KB)'}
-                                </>
-                              )}
-                            </button>
                             {item.saved ? (
                               <div className="flex items-center gap-1.5 px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
                                 <Check size={14} />
-                                제품 저장됨
+                                다운로드 + 제품 저장 완료
                               </div>
                             ) : (
                               <button
-                                onClick={() => handleSaveAsProduct(index)}
+                                onClick={() => handleCompressAndSave(index)}
                                 disabled={item.saving}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium transition-colors"
+                                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 text-sm font-medium transition-colors shadow-sm"
                               >
                                 {item.saving ? (
                                   <>
                                     <Loader2 size={14} className="animate-spin" />
-                                    AI 분석 + 저장 중...
+                                    압축 + AI 분석 + 저장 중...
                                   </>
                                 ) : (
                                   <>
                                     <Save size={14} />
-                                    제품으로 저장 (AI 자동 분석)
+                                    압축 다운로드 + 제품 저장
                                   </>
                                 )}
                               </button>
