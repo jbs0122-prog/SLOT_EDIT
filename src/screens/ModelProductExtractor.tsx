@@ -145,12 +145,14 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
     );
 
     try {
-      const compressed = await compressImageToTarget(item.extractedImageUrl, 500, 1200, 1200);
+      const compressed = await compressImageToTarget(item.extractedImageUrl, 500, 2000, 2000, 200);
 
-      const filename = `${item.label.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_compressed.webp`;
+      const isPng = compressed.blob.type === 'image/png';
+      const ext = isPng ? 'png' : 'webp';
+      const filename = `${item.label.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_compressed.${ext}`;
       downloadBlob(compressed.blob, filename);
 
-      const uploadResult = await uploadProductBlob(compressed.blob, 'webp');
+      const uploadResult = await uploadProductBlob(compressed.blob, ext);
       if (!uploadResult.success || !uploadResult.url) {
         throw new Error(uploadResult.error || '압축 이미지 업로드 실패');
       }

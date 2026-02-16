@@ -10,7 +10,8 @@ export async function compressImageToTarget(
   imageUrl: string,
   targetSizeKB: number = 100,
   maxWidth: number = 1200,
-  maxHeight: number = 1200
+  maxHeight: number = 1200,
+  minSizeKB: number = 0
 ): Promise<CompressionResult> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -29,31 +30,52 @@ export async function compressImageToTarget(
           maxHeight
         );
 
-        let quality = 0.9;
+        let quality = 0.92;
         let blob: Blob | null = null;
         let attempts = 0;
         const maxAttempts = 15;
         const targetBytes = targetSizeKB * 1024;
+        const minBytes = minSizeKB * 1024;
+        let format: 'image/webp' | 'image/png' = 'image/webp';
 
         while (attempts < maxAttempts) {
-          blob = await createCompressedBlob(img, width, height, quality);
+          blob = await createCompressedBlob(img, width, height, quality, format);
 
-          if (blob.size <= targetBytes) {
+          if (blob.size >= minBytes && blob.size <= targetBytes) {
             break;
           }
 
-          if (attempts < 5) {
-            quality -= 0.1;
-          } else if (attempts < 10) {
-            quality -= 0.05;
-            const scale = 0.95;
-            width = Math.floor(width * scale);
-            height = Math.floor(height * scale);
-          } else {
-            const scale = 0.9;
-            width = Math.floor(width * scale);
-            height = Math.floor(height * scale);
-            quality = Math.max(0.3, quality - 0.05);
+          if (blob.size < minBytes && format === 'image/webp') {
+            format = 'image/png';
+            quality = 0.92;
+            attempts++;
+            continue;
+          }
+
+          if (blob.size < minBytes && format === 'image/png') {
+            break;
+          }
+
+          if (blob.size > targetBytes) {
+            if (format === 'image/png') {
+              format = 'image/webp';
+              quality = 0.92;
+              attempts++;
+              continue;
+            }
+            if (attempts < 5) {
+              quality -= 0.1;
+            } else if (attempts < 10) {
+              quality -= 0.05;
+              const scale = 0.95;
+              width = Math.floor(width * scale);
+              height = Math.floor(height * scale);
+            } else {
+              const scale = 0.9;
+              width = Math.floor(width * scale);
+              height = Math.floor(height * scale);
+              quality = Math.max(0.3, quality - 0.05);
+            }
           }
 
           attempts++;
@@ -108,7 +130,8 @@ async function createCompressedBlob(
   img: HTMLImageElement,
   width: number,
   height: number,
-  quality: number
+  quality: number,
+  format: string = 'image/webp'
 ): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -132,8 +155,8 @@ async function createCompressedBlob(
           reject(new Error('Blob 생성 실패'));
         }
       },
-      'image/webp',
-      quality
+      format,
+      format === 'image/png' ? undefined : quality
     );
   });
 }
