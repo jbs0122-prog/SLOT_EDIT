@@ -144,10 +144,17 @@ Deno.serve(async (req: Request) => {
       throw new Error("Failed to fetch image");
     }
 
+    const contentType = imageResponse.headers.get("content-type") || "image/png";
+    const mimeType = contentType.split(";")[0].trim();
+
     const imageBuffer = await imageResponse.arrayBuffer();
-    const base64Image = btoa(
-      String.fromCharCode(...new Uint8Array(imageBuffer))
-    );
+    const bytes = new Uint8Array(imageBuffer);
+    const chunks: string[] = [];
+    const chunkSize = 32768;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+    }
+    const base64Image = btoa(chunks.join(""));
 
     const prompt =
       analysisType === "product"
@@ -175,7 +182,7 @@ IMPORTANT: Be precise with color_family. Use specific values like burgundy inste
         : `Analyze this outfit combination and provide styling insights in Korean.`;
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -186,7 +193,7 @@ IMPORTANT: Be precise with color_family. Use specific values like burgundy inste
                 { text: prompt },
                 {
                   inline_data: {
-                    mime_type: "image/jpeg",
+                    mime_type: mimeType,
                     data: base64Image,
                   },
                 },
@@ -231,7 +238,7 @@ IMPORTANT: Be precise with color_family. Use specific values like burgundy inste
       JSON.stringify({
         success: true,
         analysis,
-        model: "gemini-2.5-flash-image",
+        model: "gemini-2.5-flash",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
