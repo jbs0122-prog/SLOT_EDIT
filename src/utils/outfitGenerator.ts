@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { Product } from '../data/outfits';
-import { findBestOutfits, OutfitCandidate } from './matchingEngine';
+import { findBestOutfits, OutfitCandidate, AnchorItem } from './matchingEngine';
 import { removeBackground } from './backgroundRemoval';
 
 export interface GenerateOutfitsParams {
@@ -10,6 +10,8 @@ export interface GenerateOutfitsParams {
   count?: number;
   targetWarmth?: number;
   targetSeason?: string;
+  anchorProductId?: string;
+  anchorSlot?: string;
 }
 
 export interface GeneratedOutfit {
@@ -26,7 +28,7 @@ export const MAX_OUTFIT_USAGE = 5;
 export async function generateOutfitsAutomatically(
   params: GenerateOutfitsParams
 ): Promise<GeneratedOutfit[]> {
-  const { gender, bodyType, vibe, count = 5, targetWarmth, targetSeason } = params;
+  const { gender, bodyType, vibe, count = 5, targetWarmth, targetSeason, anchorProductId, anchorSlot } = params;
 
   const [productsResult, usageResult] = await Promise.all([
     supabase.from('products').select('*'),
@@ -46,14 +48,14 @@ export async function generateOutfitsAutomatically(
   });
 
   const products = productsResult.data.filter(
-    p => (usageCounts[p.id] || 0) < MAX_OUTFIT_USAGE
+    p => (usageCounts[p.id] || 0) < MAX_OUTFIT_USAGE || p.id === anchorProductId
   );
 
   if (products.length === 0) {
     throw new Error('사용 가능한 제품이 없습니다. 모든 제품이 코디 사용 한도(5회)에 도달했습니다.');
   }
 
-  const productList: Product[] = products.map(p => ({
+  const mapProduct = (p: typeof products[number]): Product => ({
     id: p.id,
     brand: p.brand,
     name: p.name,
@@ -78,7 +80,20 @@ export async function generateOutfitsAutomatically(
     warmth: typeof p.warmth === 'number' ? p.warmth : undefined,
     created_at: p.created_at,
     updated_at: p.updated_at,
-  }));
+  });
+
+  const productList: Product[] = products.map(mapProduct);
+
+  let anchor: AnchorItem | undefined;
+  if (anchorProductId && anchorSlot) {
+    const anchorProduct = productList.find(p => p.id === anchorProductId);
+    if (anchorProduct) {
+      anchor = {
+        product: anchorProduct,
+        slotType: anchorSlot as keyof import('./matchingEngine').OutfitCandidate,
+      };
+    }
+  }
 
   const bestOutfits = findBestOutfits(
     productList,
@@ -89,7 +104,8 @@ export async function generateOutfitsAutomatically(
       targetWarmth,
       targetSeason,
     },
-    count
+    count,
+    anchor
   );
 
   if (bestOutfits.length === 0) {

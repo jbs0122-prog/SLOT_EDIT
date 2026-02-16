@@ -111,6 +111,11 @@ function getOutfitColorKey(outfit: OutfitCandidate): string {
     .join('-');
 }
 
+export interface AnchorItem {
+  product: Product;
+  slotType: keyof OutfitCandidate;
+}
+
 export function generateOutfitCombinations(
   products: Product[],
   filters: {
@@ -119,7 +124,8 @@ export function generateOutfitCombinations(
     vibe?: string;
     targetWarmth?: number;
     targetSeason?: string;
-  }
+  },
+  anchor?: AnchorItem
 ): OutfitCandidate[] {
   const filterProducts = (category: string) => {
     return products.filter(p => {
@@ -132,8 +138,9 @@ export function generateOutfitCombinations(
     });
   };
 
-  const needsOuter = shouldIncludeOuter(filters.targetSeason, filters.targetWarmth);
-  const needsMid = shouldIncludeMid(filters.targetWarmth);
+  const anchorSlot = anchor?.slotType;
+  const needsOuter = anchorSlot === 'outer' || shouldIncludeOuter(filters.targetSeason, filters.targetWarmth);
+  const needsMid = anchorSlot === 'mid' || shouldIncludeMid(filters.targetWarmth);
 
   const outers = needsOuter ? filterProducts('outer') : [];
   const mids = needsMid ? filterProducts('mid') : [];
@@ -143,11 +150,22 @@ export function generateOutfitCombinations(
   const bags = filterProducts('bag');
   const accessories = filterProducts('accessory');
 
+  if (anchor) {
+    const ensureInList = (list: Product[], product: Product) => {
+      if (!list.find(p => p.id === product.id)) {
+        list.push(product);
+      }
+    };
+    const catMap: Record<string, Product[]> = { outer: outers, mid: mids, top: tops, bottom: bottoms, shoes, bag: bags, accessory: accessories };
+    const targetList = catMap[anchor.product.category];
+    if (targetList) ensureInList(targetList, anchor.product);
+  }
+
   if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) {
     return [];
   }
 
-  return generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters);
+  return generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor);
 }
 
 function generateSampled(
@@ -158,24 +176,56 @@ function generateSampled(
   shoes: Product[],
   bags: Product[],
   accessories: Product[],
-  filters: { targetSeason?: string }
+  filters: { targetSeason?: string },
+  anchor?: AnchorItem
 ): OutfitCandidate[] {
   const MAX_SAMPLES = 10000;
   const seen = new Set<string>();
   const combinations: OutfitCandidate[] = [];
+  const anchorSlot = anchor?.slotType;
+  const anchorProduct = anchor?.product;
 
   for (let i = 0; i < MAX_SAMPLES; i++) {
-    const top = pickRandom(tops);
-    const bottom = pickRandom(bottoms);
-    const shoe = pickRandom(shoes);
-    const outer = outers.length > 0 ? pickRandom(outers) : undefined;
-    const mid = mids.length > 0 ? (Math.random() < 0.85 ? pickRandom(mids) : undefined) : undefined;
-    const bag = bags.length > 0 ? (Math.random() < 0.8 ? pickRandom(bags) : undefined) : undefined;
-    const accessory = accessories.length > 0 ? (Math.random() < 0.7 ? pickRandom(accessories) : undefined) : undefined;
+    const top = anchorSlot === 'top' ? anchorProduct! : pickRandom(tops);
+    const bottom = anchorSlot === 'bottom' ? anchorProduct! : pickRandom(bottoms);
+    const shoe = anchorSlot === 'shoes' ? anchorProduct! : pickRandom(shoes);
+
+    let outer: Product | undefined;
+    if (anchorSlot === 'outer') {
+      outer = anchorProduct!;
+    } else {
+      outer = outers.length > 0 ? pickRandom(outers) : undefined;
+    }
+
+    let mid: Product | undefined;
+    if (anchorSlot === 'mid') {
+      mid = anchorProduct!;
+    } else {
+      mid = mids.length > 0 ? (Math.random() < 0.85 ? pickRandom(mids) : undefined) : undefined;
+    }
+
+    let bag: Product | undefined;
+    if (anchorSlot === 'bag') {
+      bag = anchorProduct!;
+    } else {
+      bag = bags.length > 0 ? (Math.random() < 0.8 ? pickRandom(bags) : undefined) : undefined;
+    }
+
+    let accessory: Product | undefined;
+    if (anchorSlot === 'accessory') {
+      accessory = anchorProduct!;
+    } else {
+      accessory = accessories.length > 0 ? (Math.random() < 0.7 ? pickRandom(accessories) : undefined) : undefined;
+    }
 
     let accessory2: Product | undefined;
-    if (accessory && accessories.length > 1 && Math.random() < 0.4) {
-      const remaining = accessories.filter(a => a.id !== accessory.id);
+    if (anchorSlot === 'accessory_2') {
+      accessory2 = anchorProduct!;
+      if (!accessory && accessories.length > 0) {
+        accessory = pickRandom(accessories.filter(a => a.id !== anchorProduct!.id));
+      }
+    } else if (accessory && accessories.length > 1 && Math.random() < 0.4) {
+      const remaining = accessories.filter(a => a.id !== accessory!.id);
       if (remaining.length > 0) accessory2 = pickRandom(remaining);
     }
 
@@ -203,7 +253,8 @@ function generateSampled(
 
 function selectDiverse(
   scored: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>,
-  topN: number
+  topN: number,
+  anchor?: AnchorItem
 ): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
   if (scored.length <= topN) return scored;
 
@@ -213,20 +264,23 @@ function selectDiverse(
   const paletteCounts = new Map<string, number>();
   const maxOuterRepeat = Math.max(2, Math.ceil(topN / 3));
   const maxPaletteRepeat = Math.max(2, Math.ceil(topN / 3));
+  const anchorOuterId = anchor?.slotType === 'outer' ? anchor.product.id : null;
 
   for (const candidate of pool) {
     if (selected.length >= topN) break;
 
     const outerId = candidate.outfit.outer?.id || 'none';
-    const currentOuterCount = outerCounts.get(outerId) || 0;
-    if (currentOuterCount >= maxOuterRepeat) continue;
+    if (outerId !== anchorOuterId) {
+      const currentOuterCount = outerCounts.get(outerId) || 0;
+      if (currentOuterCount >= maxOuterRepeat) continue;
+    }
 
     const paletteKey = getOutfitColorKey(candidate.outfit);
     const currentPaletteCount = paletteCounts.get(paletteKey) || 0;
-    if (currentPaletteCount >= maxPaletteRepeat) continue;
+    if (!anchor && currentPaletteCount >= maxPaletteRepeat) continue;
 
     selected.push(candidate);
-    outerCounts.set(outerId, currentOuterCount + 1);
+    outerCounts.set(outerId, (outerCounts.get(outerId) || 0) + 1);
     paletteCounts.set(paletteKey, currentPaletteCount + 1);
   }
 
@@ -251,9 +305,10 @@ export function findBestOutfits(
     targetWarmth?: number;
     targetSeason?: string;
   },
-  topN: number = 10
+  topN: number = 10,
+  anchor?: AnchorItem
 ): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
-  const combinations = generateOutfitCombinations(products, filters);
+  const combinations = generateOutfitCombinations(products, filters, anchor);
 
   const scoredOutfits = combinations.map(outfit => ({
     outfit,
@@ -265,5 +320,5 @@ export function findBestOutfits(
 
   scoredOutfits.sort((a, b) => b.matchScore.score - a.matchScore.score);
 
-  return selectDiverse(scoredOutfits, topN);
+  return selectDiverse(scoredOutfits, topN, anchor);
 }

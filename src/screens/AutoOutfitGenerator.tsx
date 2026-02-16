@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { X, Sparkles, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Sparkles, AlertCircle, Anchor, Search, Check } from 'lucide-react';
 import { generateOutfitsAutomatically, GeneratedOutfit } from '../utils/outfitGenerator';
+import { supabase } from '../utils/supabase';
+import { Product } from '../data/outfits';
 
 interface AutoOutfitGeneratorProps {
   onClose: () => void;
@@ -34,6 +36,16 @@ const SEASON_OPTIONS = [
   { value: 'winter', label: '겨울' },
 ];
 
+const SLOT_OPTIONS = [
+  { value: 'outer', label: 'Outer', category: 'outer' },
+  { value: 'mid', label: 'Mid Layer', category: 'mid' },
+  { value: 'top', label: 'Top', category: 'top' },
+  { value: 'bottom', label: 'Bottom', category: 'bottom' },
+  { value: 'shoes', label: 'Shoes', category: 'shoes' },
+  { value: 'bag', label: 'Bag', category: 'bag' },
+  { value: 'accessory', label: 'Accessory', category: 'accessory' },
+];
+
 export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfitGeneratorProps) {
   const [gender, setGender] = useState('MALE');
   const [bodyType, setBodyType] = useState('slim');
@@ -44,6 +56,79 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
   const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState<GeneratedOutfit[]>([]);
   const [error, setError] = useState('');
+
+  const [anchorEnabled, setAnchorEnabled] = useState(false);
+  const [anchorSlot, setAnchorSlot] = useState('');
+  const [anchorProductId, setAnchorProductId] = useState('');
+  const [anchorProducts, setAnchorProducts] = useState<Product[]>([]);
+  const [anchorSearchQuery, setAnchorSearchQuery] = useState('');
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
+  useEffect(() => {
+    if (!anchorEnabled || !anchorSlot) {
+      setAnchorProducts([]);
+      setAnchorProductId('');
+      setAnchorSearchQuery('');
+      return;
+    }
+
+    const loadProducts = async () => {
+      setLoadingProducts(true);
+      setAnchorProductId('');
+      const slot = SLOT_OPTIONS.find(s => s.value === anchorSlot);
+      if (!slot) return;
+
+      const { data, error: err } = await supabase
+        .from('products')
+        .select('*')
+        .eq('category', slot.category)
+        .order('created_at', { ascending: false });
+
+      if (!err && data) {
+        setAnchorProducts(data.map(p => ({
+          id: p.id,
+          brand: p.brand,
+          name: p.name,
+          category: p.category,
+          gender: p.gender,
+          body_type: p.body_type || [],
+          vibe: p.vibe || [],
+          color: p.color || '',
+          season: p.season || [],
+          silhouette: p.silhouette || '',
+          image_url: p.image_url,
+          product_link: p.product_link || '',
+          affiliate_link: p.affiliate_link || '',
+          price: p.price,
+          stock_status: p.stock_status || 'in_stock',
+          material: p.material || '',
+          color_family: p.color_family || '',
+          color_tone: p.color_tone || '',
+          sub_category: p.sub_category || '',
+          pattern: p.pattern || '',
+          formality: typeof p.formality === 'number' ? p.formality : undefined,
+          warmth: typeof p.warmth === 'number' ? p.warmth : undefined,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+        })));
+      }
+      setLoadingProducts(false);
+    };
+
+    loadProducts();
+  }, [anchorEnabled, anchorSlot]);
+
+  const filteredAnchorProducts = anchorProducts.filter(p => {
+    if (!anchorSearchQuery) return true;
+    const q = anchorSearchQuery.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.brand.toLowerCase().includes(q) ||
+      (p.color || '').toLowerCase().includes(q)
+    );
+  });
+
+  const selectedAnchorProduct = anchorProducts.find(p => p.id === anchorProductId);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -61,6 +146,8 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
         count,
         targetWarmth,
         targetSeason,
+        anchorProductId: anchorEnabled && anchorProductId ? anchorProductId : undefined,
+        anchorSlot: anchorEnabled && anchorSlot ? anchorSlot : undefined,
       });
 
       setResults(generated);
@@ -209,6 +296,135 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                 </div>
               </div>
 
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => {
+                    setAnchorEnabled(!anchorEnabled);
+                    if (anchorEnabled) {
+                      setAnchorSlot('');
+                      setAnchorProductId('');
+                      setAnchorSearchQuery('');
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Anchor size={18} className={anchorEnabled ? 'text-blue-600' : 'text-gray-400'} />
+                    <span className="text-sm font-medium text-gray-700">앵커 아이템 (선택사항)</span>
+                  </div>
+                  <div className={`w-10 h-6 rounded-full transition-colors relative ${anchorEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${anchorEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  </div>
+                </button>
+
+                {anchorEnabled && (
+                  <div className="p-4 space-y-4 border-t border-gray-200">
+                    <p className="text-xs text-gray-500">
+                      특정 제품을 기준으로 고정하면, 나머지 슬롯을 매칭 엔진이 자동으로 채웁니다.
+                    </p>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1.5">슬롯 선택</label>
+                      <div className="flex flex-wrap gap-2">
+                        {SLOT_OPTIONS.map(slot => (
+                          <button
+                            key={slot.value}
+                            onClick={() => setAnchorSlot(slot.value)}
+                            className={`px-3 py-1.5 text-xs rounded-full font-medium transition-colors ${
+                              anchorSlot === slot.value
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {slot.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {anchorSlot && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1.5">제품 선택</label>
+
+                        {selectedAnchorProduct && (
+                          <div className="mb-3 flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            {selectedAnchorProduct.image_url && (
+                              <img
+                                src={selectedAnchorProduct.image_url}
+                                alt=""
+                                className="w-12 h-12 object-cover rounded"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{selectedAnchorProduct.name}</p>
+                              <p className="text-xs text-gray-500">{selectedAnchorProduct.brand}</p>
+                            </div>
+                            <button
+                              onClick={() => setAnchorProductId('')}
+                              className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )}
+
+                        {!selectedAnchorProduct && (
+                          <>
+                            <div className="relative mb-2">
+                              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                              <input
+                                type="text"
+                                value={anchorSearchQuery}
+                                onChange={(e) => setAnchorSearchQuery(e.target.value)}
+                                placeholder="브랜드, 이름, 색상으로 검색..."
+                                className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                            </div>
+
+                            {loadingProducts ? (
+                              <div className="flex items-center justify-center py-6">
+                                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                              </div>
+                            ) : filteredAnchorProducts.length === 0 ? (
+                              <p className="text-xs text-gray-400 text-center py-4">
+                                {anchorProducts.length === 0 ? '해당 슬롯에 제품이 없습니다' : '검색 결과가 없습니다'}
+                              </p>
+                            ) : (
+                              <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                                {filteredAnchorProducts.map(product => (
+                                  <button
+                                    key={product.id}
+                                    onClick={() => setAnchorProductId(product.id)}
+                                    className="w-full flex items-center gap-3 p-2.5 hover:bg-gray-50 transition-colors text-left"
+                                  >
+                                    {product.image_url ? (
+                                      <img
+                                        src={product.image_url}
+                                        alt=""
+                                        className="w-10 h-10 object-cover rounded flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-10 bg-gray-100 rounded flex-shrink-0" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm text-gray-900 truncate">{product.name}</p>
+                                      <p className="text-xs text-gray-500">{product.brand} {product.color ? `/ ${product.color}` : ''}</p>
+                                    </div>
+                                    {product.id === anchorProductId && (
+                                      <Check size={16} className="text-blue-600 flex-shrink-0" />
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="flex gap-3">
                   <AlertCircle size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
@@ -219,6 +435,9 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                       <li>컬러 조화, 톤 일치, 패턴 밸런스, 격식 수준, 보온성, 계절 적합성</li>
                       <li>코디 사용 5회 이상인 제품은 자동으로 제외됩니다</li>
                       <li>생성된 코디는 "pending_render" 상태로 저장됩니다</li>
+                      {anchorEnabled && anchorProductId && (
+                        <li>앵커 아이템은 사용 한도와 관계없이 모든 코디에 포함됩니다</li>
+                      )}
                     </ul>
                   </div>
                 </div>
@@ -226,7 +445,7 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
 
               <button
                 onClick={handleGenerate}
-                disabled={generating}
+                disabled={generating || (anchorEnabled && anchorSlot && !anchorProductId ? true : false)}
                 className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-lg shadow-lg"
               >
                 {generating ? (
@@ -241,6 +460,9 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                   </>
                 )}
               </button>
+              {anchorEnabled && anchorSlot && !anchorProductId && (
+                <p className="text-xs text-amber-600 text-center -mt-3">앵커 아이템 제품을 선택하거나, 앵커 기능을 끄세요</p>
+              )}
             </div>
           )}
 
@@ -276,6 +498,11 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                     <p className="font-medium text-green-900 mb-1">생성 완료!</p>
                     <p className="text-sm text-green-700">
                       {results.length}개의 코디가 성공적으로 생성되었습니다.
+                      {anchorEnabled && selectedAnchorProduct && (
+                        <span className="block mt-1 text-xs">
+                          앵커: {selectedAnchorProduct.brand} {selectedAnchorProduct.name}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -301,9 +528,16 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                         {result.items.map(item => (
                           <span
                             key={item.slot_type}
-                            className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs"
+                            className={`px-2 py-1 rounded text-xs ${
+                              anchorEnabled && item.slot_type === anchorSlot && item.product_id === anchorProductId
+                                ? 'bg-blue-100 text-blue-700 font-medium'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
                           >
                             {item.slot_type}
+                            {anchorEnabled && item.slot_type === anchorSlot && item.product_id === anchorProductId && (
+                              <Anchor size={10} className="inline ml-0.5" />
+                            )}
                           </span>
                         ))}
                       </div>
