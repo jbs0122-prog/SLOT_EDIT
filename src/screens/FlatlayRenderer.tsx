@@ -34,6 +34,11 @@ interface OutfitItem {
 
 type Phase = 'idle' | 'preparing' | 'editing' | 'rendering' | 'success';
 
+function isPixianNobgUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return url.includes('/nobg/');
+}
+
 export default function FlatlayRenderer({ outfitId, onClose, onRendered }: FlatlayRendererProps) {
   const [items, setItems] = useState<OutfitItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,14 +122,14 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         for (let i = 0; i < updatedPins.length; i++) {
           const pin = updatedPins[i];
           const item = validItems.find(vi => vi.product_id === pin.product_id);
-          if (item?.product?.nobg_image_url) {
-            updatedPins[i] = { ...pin, image_url: item.product.nobg_image_url };
+          if (isPixianNobgUrl(item?.product?.nobg_image_url)) {
+            updatedPins[i] = { ...pin, image_url: item!.product!.nobg_image_url! };
           }
         }
 
-        const pinsNeedingBgRemoval = updatedPins.filter((pin, idx) => {
+        const pinsNeedingBgRemoval = updatedPins.filter((pin) => {
           const item = validItems.find(vi => vi.product_id === pin.product_id);
-          return !item?.product?.nobg_image_url;
+          return !isPixianNobgUrl(item?.product?.nobg_image_url);
         });
 
         if (pinsNeedingBgRemoval.length > 0) {
@@ -132,7 +137,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
           for (let i = 0; i < updatedPins.length; i++) {
             const pin = updatedPins[i];
             const item = validItems.find(vi => vi.product_id === pin.product_id);
-            if (!item?.product?.nobg_image_url && item?.product?.image_url) {
+            if (!isPixianNobgUrl(item?.product?.nobg_image_url) && item?.product?.image_url) {
               try {
                 const nobgUrl = await removeBackground(item.product.image_url, pin.product_id);
                 updatedPins[i] = { ...pin, image_url: nobgUrl };
@@ -148,14 +153,17 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         setPhase('editing');
       } else {
         setRenderingStep('레이아웃 계산 및 배경 제거 중...');
-        const renderItems = validItems.map(item => ({
-          slot_type: item.slot_type,
-          product_id: item.product_id,
-          image_url: item.product!.nobg_image_url || item.product!.image_url,
-          skipBgRemoval: !!item.product!.nobg_image_url,
-          price: item.product!.price,
-          name: item.product!.name,
-        }));
+        const renderItems = validItems.map(item => {
+          const hasValidNobg = isPixianNobgUrl(item.product!.nobg_image_url);
+          return {
+            slot_type: item.slot_type,
+            product_id: item.product_id,
+            image_url: hasValidNobg ? item.product!.nobg_image_url! : item.product!.image_url,
+            skipBgRemoval: hasValidNobg,
+            price: item.product!.price,
+            name: item.product!.name,
+          };
+        });
 
         const data = await prepareFlatlayForEditor(renderItems, {}, setRenderingStep);
         setEditorData(data);

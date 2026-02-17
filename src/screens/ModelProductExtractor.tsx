@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { uploadProductBlob, uploadProductImage, validateImageFile } from '../utils/imageUpload';
 import { detectItemsInPhoto, extractProductImage } from '../utils/productExtractor';
 import { analyzeFashionImage } from '../utils/fashionAnalyzer';
+import { removeBackground } from '../utils/backgroundRemoval';
 import { supabase } from '../utils/supabase';
 import { compressImageToTarget, downloadBlob } from '../utils/imageCompression';
 import type { DetectedItem } from '../utils/productExtractor';
@@ -160,9 +161,14 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
       }
       const compressedImageUrl = uploadResult.url;
 
+      const [analysisResult, nobgResult] = await Promise.allSettled([
+        analyzeFashionImage(compressedImageUrl),
+        removeBackground(item.extractedImageUrl),
+      ]);
+
       let analysisData: Record<string, unknown> = {};
-      try {
-        const analysis = await analyzeFashionImage(compressedImageUrl);
+      if (analysisResult.status === 'fulfilled') {
+        const analysis = analysisResult.value;
         const categoryMap: Record<string, string> = {
           '상의': 'top', '하의': 'bottom', '아우터': 'outer',
           '미드레이어': 'mid', '신발': 'shoes', '가방': 'bag', '액세서리': 'accessory', '넥타이': 'accessory',
@@ -185,15 +191,17 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
           formality: analysis.formality || 3,
           warmth: analysis.warmth || 3,
         };
-      } catch {
+      } else {
         analysisData = { category: item.slot, gender: 'UNISEX', color: item.color };
       }
+
+      const nobgImageUrl = nobgResult.status === 'fulfilled' ? nobgResult.value : null;
 
       const { error } = await supabase.from('products').insert([{
         name: item.label,
         brand: '',
         image_url: compressedImageUrl,
-        nobg_image_url: item.extractedImageUrl,
+        nobg_image_url: nobgImageUrl,
         stock_status: 'in_stock',
         body_type: [],
         ...analysisData,
@@ -528,7 +536,7 @@ export default function ModelProductExtractor({ onBack }: { onBack: () => void }
                                 {item.saving ? (
                                   <>
                                     <Loader2 size={14} className="animate-spin" />
-                                    압축 + AI 분석 + 저장 중...
+                                    압축 + 배경 제거 + AI 분석 중...
                                   </>
                                 ) : (
                                   <>
