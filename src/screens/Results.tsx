@@ -142,7 +142,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
     try {
       const { data, error } = await supabase
         .from('outfits')
-        .select('id, image_url_flatlay, image_url_on_model, flatlay_pins, on_model_pins')
+        .select('id, image_url_flatlay, image_url_on_model, flatlay_pins, on_model_pins, "AI insight"')
         .in('id', outfitIds);
 
       if (error) throw error;
@@ -150,14 +150,16 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
 
       setLocalOutfits(prev =>
         prev.map(outfit => {
-          const updated = data.find(d => d.id === outfit.id);
+          const updated = data.find((d: any) => d.id === outfit.id);
           if (updated) {
+            const aiInsight = (updated as any)['AI insight'];
             return {
               ...outfit,
               image_url_flatlay: updated.image_url_flatlay || outfit.image_url_flatlay,
               image_url_on_model: updated.image_url_on_model || outfit.image_url_on_model,
               flatlay_pins: updated.flatlay_pins || outfit.flatlay_pins,
               on_model_pins: updated.on_model_pins || outfit.on_model_pins,
+              ...(aiInsight ? { insight_text: aiInsight } : {}),
             };
           }
           return outfit;
