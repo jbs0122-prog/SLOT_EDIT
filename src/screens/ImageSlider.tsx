@@ -220,9 +220,10 @@ export default function ImageSlider({
         })}
 
         {onFeedback && (
-          <div className="absolute bottom-6 right-6 flex gap-2 z-10">
+          <div className="absolute bottom-6 right-6 flex gap-2 z-30">
             <button
-              onClick={() => onFeedback(outfitId, 'like')}
+              onClick={(e) => { e.stopPropagation(); onFeedback(outfitId, 'like'); }}
+              onTouchEnd={(e) => e.stopPropagation()}
               className={`p-2 transition-all ${
                 userFeedback === 'like'
                   ? 'bg-black text-white'
@@ -236,7 +237,8 @@ export default function ImageSlider({
               )}
             </button>
             <button
-              onClick={() => onFeedback(outfitId, 'dislike')}
+              onClick={(e) => { e.stopPropagation(); onFeedback(outfitId, 'dislike'); }}
+              onTouchEnd={(e) => e.stopPropagation()}
               className={`p-2 transition-all ${
                 userFeedback === 'dislike'
                   ? 'bg-black text-white'
@@ -396,9 +398,10 @@ export default function ImageSlider({
       </div>
 
       {onFeedback && (
-        <div className="absolute bottom-6 right-6 flex gap-2 z-10">
+        <div className="absolute bottom-6 right-6 flex gap-2 z-30">
           <button
-            onClick={() => onFeedback(outfitId, 'like')}
+            onClick={(e) => { e.stopPropagation(); onFeedback(outfitId, 'like'); }}
+            onTouchEnd={(e) => e.stopPropagation()}
             className={`p-2 transition-all ${
               userFeedback === 'like'
                 ? 'bg-black text-white'
@@ -412,7 +415,8 @@ export default function ImageSlider({
             )}
           </button>
           <button
-            onClick={() => onFeedback(outfitId, 'dislike')}
+            onClick={(e) => { e.stopPropagation(); onFeedback(outfitId, 'dislike'); }}
+            onTouchEnd={(e) => e.stopPropagation()}
             className={`p-2 transition-all ${
               userFeedback === 'dislike'
                 ? 'bg-black text-white'

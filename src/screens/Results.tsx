@@ -310,17 +310,30 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
 
   const handleFeedback = async (outfitId: string, feedbackType: 'like' | 'dislike') => {
     const sessionId = getOrCreateSessionId();
+    const prev = feedbackCounts[outfitId] || { likes: 0, dislikes: 0, userFeedback: null };
+    const isToggleOff = prev.userFeedback === feedbackType;
+    const isSwitch = prev.userFeedback && prev.userFeedback !== feedbackType;
+
+    setFeedbackCounts(c => ({
+      ...c,
+      [outfitId]: {
+        likes: prev.likes + (feedbackType === 'like' ? (isToggleOff ? -1 : 1) : (isSwitch && prev.userFeedback === 'like' ? -1 : 0)),
+        dislikes: prev.dislikes + (feedbackType === 'dislike' ? (isToggleOff ? -1 : 1) : (isSwitch && prev.userFeedback === 'dislike' ? -1 : 0)),
+        userFeedback: isToggleOff ? null : feedbackType,
+      },
+    }));
+
     try {
-      const current = feedbackCounts[outfitId]?.userFeedback;
-      if (current === feedbackType) {
+      if (isToggleOff) {
         await supabase.from('outfit_feedback').delete().eq('outfit_id', outfitId).eq('session_id', sessionId);
       } else {
-        if (current) await supabase.from('outfit_feedback').delete().eq('outfit_id', outfitId).eq('session_id', sessionId);
+        if (prev.userFeedback) await supabase.from('outfit_feedback').delete().eq('outfit_id', outfitId).eq('session_id', sessionId);
         await supabase.from('outfit_feedback').insert({ outfit_id: outfitId, feedback_type: feedbackType, session_id: sessionId });
       }
       await loadFeedbackCounts();
     } catch (error) {
       console.error('Failed to submit feedback:', error);
+      setFeedbackCounts(c => ({ ...c, [outfitId]: prev }));
     }
   };
 
