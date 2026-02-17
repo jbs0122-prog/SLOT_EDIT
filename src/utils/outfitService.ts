@@ -172,6 +172,81 @@ export const fetchOutfitById = async (outfitId: string): Promise<Outfit | null> 
   }
 };
 
+export const generateInsightForOutfit = async (
+  outfitId: string,
+  flatlayImageUrl?: string
+): Promise<string | null> => {
+  try {
+    const { data: outfit, error: outfitError } = await supabase
+      .from('outfits')
+      .select('gender, body_type, vibe')
+      .eq('id', outfitId)
+      .maybeSingle();
+
+    if (outfitError || !outfit) return null;
+
+    const { data: itemsData, error: itemsError } = await supabase
+      .from('outfit_items')
+      .select(`
+        slot_type,
+        products (
+          brand, name, category, color, color_family,
+          material, pattern, silhouette, sub_category, vibe, price
+        )
+      `)
+      .eq('outfit_id', outfitId);
+
+    if (itemsError || !itemsData || itemsData.length === 0) return null;
+
+    const items = itemsData.map((item: any) => ({
+      slot_type: item.slot_type,
+      brand: item.products?.brand || '',
+      name: item.products?.name || '',
+      category: item.products?.category || '',
+      color: item.products?.color || '',
+      color_family: item.products?.color_family || '',
+      material: item.products?.material || '',
+      pattern: item.products?.pattern || '',
+      silhouette: item.products?.silhouette || '',
+      sub_category: item.products?.sub_category || '',
+      vibe: item.products?.vibe || [],
+      price: item.products?.price,
+    }));
+
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-outfit-insight`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items,
+        gender: outfit.gender,
+        bodyType: outfit.body_type,
+        vibe: outfit.vibe,
+        matchScore: 80,
+        flatlayImageUrl,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (!data.success || !data.insight) return null;
+
+    await supabase
+      .from('outfits')
+      .update({ 'AI insight': data.insight })
+      .eq('id', outfitId);
+
+    return data.insight;
+  } catch (err) {
+    console.error(`Insight generation failed for outfit ${outfitId}:`, err);
+    return null;
+  }
+};
+
 export const fetchRankingOutfits = async (gender: 'MALE' | 'FEMALE'): Promise<Outfit[]> => {
   try {
     const { data: outfitsData, error: outfitsError } = await supabase
