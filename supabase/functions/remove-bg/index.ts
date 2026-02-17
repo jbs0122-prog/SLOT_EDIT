@@ -105,6 +105,8 @@ Deno.serve(async (req: Request) => {
     const pixianAuth = Deno.env.get("PIXIAN_API_KEY") ||
       "cHhyaWd5aXh2cjR4OTNnOnRlbXBmaXNma244Y2t1ZjBlZDg0OWg2YnF2MjZwcDcwc29icjVqYWhydXV1ajlhMjk4Y2Q=";
 
+    console.log(`Using Pixian API for: ${imageUrl}`);
+
     const formData = new FormData();
     formData.append("image.url", imageUrl);
     formData.append("output.format", "png");
@@ -119,14 +121,22 @@ Deno.serve(async (req: Request) => {
     );
 
     if (!pixianResponse.ok) {
+      const errorText = await pixianResponse.text();
+      console.error(`Pixian API error (${pixianResponse.status}):`, errorText);
       return new Response(
-        JSON.stringify({ error: "Background removal failed" }),
+        JSON.stringify({
+          error: "Background removal failed",
+          details: errorText,
+          status: pixianResponse.status
+        }),
         {
           status: pixianResponse.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
+
+    console.log(`Pixian API success for product ${productId || 'unnamed'}`);
 
     const imageBuffer = new Uint8Array(await pixianResponse.arrayBuffer());
 

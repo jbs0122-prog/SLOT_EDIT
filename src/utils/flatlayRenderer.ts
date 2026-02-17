@@ -71,9 +71,10 @@ async function loadImageWithProxy(url: string, useProxy: boolean): Promise<HTMLI
 async function removeWhiteBackgroundViaApi(imageUrl: string, productId: string): Promise<string> {
   try {
     const nobgUrl = await removeBackground(imageUrl, productId);
+    console.log(`Background removed for product ${productId}: ${nobgUrl}`);
     return nobgUrl;
   } catch (error) {
-    console.error('Pixian API bg removal failed, using original:', error);
+    console.error(`Pixian API bg removal failed for product ${productId}, using original:`, error);
     return imageUrl;
   }
 }

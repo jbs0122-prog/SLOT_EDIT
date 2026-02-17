@@ -3,10 +3,13 @@ import { supabase } from './supabase';
 export async function removeBackground(imageUrl: string, productId?: string): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
+    console.error('No admin session found for background removal');
     throw new Error('Admin authentication required');
   }
 
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/remove-bg`;
+
+  console.log(`Removing background for product ${productId || 'unnamed'}`);
 
   const response = await fetch(apiUrl, {
     method: 'POST',
@@ -19,9 +22,16 @@ export async function removeBackground(imageUrl: string, productId?: string): Pr
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Failed to remove background');
+    console.error('Background removal failed:', {
+      status: response.status,
+      error,
+      productId,
+      imageUrl
+    });
+    throw new Error(error.error || error.details || 'Failed to remove background');
   }
 
   const result = await response.json();
+  console.log(`Background removed successfully for product ${productId}`);
   return result.url || result.image;
 }
