@@ -214,23 +214,22 @@ Deno.serve(async (req: Request) => {
           ? "image/jpeg"
           : "image/png";
 
-      prompt = `You are editing an existing model photo. Here is the current model photo and the original flatlay reference.
+      prompt = `Edit this model photo. Apply ONLY the following change:
 
-REVISION REQUEST: ${safeRevision}
+"${safeRevision}"
 
-IMPORTANT RULES:
-- Keep the same model (same person, same ethnicity, same body type)
-- Keep the same outfit items from the flatlay
+RULES:
+- Keep the SAME person (same face, ethnicity, body type)
+- Keep the SAME outfit and clothing items
 - The model MUST remain ${genderText.toUpperCase()}
-- Only apply the specific changes requested above
-- Maintain the same professional fashion editorial quality
-- Studio lighting with clean white or light gray background
-- Full body shot showing the complete outfit`;
+- Apply the requested change while keeping everything else identical
+- Maintain professional fashion editorial quality
+- Studio lighting, clean white or light gray background
+- Full body shot showing complete outfit`;
 
       contentParts.push(
-        { text: prompt },
         { inline_data: { mime_type: revisionMimeType, data: base64Revision } },
-        { inline_data: { mime_type: mimeType, data: base64Image } }
+        { text: prompt }
       );
     } else {
       prompt = `CRITICAL: The model MUST be ${genderText.toUpperCase()}. Generate a professional fashion editorial photo of ${genderDescription}

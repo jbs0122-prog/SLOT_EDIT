@@ -193,8 +193,11 @@ No bullet points, no lists. Flowing prose only. Do NOT start with "This outfit".
     }
 
     const geminiData = await geminiResponse.json();
-    const insightText =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const responseParts = geminiData.candidates?.[0]?.content?.parts || [];
+    const textPart = responseParts
+      .filter((p: Record<string, unknown>) => p.text && !p.thought)
+      .pop();
+    const insightText = (textPart?.text as string)?.trim();
 
     if (!insightText) {
       throw new Error("No insight generated");
