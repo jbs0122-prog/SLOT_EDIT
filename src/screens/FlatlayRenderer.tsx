@@ -9,6 +9,7 @@ import {
   type EditorProductData,
   type ProductPosition,
 } from '../utils/flatlayRenderer';
+import { removeBackground } from '../utils/backgroundRemoval';
 import { generateAndSaveModelPhoto, reviseModelPhoto } from '../utils/modelPhotoGenerator';
 import FlatLayEditor from './FlatLayEditor';
 
@@ -111,7 +112,38 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
 
       if (pinsMatch && savedPins) {
         setRenderingStep('저장된 레이아웃 불러오는 중...');
-        const data = reconstructEditorDataFromPins(savedPins);
+
+        const updatedPins = [...savedPins];
+        for (let i = 0; i < updatedPins.length; i++) {
+          const pin = updatedPins[i];
+          const item = validItems.find(vi => vi.product_id === pin.product_id);
+          if (item?.product?.nobg_image_url) {
+            updatedPins[i] = { ...pin, image_url: item.product.nobg_image_url };
+          }
+        }
+
+        const pinsNeedingBgRemoval = updatedPins.filter((pin, idx) => {
+          const item = validItems.find(vi => vi.product_id === pin.product_id);
+          return !item?.product?.nobg_image_url;
+        });
+
+        if (pinsNeedingBgRemoval.length > 0) {
+          setRenderingStep('배경 제거 중...');
+          for (let i = 0; i < updatedPins.length; i++) {
+            const pin = updatedPins[i];
+            const item = validItems.find(vi => vi.product_id === pin.product_id);
+            if (!item?.product?.nobg_image_url && item?.product?.image_url) {
+              try {
+                const nobgUrl = await removeBackground(item.product.image_url, pin.product_id);
+                updatedPins[i] = { ...pin, image_url: nobgUrl };
+              } catch (e) {
+                console.error('bg removal failed for', pin.product_id, e);
+              }
+            }
+          }
+        }
+
+        const data = reconstructEditorDataFromPins(updatedPins);
         setEditorData(data);
         setPhase('editing');
       } else {
