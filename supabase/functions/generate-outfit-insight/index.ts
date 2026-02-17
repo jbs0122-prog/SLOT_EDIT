@@ -93,10 +93,10 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
+        JSON.stringify({ error: "AI service not configured (GEMINI_API_KEY missing)" }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -155,52 +155,46 @@ Write a styling insight in EXACTLY 2 short sentences (max 35 words total):
 
 No bullet points, no lists. Flowing prose only. Do NOT start with "This outfit". Keep it punchy and concise.`;
 
-    const userContent: Array<Record<string, unknown>> = [];
+    const parts: Array<Record<string, unknown>> = [];
 
     if (flatlayImageUrl) {
       const imageData = await fetchImageAsBase64(flatlayImageUrl);
       if (imageData) {
-        userContent.push({
-          type: "image_url",
-          image_url: {
-            url: `data:${imageData.mimeType};base64,${imageData.base64}`,
-            detail: "low",
+        parts.push({
+          inline_data: {
+            mime_type: imageData.mimeType,
+            data: imageData.base64,
           },
         });
       }
     }
 
-    userContent.push({ type: "text", text: prompt });
+    parts.push({ text: prompt });
 
-    const openaiResponse = await fetch(
-      "https://api.openai.com/v1/chat/completions",
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "user",
-              content: userContent,
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 256,
+          contents: [{ parts }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 256,
+          },
         }),
       }
     );
 
-    if (!openaiResponse.ok) {
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      console.error(`Gemini API error (${geminiResponse.status}):`, errorText);
       throw new Error("AI insight generation failed");
     }
 
-    const openaiData = await openaiResponse.json();
+    const geminiData = await geminiResponse.json();
     const insightText =
-      openaiData.choices?.[0]?.message?.content?.trim();
+      geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
     if (!insightText) {
       throw new Error("No insight generated");
