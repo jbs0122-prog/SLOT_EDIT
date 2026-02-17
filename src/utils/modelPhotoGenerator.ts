@@ -43,17 +43,21 @@ export async function generateModelPhoto(
   };
 }
 
+function loadImage(src: string, crossOrigin = true): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const el = new Image();
+    if (crossOrigin) el.crossOrigin = 'anonymous';
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+    el.src = src;
+  });
+}
+
 async function compressImageFromUrl(
   imageUrl: string,
   targetSizeKB: number
 ): Promise<Blob> {
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const el = new Image();
-    el.crossOrigin = 'anonymous';
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error('Failed to load model image for compression'));
-    el.src = imageUrl;
-  });
+  const img = await loadImage(imageUrl);
 
   const canvas = document.createElement('canvas');
   canvas.width = img.width;
@@ -61,6 +65,17 @@ async function compressImageFromUrl(
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas context not available');
   ctx.drawImage(img, 0, 0);
+
+  try {
+    const logo = await loadImage('/logo(white).png', false);
+    const logoWidth = Math.round(canvas.width * 0.5);
+    const logoHeight = Math.round((logo.height / logo.width) * logoWidth);
+    const logoX = (canvas.width - logoWidth) / 2;
+    const logoY = (canvas.height - logoHeight) / 2;
+    ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
+  } catch {
+    console.error('Failed to load logo for model photo overlay');
+  }
 
   const targetBytes = targetSizeKB * 1024;
   let quality = 0.92;
