@@ -180,7 +180,7 @@ No bullet points, no lists. Flowing prose only. Do NOT start with "This outfit".
           contents: [{ parts }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 256,
+            maxOutputTokens: 2048,
           },
         }),
       }
