@@ -25,14 +25,20 @@ export default function AdminPins() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [showProductsPanel, setShowProductsPanel] = useState(false);
   const imageRef = useRef<HTMLDivElement>(null);
-  const [filterGender, setFilterGender] = useState<string>('');
-  const [filterBodyType, setFilterBodyType] = useState<string>('');
-  const [filterVibe, setFilterVibe] = useState<string>('');
-  const [filterSeason, setFilterSeason] = useState<string>('');
+  const PINS_FILTER_KEY = 'admin_pins_filters';
+  const savedPinsFilters = (() => { try { const v = sessionStorage.getItem(PINS_FILTER_KEY); return v ? JSON.parse(v) : null; } catch { return null; } })();
+  const [filterGender, setFilterGender] = useState<string>(savedPinsFilters?.filterGender ?? '');
+  const [filterBodyType, setFilterBodyType] = useState<string>(savedPinsFilters?.filterBodyType ?? '');
+  const [filterVibe, setFilterVibe] = useState<string>(savedPinsFilters?.filterVibe ?? '');
+  const [filterSeason, setFilterSeason] = useState<string>(savedPinsFilters?.filterSeason ?? '');
   const [seasonDropdownOpen, setSeasonDropdownOpen] = useState<string | null>(null);
   const [seasonDropdownPos, setSeasonDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const seasonBtnRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [tpo, setTpo] = useState<string>('');
+
+  useEffect(() => {
+    sessionStorage.setItem(PINS_FILTER_KEY, JSON.stringify({ filterGender, filterBodyType, filterVibe, filterSeason }));
+  }, [filterGender, filterBodyType, filterVibe, filterSeason]);
 
   useEffect(() => {
     loadOutfits();

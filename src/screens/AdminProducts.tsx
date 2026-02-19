@@ -64,10 +64,23 @@ export default function AdminProducts() {
   const setFilterVibe = (v: string) => { setFilterVibeRaw(v); saveFilters({ filterVibe: v }); };
   const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); saveFilters({ filterSeason: v }); };
 
-  const [outfitFilterGender, setOutfitFilterGender] = useState('');
-  const [outfitFilterBodyType, setOutfitFilterBodyType] = useState('');
-  const [outfitFilterVibe, setOutfitFilterVibe] = useState('');
-  const [outfitFilterSeason, setOutfitFilterSeason] = useState('');
+  const OUTFIT_FILTER_KEY = 'admin_outfit_filters';
+  const loadSavedOutfitFilters = () => { try { const v = sessionStorage.getItem(OUTFIT_FILTER_KEY); return v ? JSON.parse(v) : null; } catch { return null; } };
+  const savedOutfitFilters = loadSavedOutfitFilters();
+  const saveOutfitFilters = (updates: Partial<{ outfitFilterGender: string; outfitFilterBodyType: string; outfitFilterVibe: string; outfitFilterSeason: string }>) => {
+    try { const current = loadSavedOutfitFilters() || {}; sessionStorage.setItem(OUTFIT_FILTER_KEY, JSON.stringify({ ...current, ...updates })); } catch { /* ignore */ }
+  };
+
+  const [outfitFilterGender, setOutfitFilterGenderRaw] = useState(savedOutfitFilters?.outfitFilterGender ?? '');
+  const [outfitFilterBodyType, setOutfitFilterBodyTypeRaw] = useState(savedOutfitFilters?.outfitFilterBodyType ?? '');
+  const [outfitFilterVibe, setOutfitFilterVibeRaw] = useState(savedOutfitFilters?.outfitFilterVibe ?? '');
+  const [outfitFilterSeason, setOutfitFilterSeasonRaw] = useState(savedOutfitFilters?.outfitFilterSeason ?? '');
+
+  const setOutfitFilterGender = (v: string) => { setOutfitFilterGenderRaw(v); saveOutfitFilters({ outfitFilterGender: v }); };
+  const setOutfitFilterBodyType = (v: string) => { setOutfitFilterBodyTypeRaw(v); saveOutfitFilters({ outfitFilterBodyType: v }); };
+  const setOutfitFilterVibe = (v: string) => { setOutfitFilterVibeRaw(v); saveOutfitFilters({ outfitFilterVibe: v }); };
+  const setOutfitFilterSeason = (v: string) => { setOutfitFilterSeasonRaw(v); saveOutfitFilters({ outfitFilterSeason: v }); };
+
   const [productUsageCounts, setProductUsageCounts] = useState<Record<string, number>>({});
   const [seasonDropdownOpen, setSeasonDropdownOpen] = useState<string | null>(null);
   const [seasonDropdownPos, setSeasonDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
