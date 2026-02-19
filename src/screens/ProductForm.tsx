@@ -3,7 +3,7 @@ import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { uploadProductImage, validateImageFile } from '../utils/imageUpload';
 import { analyzeFashionImage } from '../utils/fashionAnalyzer';
-import { X, Save, Upload, Loader2, Sparkles, Link2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Save, Upload, Loader2, Sparkles, Link2, CheckCircle2, AlertCircle, Scissors } from 'lucide-react';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -183,6 +183,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [removingBg, setRemovingBg] = useState(false);
+  const [nobgUrl, setNobgUrl] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [urlInput, setUrlInput] = useState('');
@@ -215,6 +217,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         formality: (product as any).formality ?? 3,
         warmth: (product as any).warmth ?? 3
       });
+      if ((product as any).nobg_image_url) {
+        setNobgUrl((product as any).nobg_image_url);
+      }
     }
   }, [product]);
 
@@ -438,6 +443,41 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     }
   };
 
+  const handleRemoveBg = async () => {
+    if (!formData.image_url.trim()) return;
+
+    setRemovingBg(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('로그인이 필요합니다');
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify({ imageUrl: formData.image_url }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || '누끼 추출 실패');
+      }
+
+      const resultUrl = data.url || data.image;
+      setNobgUrl(resultUrl);
+    } catch (error) {
+      alert('누끼 추출 실패: ' + (error as Error).message);
+    } finally {
+      setRemovingBg(false);
+    }
+  };
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.name.trim()) newErrors.name = '제품명을 입력하세요';
@@ -452,7 +492,11 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
     setSaving(true);
     try {
-      const dataToSave = { ...formData, updated_at: new Date().toISOString() };
+      const dataToSave = {
+        ...formData,
+        updated_at: new Date().toISOString(),
+        ...(nobgUrl ? { nobg_image_url: nobgUrl } : {}),
+      };
 
       if (product) {
         const { error } = await supabase.from('products').update(dataToSave).eq('id', product.id);
@@ -886,35 +930,89 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
             {formData.image_url && (
               <div className="mt-4">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-3">
                   <p className="text-sm text-gray-600">미리보기:</p>
-                  <button
-                    type="button"
-                    onClick={handleAIAnalysis}
-                    disabled={analyzing || uploading}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium shadow-md transition-all"
-                  >
-                    {analyzing ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        <span>AI 분석 중...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={16} />
-                        <span>이미지만 다시 분석</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAIAnalysis}
+                      disabled={analyzing || uploading || removingBg}
+                      className="px-3 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium shadow-md transition-all"
+                    >
+                      {analyzing ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          <span>분석 중...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={14} />
+                          <span>이미지 재분석</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveBg}
+                      disabled={removingBg || analyzing || uploading}
+                      className="px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium shadow-md transition-all"
+                    >
+                      {removingBg ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          <span>추출 중...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Scissors size={14} />
+                          <span>누끼 추출</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <img
-                  src={formData.image_url}
-                  alt="Preview"
-                  className="w-48 h-48 object-cover rounded-lg border-2 border-gray-200"
-                  onError={(e) => {
-                    e.currentTarget.src = 'https://via.placeholder.com/192?text=Invalid+URL';
-                  }}
-                />
+
+                <div className="flex gap-4 flex-wrap">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">원본</p>
+                    <img
+                      src={formData.image_url}
+                      alt="Preview"
+                      className="w-40 h-40 object-cover rounded-lg border-2 border-gray-200"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://via.placeholder.com/160?text=Invalid+URL';
+                      }}
+                    />
+                  </div>
+
+                  {nobgUrl && (
+                    <div>
+                      <div className="flex items-center gap-1 mb-1">
+                        <p className="text-xs text-emerald-600 font-medium">누끼 추출 완료</p>
+                        <CheckCircle2 size={12} className="text-emerald-500" />
+                      </div>
+                      <div
+                        className="w-40 h-40 rounded-lg border-2 border-emerald-300"
+                        style={{ backgroundImage: 'repeating-conic-gradient(#e5e7eb 0% 25%, white 0% 50%) 0 0 / 16px 16px' }}
+                      >
+                        <img
+                          src={nobgUrl}
+                          alt="누끼"
+                          className="w-full h-full object-contain rounded-lg"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">플랫레이용 이미지</p>
+                    </div>
+                  )}
+
+                  {removingBg && (
+                    <div className="w-40 h-40 rounded-lg border-2 border-emerald-200 border-dashed flex flex-col items-center justify-center gap-2 bg-emerald-50">
+                      <Loader2 size={24} className="animate-spin text-emerald-500" />
+                      <p className="text-xs text-emerald-600">배경 제거 중...</p>
+                    </div>
+                  )}
+                </div>
+
                 <p className="text-xs text-gray-500 mt-2">
                   AI 자동 분석: Gemini 2.5 Flash Image가 제품 정보를 자동으로 채워줍니다
                 </p>
