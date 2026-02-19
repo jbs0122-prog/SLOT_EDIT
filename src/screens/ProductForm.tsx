@@ -1022,7 +1022,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     <button
                       type="button"
                       onClick={handleAIAnalysis}
-                      disabled={analyzing || uploading || removingBg}
+                      disabled={analyzing || uploading}
                       className="px-3 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium shadow-md transition-all"
                     >
                       {analyzing ? (
