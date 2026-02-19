@@ -32,6 +32,22 @@ const BODY_TYPE_SILHOUETTE: Record<string, {
   },
 };
 
+const VIBE_ADJECTIVES: Record<string, string[]> = {
+  elevated_cool:     ["edgy", "structured", "dark", "sharp", "monochrome", "sleek"],
+  effortless_natural: ["earthy", "soft", "natural", "organic", "muted", "linen"],
+  artistic_minimal:  ["minimal", "clean", "tonal", "architectural", "understated", "neutral"],
+  retro_luxe:        ["vintage", "rich", "retro", "classic", "luxe", "heritage"],
+  sport_modern:      ["athletic", "technical", "performance", "sporty", "utility", "active"],
+  creative_layered:  ["layered", "eclectic", "textured", "mixed", "bold", "expressive"],
+};
+
+const SEASON_MODIFIERS: Record<string, { fabric: string[]; keywords: string[] }> = {
+  spring: { fabric: ["cotton", "linen", "light"], keywords: ["spring", "lightweight", "fresh"] },
+  summer: { fabric: ["linen", "mesh", "breathable", "lightweight"], keywords: ["summer", "breathable", "sleeveless"] },
+  fall:   { fabric: ["wool", "flannel", "corduroy", "tweed"], keywords: ["fall", "layering", "warm-tone"] },
+  winter: { fabric: ["wool", "cashmere", "fleece", "thermal", "down"], keywords: ["winter", "warm", "insulated"] },
+};
+
 // Each sub-category gets exactly 1 keyword — total = sum of all sub-categories per category
 const CATEGORY_DEFS = [
   { key: "outer",     label: "Outer",     subCategories: ["puffer", "coat", "blazer", "jacket", "trench"] },
@@ -75,9 +91,12 @@ Deno.serve(async (req: Request) => {
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const genderLabel = gender === "MALE" ? "men" : gender === "FEMALE" ? "women" : "unisex";
+    const vibeKey = vibe.toLowerCase().replace(/\s+/g, "_");
     const vibeLabel = vibe.replace(/_/g, " ").toLowerCase();
-    const seasonLabel = season || "all season";
+    const seasonLabel = (season || "all season").toLowerCase();
     const bodyFit = BODY_TYPE_SILHOUETTE[body_type] || BODY_TYPE_SILHOUETTE["regular"];
+    const vibeAdjs = VIBE_ADJECTIVES[vibeKey] || [vibeLabel];
+    const seasonMod = SEASON_MODIFIERS[seasonLabel] || { fabric: [], keywords: [] };
 
     if (!GEMINI_API_KEY) {
       const fallback = getFallbackKeywords(gender, body_type, vibe, season || "");
@@ -104,22 +123,35 @@ Deno.serve(async (req: Request) => {
       `  "${cat.key}": { ${cat.subCategories.map(s => `"${s}": "keyword"`).join(", ")} }`
     ).join(",\n");
 
+    const vibeAdjStr = vibeAdjs.slice(0, 3).join(", ");
+    const seasonFabricStr = seasonMod.fabric.slice(0, 3).join(", ") || seasonLabel;
+    const seasonKwStr = seasonMod.keywords.slice(0, 2).join(", ") || seasonLabel;
+
     const prompt = `You are a fashion search expert for Amazon. Generate Amazon search keywords for a ${genderLabel} with ${body_type || "regular"} body type.
 
-Body type principle: ${bodyFit.rationale}
-Style vibe: ${vibeLabel}
-Season: ${seasonLabel}
+=== STYLE REQUIREMENTS (MANDATORY) ===
+Body type fit principle: ${bodyFit.rationale}
+Style vibe: "${vibeLabel}" → use adjectives like: ${vibeAdjStr}
+Season: "${seasonLabel}" → prefer fabrics like: ${seasonFabricStr} | season keywords: ${seasonKwStr}
 
-Generate exactly ${totalCount} keywords — 1 keyword per sub-type, covering ALL sub-types listed below:
+=== KEYWORD FORMAT ===
+Each keyword MUST follow this pattern:
+  "${genderLabel} [FIT] [VIBE-ADJECTIVE or SEASON-FABRIC] [item]"
+
+Examples for "${vibeLabel}" vibe + "${seasonLabel}" season:
+- top/tshirt → "${genderLabel} ${bodyFit.topFit.split(",")[0].trim()} ${vibeAdjs[0]} tshirt"
+- outer/coat → "${genderLabel} ${bodyFit.outerFit.split(",")[0].trim()} ${seasonFabricStr.split(",")[0].trim()} coat"
+- bottom/denim → "${genderLabel} ${bodyFit.bottomFit.split(",")[0].trim()} ${vibeAdjs[1] || vibeAdjs[0]} denim jeans"
+
+=== CATEGORIES (generate exactly 1 keyword per sub-type) ===
 ${categoryInstructions}
 
-Rules:
-- Each keyword: "${genderLabel} [fit/style descriptor] [sub-type item name]"
-- e.g. "men relaxed wool coat", "men oversized graphic tshirt", "men wide-leg cargo pants"
-- Fit descriptors MUST match body type silhouette rules above
-- Keywords must reflect the "${vibeLabel}" style vibe and "${seasonLabel}" season
+=== STRICT RULES ===
+1. EVERY keyword MUST contain at least one vibe adjective (${vibeAdjStr}) OR season fabric (${seasonFabricStr})
+2. Fit MUST match body type rules
+3. Do NOT output generic keywords like "men cotton tshirt" — they must have style character
+4. Return ONLY valid JSON, no markdown, no explanation
 
-Return ONLY a valid JSON object with this exact structure, no markdown, no explanation:
 {
 ${exampleJson}
 }`;
