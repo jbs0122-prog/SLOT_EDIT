@@ -299,7 +299,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     e.target.value = '';
   };
 
-  const applyAnalysisToForm = (analysis: Record<string, any>) => {
+  const applyAnalysisToForm = (analysis: Record<string, any>, overrideName = true) => {
     const categoryMap: Record<string, string> = {
       '상의': 'top',
       '하의': 'bottom',
@@ -328,7 +328,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
     setFormData(prev => ({
       ...prev,
-      name: analysis.description || prev.name,
+      name: overrideName ? (analysis.description || prev.name) : prev.name,
       category: (categoryMap[analysis.category] as Product['category']) || prev.category,
       gender: genderMap[analysis.gender] || prev.gender,
       color: analysis.color || prev.color,
@@ -553,7 +553,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
       try {
         const analysis = await analyzeFashionImage(uploadResult.url);
-        applyAnalysisToForm(analysis as any);
+        applyAnalysisToForm(analysis as any, false);
       } catch {}
 
       setNobgUrl(item.extractedImageUrl);
