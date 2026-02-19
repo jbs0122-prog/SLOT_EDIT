@@ -77,24 +77,45 @@ Deno.serve(async (req: Request) => {
 
     const vibeLabel = vibe.replace(/_/g, " ").toLowerCase();
     const genderLabel = gender === "MALE" ? "men" : gender === "FEMALE" ? "women" : "unisex";
-    const bodyLabel = body_type || "regular";
     const seasonLabel = season || "all season";
+
+    const bodyFitMap: Record<string, { label: string; fitTerms: string; avoidTerms: string }> = {
+      slim: {
+        label: "slim",
+        fitTerms: "slim fit, tapered, skinny, slim-cut, fitted",
+        avoidTerms: "relaxed, loose, oversized, baggy, wide-leg",
+      },
+      regular: {
+        label: "regular",
+        fitTerms: "regular fit, classic fit, straight fit, standard",
+        avoidTerms: "oversized, baggy, skinny, skin-tight",
+      },
+      "plus-size": {
+        label: "plus-size",
+        fitTerms: "relaxed fit, loose, plus-size, extended size, curvy, oversized",
+        avoidTerms: "slim fit, skinny, fitted, tapered",
+      },
+    };
+    const bodyInfo = bodyFitMap[body_type] || bodyFitMap["regular"];
 
     const prompt = `You are a fashion product search specialist for Amazon.
 
-Generate exactly 12 Amazon search keywords for clothing and accessories that match this profile:
+Generate exactly 12 Amazon search keywords for clothing and accessories:
 - Gender: ${genderLabel}
-- Body type: ${bodyLabel}
+- Body type: ${bodyInfo.label} — MUST use fit terms like: ${bodyInfo.fitTerms}
 - Style vibe: ${vibeLabel}
 - Season: ${seasonLabel}
 
+CRITICAL FIT RULES for body type "${bodyInfo.label}":
+- Every clothing keyword (tops, bottoms, outerwear) MUST include one of these fit descriptors: ${bodyInfo.fitTerms}
+- NEVER use: ${bodyInfo.avoidTerms}
+- Example for "${bodyInfo.label}": "${genderLabel} ${bodyInfo.fitTerms.split(",")[0].trim()} chino pants", "${genderLabel} ${bodyInfo.fitTerms.split(",")[0].trim()} t-shirt"
+
 Requirements:
-- Each keyword should be a specific, shoppable Amazon search query (2-5 words)
-- Cover ALL clothing categories: tops, bottoms, outerwear, shoes, bags, accessories
-- Keywords must be in English
-- Match the exact style vibe: "${vibeLabel}"
-- Be specific enough to find real products (include fit, material, or style descriptors)
-- Do NOT repeat categories
+- Each keyword: 2-5 words, specific, shoppable on Amazon
+- Cover ALL categories (2 tops, 2 bottoms, 1 outerwear, 1 shoes, 1 bag, 1 accessory, 4 more clothing)
+- Keywords in English only
+- Match style vibe: "${vibeLabel}"
 
 Return ONLY a valid JSON array of 12 strings, no explanation, no markdown:
 ["keyword1", "keyword2", ...]`;

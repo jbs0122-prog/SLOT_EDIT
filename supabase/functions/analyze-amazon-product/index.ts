@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,13 +30,25 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const bodyTypeMap: Record<string, string> = {
+      slim: "slim — recommend slim fit, tapered, skinny, slim-cut styles",
+      regular: "regular — recommend regular fit, straight fit, classic styles",
+      "plus-size": "plus-size — recommend relaxed fit, loose, plus-size friendly styles",
+    };
+    const bodyDesc = bodyTypeMap[body_type] || "regular";
+
     const prompt = `You are a fashion product data specialist. Analyze this Amazon product and return structured metadata.
 
 Product:
 - Title: ${product.title}
 - Brand: ${product.brand || "unknown"}
 - Price: ${product.price ? `$${product.price}` : "unknown"}
-- Search context - Gender: ${gender}, Body type: ${body_type || "regular"}, Vibe: ${vibe}, Season: ${season || "all"}
+- Search context — Gender: ${gender}, Body type: ${bodyDesc}, Vibe: ${vibe}, Season: ${season || "all"}
+
+IMPORTANT: The body type is "${body_type}". The silhouette MUST match:
+- slim → use "slim" or "fitted"
+- regular → use "regular" or "straight"
+- plus-size → use "relaxed" or "oversized"
 
 Extract and return ONLY a valid JSON object with these exact fields:
 {
@@ -61,7 +74,7 @@ Extract and return ONLY a valid JSON object with these exact fields:
 Rules:
 - formality: 1=very casual, 5=formal (integer 1-5)
 - warmth: 1=very light, 5=very warm (integer 1-5)
-- Use the search context (gender, vibe, season) to inform your choices
+- body_type array MUST include "${body_type || "regular"}"
 - Return ONLY the JSON object, no markdown, no explanation`;
 
     const geminiRes = await fetch(
@@ -117,8 +130,22 @@ Rules:
       stock_status: "in_stock",
       image_url: product.image || "",
       product_link: product.url || "",
-      price: product.price ?? null,
+      price: product.price != null ? Math.round(product.price) : null,
     };
+
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const { error: insertError } = await adminClient.from("products").insert(result);
+
+    if (insertError) {
+      return new Response(
+        JSON.stringify({ error: insertError.message, detail: insertError }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({ result }),
