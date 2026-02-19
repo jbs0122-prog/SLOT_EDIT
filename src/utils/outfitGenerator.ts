@@ -187,10 +187,12 @@ export async function generateOutfitsAutomatically(
     });
   }
 
-  await Promise.all([
-    processBackgroundRemoval(bestOutfits, productList),
-    generateInsightsForOutfits(bestOutfits, generatedOutfits, productList, { gender, bodyType, vibe, targetSeason }),
-  ]);
+  processBackgroundRemoval(bestOutfits, productList).catch(err =>
+    console.error('Background removal failed:', err)
+  );
+  generateInsightsForOutfits(bestOutfits, generatedOutfits, productList, { gender, bodyType, vibe, targetSeason }).catch(err =>
+    console.error('Insight generation failed:', err)
+  );
 
   return generatedOutfits;
 }
