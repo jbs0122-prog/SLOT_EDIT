@@ -203,8 +203,21 @@ ${exampleJson}
       );
     }
 
-    // parsed shape: { outer: { puffer: "kw", coat: "kw", ... }, top: { ... }, ... }
-    const parsed = JSON.parse(jsonMatch[0]) as Record<string, Record<string, string> | string[]>;
+    let cleanedJson = jsonMatch[0]
+      .replace(/\/\/[^\n]*/g, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/,(\s*[}\]])/g, "$1");
+
+    let parsed: Record<string, Record<string, string> | string[]>;
+    try {
+      parsed = JSON.parse(cleanedJson) as Record<string, Record<string, string> | string[]>;
+    } catch {
+      const fallback = getFallbackKeywords(gender, body_type, vibe, season || "");
+      return new Response(
+        JSON.stringify({ keywords: fallback.keywords, categories: fallback.categories, source: "fallback" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const categories: Record<string, string[]> = {};
     const allKeywords: string[] = [];
