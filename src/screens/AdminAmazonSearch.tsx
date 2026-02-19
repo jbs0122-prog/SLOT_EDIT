@@ -571,6 +571,7 @@ export default function AdminAmazonSearch() {
                       {[
                         { key: 'all', label: '전체' },
                         { key: 'outer', label: 'Outer' },
+                        { key: 'mid', label: 'Mid' },
                         { key: 'top', label: 'Top' },
                         { key: 'bottom', label: 'Bottom' },
                         { key: 'shoes', label: 'Shoes' },

@@ -38,13 +38,15 @@ const BODY_TYPE_SILHOUETTE: Record<string, {
   },
 };
 
+// Matches the 7 product.category values: outer | mid | top | bottom | shoes | bag | accessory
 const CATEGORY_DEFS = [
-  { key: "outer", label: "Outerwear", count: 2 },
-  { key: "top", label: "Tops", count: 3 },
-  { key: "bottom", label: "Bottoms", count: 2 },
+  { key: "outer", label: "Outer", count: 2 },
+  { key: "mid", label: "Mid-layer", count: 1 },
+  { key: "top", label: "Top", count: 2 },
+  { key: "bottom", label: "Bottom", count: 2 },
   { key: "shoes", label: "Shoes", count: 2 },
-  { key: "bag", label: "Bags", count: 1 },
-  { key: "accessory", label: "Accessories", count: 2 },
+  { key: "bag", label: "Bag", count: 1 },
+  { key: "accessory", label: "Accessory", count: 2 },
 ];
 
 Deno.serve(async (req: Request) => {
@@ -77,13 +79,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const categoryInstructions = CATEGORY_DEFS.map(cat => {
-      if (cat.key === "top") return `- Tops (${cat.count} keywords): use fit "${bodyFit.topFit}"`;
-      if (cat.key === "bottom") return `- Bottoms (${cat.count} keywords): use fit "${bodyFit.bottomFit}"`;
-      if (cat.key === "outer") return `- Outerwear (${cat.count} keywords): use fit "${bodyFit.outerFit}"`;
-      if (cat.key === "shoes") return `- Shoes (${cat.count} keywords): specific style matching "${vibeLabel}" vibe`;
-      if (cat.key === "bag") return `- Bags (${cat.count} keyword): matching "${vibeLabel}" vibe`;
-      return `- Accessories (${cat.count} keywords): matching "${vibeLabel}" vibe`;
+      if (cat.key === "outer") return `- outer (${cat.count} keywords): outerwear/coats, use fit "${bodyFit.outerFit}"`;
+      if (cat.key === "mid") return `- mid (${cat.count} keyword): mid-layer e.g. knit sweater, cardigan, hoodie, fleece — worn between top and outer`;
+      if (cat.key === "top") return `- top (${cat.count} keywords): shirts/t-shirts/blouses, use fit "${bodyFit.topFit}"`;
+      if (cat.key === "bottom") return `- bottom (${cat.count} keywords): pants/skirts/jeans, use fit "${bodyFit.bottomFit}"`;
+      if (cat.key === "shoes") return `- shoes (${cat.count} keywords): footwear matching "${vibeLabel}" vibe`;
+      if (cat.key === "bag") return `- bag (${cat.count} keyword): bag/purse matching "${vibeLabel}" vibe`;
+      return `- accessory (${cat.count} keywords): hat/watch/belt/jewelry/scarf matching "${vibeLabel}" vibe`;
     }).join("\n");
+
+    const totalCount = CATEGORY_DEFS.reduce((s, c) => s + c.count, 0);
 
     const prompt = `You are a fashion search expert for Amazon. Generate search keywords for a ${genderLabel} with ${body_type || "regular"} body type.
 
@@ -92,26 +97,26 @@ Body type styling principle: ${bodyFit.rationale}
 Style vibe: ${vibeLabel}
 Season: ${seasonLabel}
 
-Generate exactly 12 keywords organized by category:
+Generate exactly ${totalCount} keywords organized by these 7 categories:
 ${categoryInstructions}
 
-IMPORTANT silhouette rules based on body type "${body_type || "regular"}":
-- Top keywords MUST describe fit: ${bodyFit.topFit}
-- Bottom keywords MUST describe fit: ${bodyFit.bottomFit}
-- Outerwear keywords MUST describe fit: ${bodyFit.outerFit}
-- This creates visual balance, not just matching body shape
+IMPORTANT silhouette rules (body type "${body_type || "regular"}"):
+- outer/top fit: ${bodyFit.outerFit} / ${bodyFit.topFit}
+- bottom fit: ${bodyFit.bottomFit}
+- mid-layer: knit, cardigan, or hoodie that layers well
 
-Return ONLY a valid JSON object, no markdown, no explanation:
+Return ONLY a valid JSON object with exactly these 7 keys, no markdown, no explanation:
 {
   "outer": ["keyword1", "keyword2"],
-  "top": ["keyword1", "keyword2", "keyword3"],
+  "mid": ["keyword1"],
+  "top": ["keyword1", "keyword2"],
   "bottom": ["keyword1", "keyword2"],
   "shoes": ["keyword1", "keyword2"],
   "bag": ["keyword1"],
   "accessory": ["keyword1", "keyword2"]
 }
 
-Each keyword: ${genderLabel} + fit descriptor + item name (e.g., "${genderLabel} oversized linen shirt", "${genderLabel} wide leg trousers")`;
+Each keyword format: ${genderLabel} + style/fit descriptor + item name`;
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -179,69 +184,79 @@ function getFallbackKeywords(
   const topFit = bodyFit.topFit.split(",")[0].trim();
   const bottomFit = bodyFit.bottomFit.split(",")[0].trim();
 
-  const vibeItems: Record<string, { outer: string[]; top: string[]; bottom: string[]; shoes: string[]; bag: string[]; accessory: string[] }> = {
+  const outerFit = bodyFit.outerFit.split(",")[0].trim();
+
+  const vibeItems: Record<string, { outer: string[]; mid: string[]; top: string[]; bottom: string[]; shoes: string[]; bag: string[]; accessory: string[] }> = {
     ELEVATED_COOL: {
-      outer: [`${g} ${bodyFit.outerFit.split(",")[0].trim()} wool overcoat`, `${g} tailored blazer`],
-      top: [`${g} ${topFit} turtleneck`, `${g} ${topFit} cotton shirt`, `${g} ${topFit} minimalist t-shirt`],
-      bottom: [`${g} ${bottomFit} chino pants`, `${g} ${bottomFit} trousers`],
+      outer: [`${g} ${outerFit} wool overcoat`, `${g} tailored blazer`],
+      mid: [`${g} merino wool crewneck sweater`],
+      top: [`${g} ${topFit} turtleneck shirt`, `${g} ${topFit} cotton dress shirt`],
+      bottom: [`${g} ${bottomFit} chino pants`, `${g} ${bottomFit} tailored trousers`],
       shoes: [`${g} leather chelsea boots`, `${g} suede loafers`],
       bag: [`${g} leather crossbody bag`],
-      accessory: [`${g} silver watch`, `${g} minimalist belt`],
+      accessory: [`${g} silver watch`, `${g} minimalist leather belt`],
     },
     EFFORTLESS_NATURAL: {
-      outer: [`${g} ${bodyFit.outerFit.split(",")[0].trim()} linen jacket`, `${g} lightweight knit cardigan`],
-      top: [`${g} ${topFit} linen shirt`, `${g} ${topFit} organic cotton tee`, `${g} ${topFit} knit sweater`],
+      outer: [`${g} ${outerFit} linen jacket`, `${g} ${outerFit} cotton field jacket`],
+      mid: [`${g} lightweight knit cardigan`],
+      top: [`${g} ${topFit} linen shirt`, `${g} ${topFit} organic cotton tee`],
       bottom: [`${g} ${bottomFit} linen pants`, `${g} ${bottomFit} chinos`],
       shoes: [`${g} canvas sneakers`, `${g} leather sandals`],
       bag: [`${g} canvas tote bag`],
       accessory: [`${g} woven belt`, `${g} straw hat`],
     },
     ARTISTIC_MINIMAL: {
-      outer: [`${g} ${bodyFit.outerFit.split(",")[0].trim()} structured coat`, `${g} minimalist blazer`],
-      top: [`${g} ${topFit} boxy t-shirt`, `${g} ${topFit} monochrome shirt`, `${g} ${topFit} long cardigan`],
+      outer: [`${g} ${outerFit} structured wool coat`, `${g} ${outerFit} minimalist blazer`],
+      mid: [`${g} fine knit long cardigan`],
+      top: [`${g} ${topFit} boxy t-shirt`, `${g} ${topFit} monochrome shirt`],
       bottom: [`${g} ${bottomFit} wide leg pants black`, `${g} ${bottomFit} pleated trousers`],
       shoes: [`${g} minimalist white sneakers`, `${g} slip-on loafers`],
-      bag: [`${g} structured minimal bag`],
+      bag: [`${g} structured minimal tote bag`],
       accessory: [`${g} geometric earrings`, `${g} simple silver necklace`],
     },
     RETRO_LUXE: {
-      outer: [`${g} ${bodyFit.outerFit.split(",")[0].trim()} corduroy jacket`, `${g} heritage wool coat`],
-      top: [`${g} ${topFit} retro polo shirt`, `${g} ${topFit} silk shirt`, `${g} ${topFit} turtleneck knit`],
+      outer: [`${g} ${outerFit} corduroy jacket`, `${g} ${outerFit} heritage wool coat`],
+      mid: [`${g} ribbed knit polo sweater`],
+      top: [`${g} ${topFit} retro polo shirt`, `${g} ${topFit} silk shirt`],
       bottom: [`${g} ${bottomFit} plaid trousers`, `${g} ${bottomFit} corduroy pants`],
       shoes: [`${g} leather penny loafers`, `${g} suede chelsea boots`],
       bag: [`${g} vintage leather bag`],
-      accessory: [`${g} retro watch`, `${g} vintage scarf`],
+      accessory: [`${g} retro watch`, `${g} vintage silk scarf`],
     },
     SPORT_MODERN: {
-      outer: [`${g} ${bodyFit.outerFit.split(",")[0].trim()} windbreaker jacket`, `${g} technical zip-up jacket`],
-      top: [`${g} ${topFit} performance hoodie`, `${g} ${topFit} mesh polo`, `${g} ${topFit} compression shirt`],
+      outer: [`${g} ${outerFit} windbreaker jacket`, `${g} ${outerFit} technical shell jacket`],
+      mid: [`${g} zip-up fleece hoodie`],
+      top: [`${g} ${topFit} performance t-shirt`, `${g} ${topFit} mesh polo`],
       bottom: [`${g} ${bottomFit} athletic joggers`, `${g} ${bottomFit} track pants`],
       shoes: [`${g} running sneakers`, `${g} training shoes`],
       bag: [`${g} sport crossbody bag`],
       accessory: [`${g} sport watch`, `${g} athletic cap`],
     },
     CREATIVE_LAYERED: {
-      outer: [`${g} ${bodyFit.outerFit.split(",")[0].trim()} patchwork jacket`, `${g} oversized bomber jacket`],
-      top: [`${g} ${topFit} graphic tee`, `${g} ${topFit} colorblock hoodie`, `${g} ${topFit} printed shirt`],
-      bottom: [`${g} ${bottomFit} cargo pants`, `${g} ${bottomFit} patchwork jeans`],
+      outer: [`${g} ${outerFit} oversized bomber jacket`, `${g} ${outerFit} patchwork jacket`],
+      mid: [`${g} colorblock zip-up hoodie`],
+      top: [`${g} ${topFit} graphic tee`, `${g} ${topFit} printed shirt`],
+      bottom: [`${g} ${bottomFit} cargo pants`, `${g} ${bottomFit} wide leg jeans`],
       shoes: [`${g} chunky sneakers`, `${g} platform boots`],
       bag: [`${g} streetwear crossbody bag`],
-      accessory: [`${g} bucket hat`, `${g} layered necklace`],
+      accessory: [`${g} bucket hat`, `${g} layered chain necklace`],
     },
   };
 
   const items = vibeItems[vibe] || vibeItems["ELEVATED_COOL"];
 
   if (season === "winter") {
-    items.outer[0] = `${g} ${bodyFit.outerFit.split(",")[0].trim()} winter coat warm`;
-    items.accessory.push(`${g} warm knit scarf`);
+    items.outer[0] = `${g} ${outerFit} warm winter coat`;
+    items.mid[0] = `${g} thermal knit sweater`;
   } else if (season === "summer") {
-    items.top[0] = `${g} ${topFit} lightweight summer top`;
+    items.top[0] = `${g} ${topFit} lightweight summer shirt`;
     items.bottom[0] = `${g} ${bottomFit} linen summer pants`;
+    items.mid[0] = `${g} lightweight open-front cardigan`;
   }
 
   const categories: Record<string, string[]> = {
     outer: items.outer,
+    mid: items.mid,
     top: items.top,
     bottom: items.bottom,
     shoes: items.shoes,
@@ -249,7 +264,7 @@ function getFallbackKeywords(
     accessory: items.accessory,
   };
 
-  const keywords = [...items.outer, ...items.top, ...items.bottom, ...items.shoes, ...items.bag, ...items.accessory];
+  const keywords = [...items.outer, ...items.mid, ...items.top, ...items.bottom, ...items.shoes, ...items.bag, ...items.accessory];
 
   return { keywords: keywords.slice(0, 12), categories };
 }
