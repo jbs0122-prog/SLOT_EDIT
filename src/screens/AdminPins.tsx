@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Save, ArrowLeft, Package, Users, Key } from 'lucide-react';
+import { X, Save, ArrowLeft, Package, Users, Key, ChevronDown } from 'lucide-react';
+
+const SEASON_LABELS: Record<string, string> = {
+  spring: '봄',
+  summer: '여름',
+  fall: '가을',
+  winter: '겨울',
+};
+
+const ALL_SEASONS = ['spring', 'summer', 'fall', 'winter'];
 
 type ImageType = 'flatlay' | 'on_model';
 
@@ -20,7 +29,7 @@ export default function AdminPins() {
   const [filterBodyType, setFilterBodyType] = useState<string>('');
   const [filterVibe, setFilterVibe] = useState<string>('');
   const [filterSeason, setFilterSeason] = useState<string>('');
-  const [outfitSeasonsMap, setOutfitSeasonsMap] = useState<Map<string, string[]>>(new Map());
+  const [seasonDropdownOpen, setSeasonDropdownOpen] = useState<string | null>(null);
   const [tpo, setTpo] = useState<string>('');
 
   useEffect(() => {
@@ -30,32 +39,19 @@ export default function AdminPins() {
 
   const loadOutfits = async () => {
     try {
-      const [outfitsResult, itemsResult] = await Promise.all([
-        supabase.from('outfits').select('*').order('created_at', { ascending: false }),
-        supabase.from('outfit_items').select('outfit_id, product:products(season)'),
-      ]);
+      const { data, error } = await supabase
+        .from('outfits')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (outfitsResult.error) throw outfitsResult.error;
-      if (itemsResult.error) throw itemsResult.error;
+      if (error) throw error;
 
-      const seasonsMap = new Map<string, string[]>();
-      itemsResult.data?.forEach((item: any) => {
-        const productData = Array.isArray(item.product) ? item.product[0] : item.product;
-        const seasons: string[] = productData?.season || [];
-        if (!seasonsMap.has(item.outfit_id)) seasonsMap.set(item.outfit_id, []);
-        seasons.forEach(s => {
-          if (!seasonsMap.get(item.outfit_id)!.includes(s)) {
-            seasonsMap.get(item.outfit_id)!.push(s);
-          }
-        });
-      });
-      setOutfitSeasonsMap(seasonsMap);
-
-      const outfitsData: Outfit[] = outfitsResult.data?.map(row => ({
+      const outfitsData: Outfit[] = data?.map(row => ({
         id: row.id,
         gender: row.gender,
         body_type: row.body_type,
         vibe: row.vibe,
+        season: row.season || [],
         image_url_flatlay: row.image_url_flatlay || '',
         image_url_on_model: row.image_url_on_model || '',
         insight_text: row['AI insight'] || '',
@@ -74,6 +70,21 @@ export default function AdminPins() {
       console.error('Failed to load outfits:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOutfitSeasonToggle = async (outfitId: string, season: string, currentSeasons: string[]) => {
+    const newSeasons = currentSeasons.includes(season)
+      ? currentSeasons.filter(s => s !== season)
+      : [...currentSeasons, season];
+
+    const { error } = await supabase
+      .from('outfits')
+      .update({ season: newSeasons })
+      .eq('id', outfitId);
+
+    if (!error) {
+      setOutfits(prev => prev.map(o => o.id === outfitId ? { ...o, season: newSeasons } : o));
     }
   };
 
@@ -257,7 +268,7 @@ export default function AdminPins() {
     if (filterBodyType && outfit.body_type !== filterBodyType) return false;
     if (filterVibe && outfit.vibe !== filterVibe) return false;
     if (filterSeason) {
-      const seasons = outfitSeasonsMap.get(outfit.id) || [];
+      const seasons = outfit.season || [];
       if (!seasons.includes(filterSeason)) return false;
     }
     return true;
@@ -413,8 +424,44 @@ export default function AdminPins() {
                     <div className="text-sm text-gray-600">
                       {outfit.gender} · {outfit.body_type} · {outfit.vibe}
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">
+                    <div className="text-xs text-gray-400 mt-1 mb-2">
                       ID: {outfit.id.slice(0, 8)} · {outfit.status}
+                    </div>
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSeasonDropdownOpen(seasonDropdownOpen === outfit.id ? null : outfit.id);
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-gray-300 bg-gray-50 hover:bg-white transition-colors"
+                      >
+                        <span>
+                          {(outfit.season || []).length === 0
+                            ? '계절 미설정'
+                            : (outfit.season || []).map(s => SEASON_LABELS[s] || s).join(' · ')}
+                        </span>
+                        <ChevronDown size={14} />
+                      </button>
+                      {seasonDropdownOpen === outfit.id && (
+                        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2">
+                          {ALL_SEASONS.map(s => (
+                            <button
+                              key={s}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOutfitSeasonToggle(outfit.id, s, outfit.season || []);
+                              }}
+                              className={`w-full text-left px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                (outfit.season || []).includes(s)
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'text-gray-600 hover:bg-gray-100'
+                              }`}
+                            >
+                              {SEASON_LABELS[s]}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ))}

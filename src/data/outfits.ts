@@ -48,6 +48,7 @@ export interface Outfit {
   gender: string;
   body_type: string;
   vibe: string;
+  season?: string[];
   image_url_flatlay: string;
   image_url_flatlay_clean?: string;
   image_url_on_model: string;

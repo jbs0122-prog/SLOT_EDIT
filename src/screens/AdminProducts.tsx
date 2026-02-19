@@ -6,7 +6,16 @@ import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
-import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users, Key, Scissors, CheckSquare, Square, XSquare } from 'lucide-react';
+import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users, Key, Scissors, CheckSquare, Square, XSquare, ChevronDown } from 'lucide-react';
+
+const SEASON_LABELS: Record<string, string> = {
+  spring: '봄',
+  summer: '여름',
+  fall: '가을',
+  winter: '겨울',
+};
+
+const ALL_SEASONS = ['spring', 'summer', 'fall', 'winter'];
 
 type ViewMode = 'products' | 'outfits';
 
@@ -59,15 +68,14 @@ export default function AdminProducts() {
   const [outfitFilterBodyType, setOutfitFilterBodyType] = useState('');
   const [outfitFilterVibe, setOutfitFilterVibe] = useState('');
   const [outfitFilterSeason, setOutfitFilterSeason] = useState('');
-  const [outfitSeasonsMap, setOutfitSeasonsMap] = useState<Map<string, string[]>>(new Map());
   const [productUsageCounts, setProductUsageCounts] = useState<Record<string, number>>({});
+  const [seasonDropdownOpen, setSeasonDropdownOpen] = useState<string | null>(null);
   const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadProducts();
     loadOutfits();
     loadProductUsageCounts();
-    loadOutfitSeasonsMap();
   }, []);
 
   const loadProducts = async () => {
@@ -128,6 +136,7 @@ export default function AdminProducts() {
         gender: row.gender,
         body_type: row.body_type,
         vibe: row.vibe,
+        season: row.season || [],
         image_url_flatlay: row.image_url_flatlay || '',
         image_url_flatlay_clean: row.image_url_flatlay_clean || '',
         image_url_on_model: row.image_url_on_model || '',
@@ -169,31 +178,6 @@ export default function AdminProducts() {
     }
   };
 
-  const loadOutfitSeasonsMap = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('outfit_items')
-        .select('outfit_id, product:products(season)');
-
-      if (error) throw error;
-
-      const seasonsMap = new Map<string, string[]>();
-      data?.forEach((item: any) => {
-        const productData = Array.isArray(item.product) ? item.product[0] : item.product;
-        const seasons: string[] = productData?.season || [];
-        if (!seasonsMap.has(item.outfit_id)) seasonsMap.set(item.outfit_id, []);
-        seasons.forEach(s => {
-          if (!seasonsMap.get(item.outfit_id)!.includes(s)) {
-            seasonsMap.get(item.outfit_id)!.push(s);
-          }
-        });
-      });
-      setOutfitSeasonsMap(seasonsMap);
-    } catch (error) {
-      console.error('Failed to load outfit seasons:', error);
-    }
-  };
-
   const handleAddProduct = () => {
     setEditingProduct(null);
     setShowProductForm(true);
@@ -232,7 +216,21 @@ export default function AdminProducts() {
   const handleLinksUpdated = () => {
     loadOutfits();
     loadProductUsageCounts();
-    loadOutfitSeasonsMap();
+  };
+
+  const handleOutfitSeasonToggle = async (outfitId: string, season: string, currentSeasons: string[]) => {
+    const newSeasons = currentSeasons.includes(season)
+      ? currentSeasons.filter(s => s !== season)
+      : [...currentSeasons, season];
+
+    const { error } = await supabase
+      .from('outfits')
+      .update({ season: newSeasons })
+      .eq('id', outfitId);
+
+    if (!error) {
+      setOutfits(prev => prev.map(o => o.id === outfitId ? { ...o, season: newSeasons } : o));
+    }
   };
 
   const handleDeleteOutfit = async (outfitId: string) => {
@@ -324,7 +322,7 @@ export default function AdminProducts() {
     if (outfitFilterBodyType && outfit.body_type !== outfitFilterBodyType) return false;
     if (outfitFilterVibe && outfit.vibe !== outfitFilterVibe) return false;
     if (outfitFilterSeason) {
-      const seasons = outfitSeasonsMap.get(outfit.id) || [];
+      const seasons = outfit.season || [];
       if (!seasons.includes(outfitFilterSeason)) return false;
     }
     return true;
@@ -689,8 +687,44 @@ export default function AdminProducts() {
                       <div className="text-sm text-gray-600 mb-2">
                         {outfit.gender} · {outfit.body_type} · {outfit.vibe}
                       </div>
-                      <div className="text-xs text-gray-400 mb-3">
+                      <div className="text-xs text-gray-400 mb-2">
                         연결된 제품: {outfit.items?.length || 0}개 · {outfit.status}
+                      </div>
+                      <div className="relative mb-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSeasonDropdownOpen(seasonDropdownOpen === outfit.id ? null : outfit.id);
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-gray-300 bg-gray-50 hover:bg-white transition-colors"
+                        >
+                          <span>
+                            {(outfit.season || []).length === 0
+                              ? '계절 미설정'
+                              : (outfit.season || []).map(s => SEASON_LABELS[s] || s).join(' · ')}
+                          </span>
+                          <ChevronDown size={14} />
+                        </button>
+                        {seasonDropdownOpen === outfit.id && (
+                          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2">
+                            {ALL_SEASONS.map(s => (
+                              <button
+                                key={s}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOutfitSeasonToggle(outfit.id, s, outfit.season || []);
+                                }}
+                                className={`w-full text-left px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                  (outfit.season || []).includes(s)
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'text-gray-600 hover:bg-gray-100'
+                                }`}
+                              >
+                                {SEASON_LABELS[s]}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <button
                         onClick={() => handleLinkOutfit(outfit)}
