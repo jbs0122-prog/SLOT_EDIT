@@ -51,13 +51,16 @@ Deno.serve(async (req: Request) => {
   try {
     let gender: string, body_type: string, vibe: string, season: string;
     try {
-      const body = await req.json();
+      const rawText = await req.text();
+      const cleaned = rawText.trim();
+      if (!cleaned) throw new Error("empty body");
+      const body = JSON.parse(cleaned);
       gender = body.gender;
       body_type = body.body_type;
       vibe = body.vibe;
       season = body.season;
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid or empty request body" }), {
+    } catch (parseErr) {
+      return new Response(JSON.stringify({ error: "Invalid or empty request body", detail: (parseErr as Error).message }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
