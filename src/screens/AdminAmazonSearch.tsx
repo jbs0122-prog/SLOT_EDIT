@@ -173,6 +173,7 @@ export default function AdminAmazonSearch() {
   };
 
   const searchByKeyword = useCallback(async (kw: string, p = 1) => {
+    const isNewKeyword = kw !== activeKeyword;
     setActiveKeyword(kw);
     setSearchLoading(true);
     setSearchError('');
@@ -180,7 +181,7 @@ export default function AdminAmazonSearch() {
     setProducts([]);
     setSelected(new Set());
     setCategoryFilter('all');
-    setSortBy('default');
+    if (isNewKeyword) setSortBy('default');
 
     try {
       const { data, error } = await supabase.functions.invoke('amazon-search', {
@@ -195,7 +196,7 @@ export default function AdminAmazonSearch() {
     } finally {
       setSearchLoading(false);
     }
-  }, []);
+  }, [activeKeyword]);
 
   const toggleSelect = (asin: string) => {
     setSelected(prev => {
