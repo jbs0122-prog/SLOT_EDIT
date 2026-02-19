@@ -40,7 +40,8 @@ export default function AdminPins() {
 
       const seasonsMap = new Map<string, string[]>();
       itemsResult.data?.forEach((item: any) => {
-        const seasons: string[] = item.product?.season || [];
+        const productData = Array.isArray(item.product) ? item.product[0] : item.product;
+        const seasons: string[] = productData?.season || [];
         if (!seasonsMap.has(item.outfit_id)) seasonsMap.set(item.outfit_id, []);
         seasons.forEach(s => {
           if (!seasonsMap.get(item.outfit_id)!.includes(s)) {
