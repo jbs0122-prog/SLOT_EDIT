@@ -1,5 +1,6 @@
 import { Product } from '../data/outfits';
 import { scoreOutfit } from './matchingScoring';
+import { inferColorFamily, getColorHarmonyScore, isNeutralColor, getVibeCompatScore } from './matchingData';
 
 export interface MatchScore {
   score: number;
@@ -32,78 +33,111 @@ export interface OutfitCandidate {
 
 export { scoreOutfit } from './matchingScoring';
 
-function weightedPickRandom<T extends { id: string }>(arr: T[], usageCounts: Record<string, number>): T {
-  const weights = arr.map(item => {
-    const usage = usageCounts[item.id] ?? 0;
-    if (usage === 0) return 3.0;
-    if (usage === 1) return 2.0;
-    if (usage <= 3) return 1.0;
-    return 0.5;
-  });
-  const total = weights.reduce((sum, w) => sum + w, 0);
-  let rand = Math.random() * total;
-  for (let i = 0; i < arr.length; i++) {
-    rand -= weights[i];
-    if (rand <= 0) return arr[i];
+export interface AnchorItem {
+  product: Product;
+  slotType: keyof OutfitCandidate;
+}
+
+function yieldToMain(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function scoreProductForContext(
+  product: Product,
+  filters: { gender?: string; bodyType?: string; vibe?: string; targetSeason?: string; targetWarmth?: number },
+  usageCounts: Record<string, number>
+): number {
+  let score = 100;
+
+  if (filters.vibe && product.vibe && product.vibe.length > 0) {
+    const vibeScore = Math.max(...product.vibe.map(v => getVibeCompatScore(v, filters.vibe!)));
+    score += (vibeScore - 50) * 0.6;
   }
-  return arr[arr.length - 1];
-}
 
-function shuffle<T>(arr: T[]): T[] {
-  const result = [...arr];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
+  if (filters.targetSeason && product.season && product.season.length > 0) {
+    if (product.season.includes(filters.targetSeason)) score += 15;
+    else score -= 10;
   }
-  return result;
+
+  if (filters.targetWarmth !== undefined && product.warmth !== undefined) {
+    const diff = Math.abs(product.warmth - filters.targetWarmth);
+    if (diff <= 0.5) score += 15;
+    else if (diff <= 1) score += 5;
+    else if (diff > 2) score -= 20;
+  }
+
+  const usage = usageCounts[product.id] ?? 0;
+  if (usage === 0) score += 20;
+  else if (usage === 1) score += 10;
+  else if (usage <= 3) score += 0;
+  else score -= 15;
+
+  return score;
 }
 
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+function pickTopCandidatesPerSlot(
+  products: Product[],
+  maxPerSlot: number,
+  filters: { gender?: string; bodyType?: string; vibe?: string; targetSeason?: string; targetWarmth?: number },
+  usageCounts: Record<string, number>
+): Product[] {
+  if (products.length <= maxPerSlot) return products;
 
-function getColorFamily(item: Product): string {
-  return item.color_family || '';
-}
+  const scored = products.map(p => ({
+    product: p,
+    score: scoreProductForContext(p, filters, usageCounts),
+  }));
 
-function getFormality(item: Product): number | undefined {
-  return item.formality;
-}
+  scored.sort((a, b) => b.score - a.score);
 
-function getWarmth(item: Product): number | undefined {
-  return item.warmth;
+  const colorFamilyBuckets = new Map<string, Product[]>();
+  for (const { product } of scored) {
+    const cf = inferColorFamily(product) || 'unknown';
+    if (!colorFamilyBuckets.has(cf)) colorFamilyBuckets.set(cf, []);
+    colorFamilyBuckets.get(cf)!.push(product);
+  }
+
+  const result: Product[] = [];
+  const perBucketTarget = Math.ceil(maxPerSlot / colorFamilyBuckets.size);
+  const buckets = [...colorFamilyBuckets.values()];
+
+  for (const bucket of buckets) {
+    const take = Math.min(perBucketTarget, bucket.length);
+    result.push(...bucket.slice(0, take));
+    if (result.length >= maxPerSlot) break;
+  }
+
+  if (result.length < maxPerSlot) {
+    for (const { product } of scored) {
+      if (result.length >= maxPerSlot) break;
+      if (!result.includes(product)) result.push(product);
+    }
+  }
+
+  return result.slice(0, maxPerSlot);
 }
 
 function passesHardConstraints(
   outfit: OutfitCandidate,
   context?: { targetSeason?: string }
 ): boolean {
-  const coreItems = [outfit.top, outfit.bottom, outfit.shoes].filter(Boolean);
-  if (coreItems.length < 3) return false;
-
   const allItems = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
     .filter(Boolean) as Product[];
-  const formalities = allItems.map(getFormality).filter((f): f is number => typeof f === 'number');
 
+  const formalities = allItems.map(i => i.formality).filter((f): f is number => typeof f === 'number');
   if (formalities.length >= 2) {
     const range = Math.max(...formalities) - Math.min(...formalities);
     if (range > 3) return false;
   }
 
   if (context?.targetSeason === 'summer') {
-    const warmths = allItems.map(getWarmth).filter((w): w is number => typeof w === 'number');
-    if (warmths.length > 0) {
-      const avgWarmth = warmths.reduce((s, w) => s + w, 0) / warmths.length;
-      if (avgWarmth > 4) return false;
-    }
+    const warmths = allItems.map(i => i.warmth).filter((w): w is number => typeof w === 'number');
+    if (warmths.length > 0 && warmths.reduce((s, w) => s + w, 0) / warmths.length > 4) return false;
   }
 
   if (context?.targetSeason === 'winter') {
-    const warmths = allItems.map(getWarmth).filter((w): w is number => typeof w === 'number');
-    if (warmths.length > 0) {
-      const avgWarmth = warmths.reduce((s, w) => s + w, 0) / warmths.length;
-      if (avgWarmth < 1.5) return false;
-    }
+    const warmths = allItems.map(i => i.warmth).filter((w): w is number => typeof w === 'number');
+    if (warmths.length > 0 && warmths.reduce((s, w) => s + w, 0) / warmths.length < 1.5) return false;
   }
 
   return true;
@@ -124,15 +158,10 @@ function shouldIncludeMid(targetSeason?: string, targetWarmth?: number): boolean
 function getOutfitColorKey(outfit: OutfitCandidate): string {
   return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.accessory]
     .filter(Boolean)
-    .map(item => getColorFamily(item as Product))
+    .map(item => inferColorFamily(item as Product) || '')
     .filter(Boolean)
     .sort()
     .join('-');
-}
-
-export interface AnchorItem {
-  product: Product;
-  slotType: keyof OutfitCandidate;
 }
 
 export async function generateOutfitCombinations(
@@ -147,8 +176,8 @@ export async function generateOutfitCombinations(
   anchor?: AnchorItem,
   usageCounts: Record<string, number> = {}
 ): Promise<OutfitCandidate[]> {
-  const filterProducts = (category: string) => {
-    return products.filter(p => {
+  const filterProducts = (category: string) =>
+    products.filter(p => {
       if (p.category !== category) return false;
       if (p.stock_status && p.stock_status !== 'in_stock') return false;
       if (filters.gender && p.gender !== 'UNISEX' && p.gender !== filters.gender) return false;
@@ -156,75 +185,79 @@ export async function generateOutfitCombinations(
       if (filters.vibe && p.vibe && p.vibe.length > 0 && !p.vibe.includes(filters.vibe)) return false;
       return true;
     });
-  };
 
   const anchorSlot = anchor?.slotType;
   const needsOuter = anchorSlot === 'outer' || shouldIncludeOuter(filters.targetSeason, filters.targetWarmth);
   const needsMid = anchorSlot === 'mid' || shouldIncludeMid(filters.targetSeason, filters.targetWarmth);
 
-  const outers = needsOuter ? filterProducts('outer') : [];
-  const mids = needsMid ? filterProducts('mid') : [];
-  const tops = filterProducts('top');
-  const bottoms = filterProducts('bottom');
-  const shoes = filterProducts('shoes');
-  const bags = filterProducts('bag');
-  const accessories = filterProducts('accessory');
+  const MAX_PER_CORE_SLOT = 12;
+  const MAX_PER_OPT_SLOT = 8;
+
+  const rawTops = filterProducts('top');
+  const rawBottoms = filterProducts('bottom');
+  const rawShoes = filterProducts('shoes');
+  const rawOuters = needsOuter ? filterProducts('outer') : [];
+  const rawMids = needsMid ? filterProducts('mid') : [];
+  const rawBags = filterProducts('bag');
+  const rawAccessories = filterProducts('accessory');
 
   if (anchor) {
     const ensureInList = (list: Product[], product: Product) => {
-      if (!list.find(p => p.id === product.id)) {
-        list.push(product);
-      }
+      if (!list.find(p => p.id === product.id)) list.push(product);
     };
-    const catMap: Record<string, Product[]> = { outer: outers, mid: mids, top: tops, bottom: bottoms, shoes, bag: bags, accessory: accessories };
-    const targetList = catMap[anchor.product.category];
-    if (targetList) ensureInList(targetList, anchor.product);
+    const catMap: Record<string, Product[]> = {
+      outer: rawOuters, mid: rawMids, top: rawTops,
+      bottom: rawBottoms, shoes: rawShoes, bag: rawBags, accessory: rawAccessories,
+    };
+    if (catMap[anchor.product.category]) ensureInList(catMap[anchor.product.category], anchor.product);
   }
 
-  if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) {
-    return [];
-  }
+  if (rawTops.length === 0 || rawBottoms.length === 0 || rawShoes.length === 0) return [];
 
-  const totalCore = tops.length * bottoms.length * shoes.length;
-  const EXHAUSTIVE_THRESHOLD = 500;
-
-  if (totalCore <= EXHAUSTIVE_THRESHOLD) {
-    return await generateExhaustive(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
-  }
-
-  return await generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
-}
-
-async function generateExhaustive(
-  outers: Product[],
-  mids: Product[],
-  tops: Product[],
-  bottoms: Product[],
-  shoes: Product[],
-  bags: Product[],
-  accessories: Product[],
-  filters: { targetSeason?: string },
-  anchor?: AnchorItem,
-  usageCounts: Record<string, number> = {}
-): Promise<OutfitCandidate[]> {
-  const YIELD_INTERVAL = 1000;
-  const combinations: OutfitCandidate[] = [];
-  const anchorSlot = anchor?.slotType;
-  const anchorProduct = anchor?.product;
+  const tops = anchorSlot === 'top' ? [anchor!.product] : pickTopCandidatesPerSlot(rawTops, MAX_PER_CORE_SLOT, filters, usageCounts);
+  const bottoms = anchorSlot === 'bottom' ? [anchor!.product] : pickTopCandidatesPerSlot(rawBottoms, MAX_PER_CORE_SLOT, filters, usageCounts);
+  const shoes = anchorSlot === 'shoes' ? [anchor!.product] : pickTopCandidatesPerSlot(rawShoes, MAX_PER_CORE_SLOT, filters, usageCounts);
+  const outers = anchorSlot === 'outer' ? [anchor!.product] : pickTopCandidatesPerSlot(rawOuters, MAX_PER_OPT_SLOT, filters, usageCounts);
+  const mids = anchorSlot === 'mid' ? [anchor!.product] : pickTopCandidatesPerSlot(rawMids, MAX_PER_OPT_SLOT, filters, usageCounts);
+  const bags = anchorSlot === 'bag' ? [anchor!.product] : pickTopCandidatesPerSlot(rawBags, MAX_PER_OPT_SLOT, filters, usageCounts);
+  const accessories = anchorSlot === 'accessory' ? [anchor!.product] : pickTopCandidatesPerSlot(rawAccessories, MAX_PER_OPT_SLOT, filters, usageCounts);
 
   const outerPool = outers.length > 0 ? [undefined, ...outers] : [undefined];
   const midPool = mids.length > 0 ? [undefined, ...mids] : [undefined];
   const bagPool = bags.length > 0 ? [undefined, ...bags] : [undefined];
   const accPool = accessories.length > 0 ? [undefined, ...accessories] : [undefined];
 
+  const combinations: OutfitCandidate[] = [];
   let count = 0;
-  for (const top of (anchorSlot === 'top' ? [anchorProduct!] : tops)) {
-    for (const bottom of (anchorSlot === 'bottom' ? [anchorProduct!] : bottoms)) {
-      for (const shoe of (anchorSlot === 'shoes' ? [anchorProduct!] : shoes)) {
-        for (const outer of (anchorSlot === 'outer' ? [anchorProduct!] : outerPool)) {
-          for (const mid of (anchorSlot === 'mid' ? [anchorProduct!] : midPool)) {
-            for (const bag of (anchorSlot === 'bag' ? [anchorProduct!] : bagPool)) {
-              for (const acc of (anchorSlot === 'accessory' ? [anchorProduct!] : accPool)) {
+
+  for (const top of (anchorSlot === 'top' ? [anchor!.product] : tops)) {
+    const topColorFamily = inferColorFamily(top) || '';
+    for (const bottom of (anchorSlot === 'bottom' ? [anchor!.product] : bottoms)) {
+      const bottomColorFamily = inferColorFamily(bottom) || '';
+      const topBottomHarmony = topColorFamily && bottomColorFamily
+        ? getColorHarmonyScore(topColorFamily, bottomColorFamily)
+        : 60;
+      if (topBottomHarmony < 30) continue;
+
+      for (const shoe of (anchorSlot === 'shoes' ? [anchor!.product] : shoes)) {
+        const shoeColorFamily = inferColorFamily(shoe) || '';
+        const shoeHarmony = shoeColorFamily && topColorFamily
+          ? getColorHarmonyScore(shoeColorFamily, topColorFamily)
+          : 60;
+        if (shoeHarmony < 25) continue;
+
+        for (const outer of (anchorSlot === 'outer' ? [anchor!.product] : outerPool)) {
+          if (outer) {
+            const outerCF = inferColorFamily(outer) || '';
+            const outerHarmony = outerCF && topColorFamily
+              ? getColorHarmonyScore(outerCF, topColorFamily)
+              : 60;
+            if (outerHarmony < 25) continue;
+          }
+
+          for (const mid of (anchorSlot === 'mid' ? [anchor!.product] : midPool)) {
+            for (const bag of (anchorSlot === 'bag' ? [anchor!.product] : bagPool)) {
+              for (const acc of (anchorSlot === 'accessory' ? [anchor!.product] : accPool)) {
                 const outfit: OutfitCandidate = { top, bottom, shoes: shoe };
                 if (outer) outfit.outer = outer;
                 if (mid) outfit.mid = mid;
@@ -236,123 +269,12 @@ async function generateExhaustive(
                 }
 
                 count++;
-                if (count % YIELD_INTERVAL === 0) {
-                  await yieldToMain();
-                }
+                if (count % 2000 === 0) await yieldToMain();
               }
             }
           }
         }
       }
-    }
-  }
-
-  return combinations;
-}
-
-async function generateSampled(
-  outers: Product[],
-  mids: Product[],
-  tops: Product[],
-  bottoms: Product[],
-  shoes: Product[],
-  bags: Product[],
-  accessories: Product[],
-  filters: { targetSeason?: string },
-  anchor?: AnchorItem,
-  usageCounts: Record<string, number> = {}
-): Promise<OutfitCandidate[]> {
-  const MAX_SAMPLES = 3000;
-  const YIELD_INTERVAL = 500;
-  const seen = new Set<string>();
-  const combinations: OutfitCandidate[] = [];
-  const anchorSlot = anchor?.slotType;
-  const anchorProduct = anchor?.product;
-
-  const zeroUsageTops = anchorSlot === 'top' ? [] : tops.filter(p => (usageCounts[p.id] ?? 0) === 0);
-  const zeroUsageBottoms = anchorSlot === 'bottom' ? [] : bottoms.filter(p => (usageCounts[p.id] ?? 0) === 0);
-  const zeroUsageShoes = anchorSlot === 'shoes' ? [] : shoes.filter(p => (usageCounts[p.id] ?? 0) === 0);
-  const zeroUsageOuters = anchorSlot === 'outer' ? [] : outers.filter(p => (usageCounts[p.id] ?? 0) === 0);
-  const zeroUsageBags = anchorSlot === 'bag' ? [] : bags.filter(p => (usageCounts[p.id] ?? 0) === 0);
-  const zeroUsageAccessories = anchorSlot === 'accessory' ? [] : accessories.filter(p => (usageCounts[p.id] ?? 0) === 0);
-
-  const pickForSlot = (
-    zeroPool: Product[],
-    allPool: Product[],
-    forceZeroProb: number
-  ): Product => {
-    if (zeroPool.length > 0 && Math.random() < forceZeroProb) {
-      return pickRandom(zeroPool);
-    }
-    return weightedPickRandom(allPool, usageCounts);
-  };
-
-  for (let i = 0; i < MAX_SAMPLES; i++) {
-    if (i > 0 && i % YIELD_INTERVAL === 0) {
-      await yieldToMain();
-    }
-    const forceZeroProb = i < MAX_SAMPLES * 0.6 ? 0.7 : 0.3;
-
-    const top = anchorSlot === 'top' ? anchorProduct! : pickForSlot(zeroUsageTops, tops, forceZeroProb);
-    const bottom = anchorSlot === 'bottom' ? anchorProduct! : pickForSlot(zeroUsageBottoms, bottoms, forceZeroProb);
-    const shoe = anchorSlot === 'shoes' ? anchorProduct! : pickForSlot(zeroUsageShoes, shoes, forceZeroProb);
-
-    let outer: Product | undefined;
-    if (anchorSlot === 'outer') {
-      outer = anchorProduct!;
-    } else {
-      outer = outers.length > 0 ? pickForSlot(zeroUsageOuters, outers, forceZeroProb) : undefined;
-    }
-
-    let mid: Product | undefined;
-    if (anchorSlot === 'mid') {
-      mid = anchorProduct!;
-    } else {
-      mid = mids.length > 0 ? (Math.random() < 0.85 ? weightedPickRandom(mids, usageCounts) : undefined) : undefined;
-    }
-
-    let bag: Product | undefined;
-    if (anchorSlot === 'bag') {
-      bag = anchorProduct!;
-    } else {
-      bag = bags.length > 0 ? (Math.random() < 0.8 ? pickForSlot(zeroUsageBags, bags, forceZeroProb) : undefined) : undefined;
-    }
-
-    let accessory: Product | undefined;
-    if (anchorSlot === 'accessory') {
-      accessory = anchorProduct!;
-    } else {
-      accessory = accessories.length > 0 ? (Math.random() < 0.7 ? pickForSlot(zeroUsageAccessories, accessories, forceZeroProb) : undefined) : undefined;
-    }
-
-    let accessory2: Product | undefined;
-    if (anchorSlot === 'accessory_2') {
-      accessory2 = anchorProduct!;
-      if (!accessory && accessories.length > 0) {
-        const remaining = accessories.filter(a => a.id !== anchorProduct!.id);
-        if (remaining.length > 0) accessory = weightedPickRandom(remaining, usageCounts);
-      }
-    } else if (accessory && accessories.length > 1 && Math.random() < 0.4) {
-      const remaining = accessories.filter(a => a.id !== accessory!.id);
-      if (remaining.length > 0) accessory2 = weightedPickRandom(remaining, usageCounts);
-    }
-
-    const key = [
-      outer?.id || '', mid?.id || '', top.id, bottom.id, shoe.id,
-      bag?.id || '', accessory?.id || '', accessory2?.id || '',
-    ].join('|');
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const outfit: OutfitCandidate = { top, bottom, shoes: shoe };
-    if (outer) outfit.outer = outer;
-    if (mid) outfit.mid = mid;
-    if (bag) outfit.bag = bag;
-    if (accessory) outfit.accessory = accessory;
-    if (accessory2) outfit.accessory_2 = accessory2;
-
-    if (passesHardConstraints(outfit, { targetSeason: filters.targetSeason })) {
-      combinations.push(outfit);
     }
   }
 
@@ -367,7 +289,7 @@ function selectDiverse(
 ): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
   if (scored.length <= topN) return scored;
 
-  const pool = scored.slice(0, Math.min(scored.length, topN * 50));
+  const pool = scored.slice(0, Math.min(scored.length, topN * 30));
   const selected: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
   const outerCounts = new Map<string, number>();
   const paletteCounts = new Map<string, number>();
@@ -378,12 +300,7 @@ function selectDiverse(
   const anchorOuterId = anchor?.slotType === 'outer' ? anchor.product.id : null;
   const anchorProductId = anchor?.product.id ?? null;
 
-  const getCoreIds = (outfit: OutfitCandidate): string[] => [
-    outfit.top.id,
-    outfit.bottom.id,
-    outfit.shoes.id,
-  ];
-
+  const getCoreIds = (outfit: OutfitCandidate): string[] => [outfit.top.id, outfit.bottom.id, outfit.shoes.id];
   const getOptionalIds = (outfit: OutfitCandidate): string[] =>
     [outfit.outer, outfit.mid, outfit.bag, outfit.accessory, outfit.accessory_2]
       .filter((p): p is Product => !!p)
@@ -398,68 +315,33 @@ function selectDiverse(
     for (const candidate of pool) {
       if (selected.length >= topN) break;
       if (selected.includes(candidate)) continue;
-
       if (requireZeroUsage && !hasZeroUsageItem(candidate.outfit)) continue;
 
       const outerId = candidate.outfit.outer?.id || 'none';
       if (outerId !== anchorOuterId) {
-        const currentOuterCount = outerCounts.get(outerId) || 0;
-        if (currentOuterCount >= maxOuterRepeat) continue;
+        if ((outerCounts.get(outerId) || 0) >= maxOuterRepeat) continue;
       }
 
       const paletteKey = getOutfitColorKey(candidate.outfit);
-      const currentPaletteCount = paletteCounts.get(paletteKey) || 0;
-      if (!anchor && currentPaletteCount >= maxPaletteRepeat) continue;
+      if (!anchor && (paletteCounts.get(paletteKey) || 0) >= maxPaletteRepeat) continue;
 
       if (enforceProductLimit) {
         const coreIds = getCoreIds(candidate.outfit);
-        const blocked = coreIds.some(id => {
-          if (id === anchorProductId) return false;
-          return (productCounts.get(id) || 0) >= maxProductRepeat;
-        });
-        if (blocked) continue;
+        if (coreIds.some(id => id !== anchorProductId && (productCounts.get(id) || 0) >= maxProductRepeat)) continue;
       }
 
       selected.push(candidate);
       outerCounts.set(outerId, (outerCounts.get(outerId) || 0) + 1);
-      paletteCounts.set(paletteKey, currentPaletteCount + 1);
-
+      paletteCounts.set(paletteKey, (paletteCounts.get(paletteKey) || 0) + 1);
       for (const id of [...getCoreIds(candidate.outfit), ...getOptionalIds(candidate.outfit)]) {
-        if (id !== anchorProductId) {
-          productCounts.set(id, (productCounts.get(id) || 0) + 1);
-        }
+        if (id !== anchorProductId) productCounts.set(id, (productCounts.get(id) || 0) + 1);
       }
     }
   };
 
   trySelect(true, true);
-
-  if (selected.length < topN) {
-    trySelect(true, false);
-  }
-
-  if (selected.length < topN) {
-    trySelect(false, false);
-  }
-
-  if (selected.length < topN) {
-    const relaxedMax = 2;
-    for (const candidate of pool) {
-      if (selected.length >= topN) break;
-      if (selected.includes(candidate)) continue;
-      const coreIds = getCoreIds(candidate.outfit);
-      const blocked = coreIds.some(id => {
-        if (id === anchorProductId) return false;
-        return (productCounts.get(id) || 0) >= relaxedMax;
-      });
-      if (!blocked) {
-        selected.push(candidate);
-        for (const id of [...getCoreIds(candidate.outfit), ...getOptionalIds(candidate.outfit)]) {
-          if (id !== anchorProductId) productCounts.set(id, (productCounts.get(id) || 0) + 1);
-        }
-      }
-    }
-  }
+  if (selected.length < topN) trySelect(true, false);
+  if (selected.length < topN) trySelect(false, false);
 
   if (selected.length < topN) {
     for (const candidate of pool) {
@@ -482,10 +364,6 @@ function computeUsagePenalty(outfit: OutfitCandidate, usageCounts: Record<string
   return Math.min(40, (maxUsage * 0.6 + avgUsage * 0.4) * USAGE_PENALTY_SCALE);
 }
 
-function yieldToMain(): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, 0));
-}
-
 export async function findBestOutfits(
   products: Product[],
   filters: {
@@ -503,7 +381,7 @@ export async function findBestOutfits(
 
   await yieldToMain();
 
-  const CHUNK = 200;
+  const CHUNK = 300;
   const scoredOutfits: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
   for (let i = 0; i < combinations.length; i += CHUNK) {
     const chunk = combinations.slice(i, i + CHUNK);
@@ -516,9 +394,7 @@ export async function findBestOutfits(
         }),
       });
     }
-    if (i % (CHUNK * 5) === 0) {
-      await yieldToMain();
-    }
+    await yieldToMain();
   }
 
   const hasAnyZeroUsage = combinations.some(outfit => {
@@ -530,22 +406,17 @@ export async function findBestOutfits(
   scoredOutfits.sort((a, b) => {
     const aPenalty = computeUsagePenalty(a.outfit, usageCounts);
     const bPenalty = computeUsagePenalty(b.outfit, usageCounts);
-    const aHasZero = hasAnyZeroUsage
-      ? [a.outfit.outer, a.outfit.mid, a.outfit.top, a.outfit.bottom, a.outfit.shoes, a.outfit.bag, a.outfit.accessory, a.outfit.accessory_2]
-          .filter((p): p is Product => !!p)
-          .some(p => (usageCounts[p.id] ?? 0) === 0)
-      : false;
-    const bHasZero = hasAnyZeroUsage
-      ? [b.outfit.outer, b.outfit.mid, b.outfit.top, b.outfit.bottom, b.outfit.shoes, b.outfit.bag, b.outfit.accessory, b.outfit.accessory_2]
-          .filter((p): p is Product => !!p)
-          .some(p => (usageCounts[p.id] ?? 0) === 0)
-      : false;
+    const aHasZero = hasAnyZeroUsage &&
+      [a.outfit.outer, a.outfit.mid, a.outfit.top, a.outfit.bottom, a.outfit.shoes, a.outfit.bag, a.outfit.accessory, a.outfit.accessory_2]
+        .filter((p): p is Product => !!p)
+        .some(p => (usageCounts[p.id] ?? 0) === 0);
+    const bHasZero = hasAnyZeroUsage &&
+      [b.outfit.outer, b.outfit.mid, b.outfit.top, b.outfit.bottom, b.outfit.shoes, b.outfit.bag, b.outfit.accessory, b.outfit.accessory_2]
+        .filter((p): p is Product => !!p)
+        .some(p => (usageCounts[p.id] ?? 0) === 0);
 
     if (aHasZero !== bHasZero) return aHasZero ? -1 : 1;
-
-    const aEffective = a.matchScore.score - aPenalty;
-    const bEffective = b.matchScore.score - bPenalty;
-    return bEffective - aEffective;
+    return (b.matchScore.score - bPenalty) - (a.matchScore.score - aPenalty);
   });
 
   return selectDiverse(scoredOutfits, topN, anchor, usageCounts);
