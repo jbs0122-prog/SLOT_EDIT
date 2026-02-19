@@ -124,6 +124,7 @@ export default function AdminAmazonSearch() {
   const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
   const [savingAll, setSavingAll] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0, keyword: '' });
+  const [sortBy, setSortBy] = useState<'default' | 'rating' | 'reviews'>('default');
 
   // Auto mode
   const [autoMode, setAutoMode] = useState(false);
@@ -179,6 +180,7 @@ export default function AdminAmazonSearch() {
     setProducts([]);
     setSelected(new Set());
     setCategoryFilter('all');
+    setSortBy('default');
 
     try {
       const { data, error } = await supabase.functions.invoke('amazon-search', {
@@ -335,9 +337,28 @@ export default function AdminAmazonSearch() {
     autoAbortRef.current = true;
   };
 
-  const filteredProducts = categoryFilter === 'all'
-    ? products
-    : products.filter(p => p.analyzed?.category === categoryFilter);
+  const filteredProducts = (() => {
+    const base = categoryFilter === 'all'
+      ? products
+      : products.filter(p => p.analyzed?.category === categoryFilter);
+    if (sortBy === 'rating') {
+      return [...base].sort((a, b) => {
+        if (a.rating == null && b.rating == null) return 0;
+        if (a.rating == null) return 1;
+        if (b.rating == null) return -1;
+        return b.rating - a.rating;
+      });
+    }
+    if (sortBy === 'reviews') {
+      return [...base].sort((a, b) => {
+        if (a.reviews_count == null && b.reviews_count == null) return 0;
+        if (a.reviews_count == null) return 1;
+        if (b.reviews_count == null) return -1;
+        return b.reviews_count - a.reviews_count;
+      });
+    }
+    return base;
+  })();
 
   const categoryCounts = products.reduce((acc, p) => {
     if (p.analyzed?.category) {
@@ -734,6 +755,25 @@ export default function AdminAmazonSearch() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5">
+                    {([
+                      { value: 'default', label: '기본순' },
+                      { value: 'rating', label: '별점순' },
+                      { value: 'reviews', label: '리뷰수순' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setSortBy(opt.value)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          sortBy === opt.value
+                            ? 'bg-amber-500 text-black'
+                            : 'text-white/40 hover:text-white/70'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                   {savingAll && (
                     <span className="text-xs text-white/40">
                       {saveProgress.done}/{saveProgress.total} 처리 중...
