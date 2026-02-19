@@ -110,11 +110,13 @@ function passesHardConstraints(
 }
 
 function shouldIncludeOuter(targetSeason?: string, targetWarmth?: number): boolean {
+  if (targetSeason === 'summer') return false;
   if (targetWarmth !== undefined && targetWarmth <= 2) return false;
   return true;
 }
 
-function shouldIncludeMid(targetWarmth?: number): boolean {
+function shouldIncludeMid(targetSeason?: string, targetWarmth?: number): boolean {
+  if (targetSeason === 'summer') return false;
   if (targetWarmth !== undefined && targetWarmth <= 3) return false;
   return true;
 }
@@ -158,7 +160,7 @@ export function generateOutfitCombinations(
 
   const anchorSlot = anchor?.slotType;
   const needsOuter = anchorSlot === 'outer' || shouldIncludeOuter(filters.targetSeason, filters.targetWarmth);
-  const needsMid = anchorSlot === 'mid' || shouldIncludeMid(filters.targetWarmth);
+  const needsMid = anchorSlot === 'mid' || shouldIncludeMid(filters.targetSeason, filters.targetWarmth);
 
   const outers = needsOuter ? filterProducts('outer') : [];
   const mids = needsMid ? filterProducts('mid') : [];
@@ -183,7 +185,62 @@ export function generateOutfitCombinations(
     return [];
   }
 
+  const totalCore = tops.length * bottoms.length * shoes.length;
+  const EXHAUSTIVE_THRESHOLD = 3000;
+
+  if (totalCore <= EXHAUSTIVE_THRESHOLD) {
+    return generateExhaustive(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
+  }
+
   return generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
+}
+
+function generateExhaustive(
+  outers: Product[],
+  mids: Product[],
+  tops: Product[],
+  bottoms: Product[],
+  shoes: Product[],
+  bags: Product[],
+  accessories: Product[],
+  filters: { targetSeason?: string },
+  anchor?: AnchorItem,
+  usageCounts: Record<string, number> = {}
+): OutfitCandidate[] {
+  const combinations: OutfitCandidate[] = [];
+  const anchorSlot = anchor?.slotType;
+  const anchorProduct = anchor?.product;
+
+  const outerPool = outers.length > 0 ? [undefined, ...outers] : [undefined];
+  const midPool = mids.length > 0 ? [undefined, ...mids] : [undefined];
+  const bagPool = bags.length > 0 ? [undefined, ...bags] : [undefined];
+  const accPool = accessories.length > 0 ? [undefined, ...accessories] : [undefined];
+
+  for (const top of (anchorSlot === 'top' ? [anchorProduct!] : tops)) {
+    for (const bottom of (anchorSlot === 'bottom' ? [anchorProduct!] : bottoms)) {
+      for (const shoe of (anchorSlot === 'shoes' ? [anchorProduct!] : shoes)) {
+        for (const outer of (anchorSlot === 'outer' ? [anchorProduct!] : outerPool)) {
+          for (const mid of (anchorSlot === 'mid' ? [anchorProduct!] : midPool)) {
+            for (const bag of (anchorSlot === 'bag' ? [anchorProduct!] : bagPool)) {
+              for (const acc of (anchorSlot === 'accessory' ? [anchorProduct!] : accPool)) {
+                const outfit: OutfitCandidate = { top, bottom, shoes: shoe };
+                if (outer) outfit.outer = outer;
+                if (mid) outfit.mid = mid;
+                if (bag) outfit.bag = bag;
+                if (acc) outfit.accessory = acc;
+
+                if (passesHardConstraints(outfit, { targetSeason: filters.targetSeason })) {
+                  combinations.push(outfit);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return combinations;
 }
 
 function generateSampled(
@@ -403,6 +460,17 @@ function selectDiverse(
   return selected;
 }
 
+const USAGE_PENALTY_SCALE = 8;
+
+function computeUsagePenalty(outfit: OutfitCandidate, usageCounts: Record<string, number>): number {
+  const items = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
+    .filter((p): p is Product => !!p);
+  const usages = items.map(p => usageCounts[p.id] ?? 0);
+  const maxUsage = Math.max(...usages);
+  const avgUsage = usages.reduce((s, u) => s + u, 0) / usages.length;
+  return Math.min(40, (maxUsage * 0.6 + avgUsage * 0.4) * USAGE_PENALTY_SCALE);
+}
+
 export function findBestOutfits(
   products: Product[],
   filters: {
@@ -426,17 +494,31 @@ export function findBestOutfits(
     }),
   }));
 
-  const getOutfitMinUsage = (outfit: OutfitCandidate): number => {
+  const hasAnyZeroUsage = combinations.some(outfit => {
     const items = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
       .filter((p): p is Product => !!p);
-    return Math.min(...items.map(p => usageCounts[p.id] ?? 0));
-  };
+    return items.some(p => (usageCounts[p.id] ?? 0) === 0);
+  });
 
   scoredOutfits.sort((a, b) => {
-    const aMinUsage = getOutfitMinUsage(a.outfit);
-    const bMinUsage = getOutfitMinUsage(b.outfit);
-    if (aMinUsage !== bMinUsage) return aMinUsage - bMinUsage;
-    return b.matchScore.score - a.matchScore.score;
+    const aPenalty = computeUsagePenalty(a.outfit, usageCounts);
+    const bPenalty = computeUsagePenalty(b.outfit, usageCounts);
+    const aHasZero = hasAnyZeroUsage
+      ? [a.outfit.outer, a.outfit.mid, a.outfit.top, a.outfit.bottom, a.outfit.shoes, a.outfit.bag, a.outfit.accessory, a.outfit.accessory_2]
+          .filter((p): p is Product => !!p)
+          .some(p => (usageCounts[p.id] ?? 0) === 0)
+      : false;
+    const bHasZero = hasAnyZeroUsage
+      ? [b.outfit.outer, b.outfit.mid, b.outfit.top, b.outfit.bottom, b.outfit.shoes, b.outfit.bag, b.outfit.accessory, b.outfit.accessory_2]
+          .filter((p): p is Product => !!p)
+          .some(p => (usageCounts[p.id] ?? 0) === 0)
+      : false;
+
+    if (aHasZero !== bHasZero) return aHasZero ? -1 : 1;
+
+    const aEffective = a.matchScore.score - aPenalty;
+    const bEffective = b.matchScore.score - bPenalty;
+    return bEffective - aEffective;
   });
 
   return selectDiverse(scoredOutfits, topN, anchor, usageCounts);

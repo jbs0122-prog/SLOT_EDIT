@@ -189,7 +189,7 @@ function scoreWarmthMatchAxis(outfit: OutfitCandidate, targetWarmth?: number): A
 function scoreSeasonMatchAxis(outfit: OutfitCandidate, targetSeason?: string): AxisResult {
   const items = getCoreItems(outfit);
   if (items.length < 3) return { score: 0, hasData: false };
-  if (!targetSeason) return { score: 75, hasData: false };
+  if (!targetSeason) return { score: 50, hasData: false };
 
   let score = 100;
   let matchCount = 0;
@@ -214,29 +214,51 @@ function scoreSeasonMatchAxis(outfit: OutfitCandidate, targetSeason?: string): A
 function scoreSilhouetteBalanceAxis(outfit: OutfitCandidate): AxisResult {
   const topSil = outfit.top.silhouette || '';
   const bottomSil = outfit.bottom.silhouette || '';
+  const outerSil = outfit.outer?.silhouette || '';
+  const midSil = outfit.mid?.silhouette || '';
 
-  if (!topSil || !bottomSil) return { score: 50, hasData: false };
+  const hasEnoughData = (topSil && bottomSil) || (outerSil && bottomSil) || (outerSil && topSil);
+  if (!hasEnoughData) return { score: 50, hasData: false };
 
   let score = 70;
+  let evaluations = 0;
+  let bonusSum = 0;
 
-  const goodPairs = SILHOUETTE_BALANCE[topSil];
-  if (goodPairs && goodPairs.includes(bottomSil)) {
-    score += 30;
-  } else if (topSil === bottomSil) {
-    if (topSil === 'oversized' || topSil === 'wide') score -= 20;
-    else if (topSil === 'fitted' || topSil === 'slim') score -= 5;
+  const evalPair = (sil1: string, sil2: string): number => {
+    if (!sil1 || !sil2) return 0;
+    const goodPairs = SILHOUETTE_BALANCE[sil1];
+    if (goodPairs && goodPairs.includes(sil2)) return 30;
+    if (sil1 === sil2) {
+      if (sil1 === 'oversized' || sil1 === 'wide') return -20;
+      if (sil1 === 'fitted' || sil1 === 'slim') return -5;
+      return 0;
+    }
+    return 0;
+  };
+
+  if (topSil && bottomSil) {
+    bonusSum += evalPair(topSil, bottomSil);
+    evaluations++;
   }
 
-  if (outfit.outer) {
-    const outerSil = outfit.outer.silhouette || '';
-    if (outerSil === 'oversized' && topSil === 'oversized') score -= 15;
+  if (outerSil && bottomSil) {
+    bonusSum += evalPair(outerSil, bottomSil) * 0.7;
+    evaluations += 0.7;
   }
 
-  if (outfit.mid) {
-    const midSil = outfit.mid.silhouette || '';
-    if (midSil === 'oversized' && topSil === 'oversized') score -= 10;
-    if (midSil && topSil && midSil === 'fitted' && topSil === 'fitted') score += 5;
+  if (outerSil && topSil) {
+    if (outerSil === 'oversized' && topSil === 'oversized') bonusSum -= 15;
+    else bonusSum += evalPair(outerSil, topSil) * 0.5;
+    evaluations += 0.5;
   }
+
+  if (midSil && topSil) {
+    if (midSil === 'oversized' && topSil === 'oversized') bonusSum -= 10;
+    else if (midSil === 'fitted' && topSil === 'fitted') bonusSum += 5;
+    evaluations += 0.3;
+  }
+
+  if (evaluations > 0) score += bonusSum / Math.max(1, evaluations);
 
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
@@ -335,13 +357,19 @@ function scoreMoodCoherenceAxis(outfit: OutfitCandidate): AxisResult {
 
   for (let i = 0; i < vibeArrays.length; i++) {
     for (let j = i + 1; j < vibeArrays.length; j++) {
-      let bestCompat = 0;
-      for (const v1 of vibeArrays[i]) {
-        for (const v2 of vibeArrays[j]) {
-          bestCompat = Math.max(bestCompat, getVibeCompatScore(v1, v2));
+      const vibes1 = vibeArrays[i];
+      const vibes2 = vibeArrays[j];
+      let pairTotal = 0;
+      let pairComparisons = 0;
+      for (const v1 of vibes1) {
+        for (const v2 of vibes2) {
+          pairTotal += getVibeCompatScore(v1, v2);
+          pairComparisons++;
         }
       }
-      totalScore += bestCompat;
+      const avgCompat = pairComparisons > 0 ? pairTotal / pairComparisons : 50;
+      const bestCompat = Math.max(...vibes1.flatMap(v1 => vibes2.map(v2 => getVibeCompatScore(v1, v2))));
+      totalScore += avgCompat * 0.6 + bestCompat * 0.4;
       pairCount++;
     }
   }
@@ -360,7 +388,7 @@ function scoreMoodCoherenceAxis(outfit: OutfitCandidate): AxisResult {
 
 function scoreAccessoryHarmonyAxis(outfit: OutfitCandidate): AxisResult {
   const accessories = [outfit.bag, outfit.accessory, outfit.accessory_2].filter(Boolean) as Product[];
-  if (accessories.length === 0) return { score: 70, hasData: false };
+  if (accessories.length === 0) return { score: 50, hasData: false };
 
   const mainItems = getCoreItems(outfit);
   const mainColors = mainItems.map(getColorFamily).filter(Boolean);
