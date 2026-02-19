@@ -2,12 +2,17 @@ import { useState, useRef, useCallback } from 'react';
 import {
   Camera, Search, Sparkles, Check, Star, ExternalLink,
   Loader2, AlertCircle, Tag, Eye, Zap, ChevronDown,
-  ChevronUp, ImageIcon, ArrowRight, X, Square, RefreshCw
+  ChevronUp, ImageIcon, ArrowRight, X, Square
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+interface CategoryKeyword {
+  category: string;
+  keywords: string[];
+}
 
 interface SmartResult {
   asin: string;
@@ -21,6 +26,7 @@ interface SmartResult {
   url: string;
   is_prime: boolean;
   source: 'lens' | 'keyword';
+  category?: string;
   analyzed?: AnalyzedData;
   analyzing?: boolean;
   analyzeError?: string;
@@ -58,7 +64,7 @@ const GENDER_OPTIONS = [
 const BODY_TYPE_OPTIONS = [
   { value: 'slim', label: 'Slim' },
   { value: 'regular', label: 'Regular' },
-  { value: 'plus-size', label: 'Plus-size' },
+  { value: 'plus-size', label: 'Plus' },
 ];
 
 const VIBE_OPTIONS = [
@@ -87,10 +93,11 @@ const CATEGORY_COLORS: Record<string, string> = {
   accessory: 'bg-white/10 text-white/50',
 };
 
-type SearchPhase = 'idle' | 'lens_searching' | 'generating_keywords' | 'keyword_searching' | 'done';
+type SearchPhase = 'idle' | 'visual_searching' | 'generating_keywords' | 'keyword_searching' | 'done';
 
 export default function AdminSmartSearch() {
   const [imageUrl, setImageUrl] = useState('');
+  const [imagePreviewError, setImagePreviewError] = useState(false);
   const [gender, setGender] = useState('');
   const [bodyType, setBodyType] = useState('');
   const [vibe, setVibe] = useState('');
@@ -98,15 +105,16 @@ export default function AdminSmartSearch() {
 
   const [phase, setPhase] = useState<SearchPhase>('idle');
   const [results, setResults] = useState<SmartResult[]>([]);
-  const [searchLog, setSearchLog] = useState<string[]>([]);
+  const [searchLog, setSearchLog] = useState<{ msg: string; type: 'info' | 'success' | 'error' | 'warn' }[]>([]);
   const [showLog, setShowLog] = useState(true);
 
-  const [lensCount, setLensCount] = useState(0);
+  const [visualCount, setVisualCount] = useState(0);
   const [keywordCount, setKeywordCount] = useState(0);
   const [allVisualMatches, setAllVisualMatches] = useState(0);
-  const [usedKeywords, setUsedKeywords] = useState<string[]>([]);
-  const [fallbackUsed, setFallbackUsed] = useState(false);
+  const [categoryKeywords, setCategoryKeywords] = useState<CategoryKeyword[]>([]);
   const [searchError, setSearchError] = useState('');
+
+  const [activeCategory, setActiveCategory] = useState('all');
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
@@ -120,27 +128,27 @@ export default function AdminSmartSearch() {
 
   const abortRef = useRef(false);
 
-  const addLog = useCallback((msg: string) => {
-    setSearchLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  const addLog = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') => {
+    setSearchLog(prev => [...prev, { msg: `[${new Date().toLocaleTimeString()}] ${msg}`, type }]);
   }, []);
 
   const runSmartSearch = async () => {
     if (!imageUrl.trim()) return;
 
     abortRef.current = false;
-    setPhase('lens_searching');
+    setPhase('visual_searching');
     setResults([]);
     setSearchLog([]);
     setSearchError('');
     setSelected(new Set());
-    setLensCount(0);
+    setVisualCount(0);
     setKeywordCount(0);
     setAllVisualMatches(0);
-    setUsedKeywords([]);
-    setFallbackUsed(false);
+    setCategoryKeywords([]);
+    setActiveCategory('all');
     setShowLog(true);
 
-    addLog('Google Lens 이미지 검색 시작...');
+    addLog('Visual Search (SerpAPI Google Lens) 이미지 분석 시작...', 'info');
 
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/smart-product-search`, {
@@ -163,40 +171,41 @@ export default function AdminSmartSearch() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-      if (data.lens_error) {
-        addLog(`Lens 검색 실패: ${data.lens_error}`);
+      // Visual search result log
+      if (data.visual_error) {
+        addLog(`Visual Search 실패: ${data.visual_error}`, 'error');
+        addLog('원인: Pinterest/SNS 이미지는 Google Lens 접근이 차단될 수 있습니다. CDN 직접 이미지 URL을 사용하세요.', 'warn');
       } else {
-        addLog(`Lens 검색 완료: 시각적 매칭 ${data.all_visual_matches}개, Amazon 상품 ${data.lens_count}개`);
+        addLog(
+          `Visual Search 완료 — 시각적 매칭 ${data.all_visual_matches}개, Amazon 상품 ${data.visual_count}개`,
+          data.visual_count > 0 ? 'success' : 'warn'
+        );
       }
 
-      if (data.fallback_used) {
-        setPhase('generating_keywords');
-        addLog('Lens 결과 부족 -> AI 키워드 fallback 실행...');
+      setPhase('generating_keywords');
+      addLog('Gemini AI가 이미지에서 카테고리별 키워드 분석 중...', 'info');
 
-        if (data.keyword_error) {
-          addLog(`키워드 검색 실패: ${data.keyword_error}`);
-        } else {
-          addLog(`AI 키워드로 ${data.keyword_count}개 추가 상품 발견`);
-          if (data.used_keywords?.length > 0) {
-            addLog(`사용된 키워드: ${data.used_keywords.join(', ')}`);
-          }
-        }
+      if (data.keyword_error) {
+        addLog(`키워드 생성 실패: ${data.keyword_error}`, 'error');
+      } else if (data.category_keywords?.length > 0) {
+        const cats = data.category_keywords.map((ck: CategoryKeyword) => ck.category).join(', ');
+        addLog(`카테고리 감지: ${cats} (${data.category_keywords.length}개)`, 'success');
+        addLog(`키워드 검색으로 ${data.keyword_count}개 상품 추가`, 'success');
       }
 
-      setLensCount(data.lens_count || 0);
+      setVisualCount(data.visual_count || 0);
       setKeywordCount(data.keyword_count || 0);
       setAllVisualMatches(data.all_visual_matches || 0);
-      setUsedKeywords(data.used_keywords || []);
-      setFallbackUsed(data.fallback_used || false);
+      setCategoryKeywords(data.category_keywords || []);
 
       const mergedResults: SmartResult[] = (data.results || []).map((r: SmartResult) => ({ ...r }));
       setResults(mergedResults);
 
-      addLog(`완료! 총 ${mergedResults.length}개 Amazon 상품`);
+      addLog(`완료! 총 ${mergedResults.length}개 Amazon 상품`, 'success');
       setPhase('done');
     } catch (err) {
       setSearchError((err as Error).message);
-      addLog(`오류: ${(err as Error).message}`);
+      addLog(`오류: ${(err as Error).message}`, 'error');
       setPhase('done');
     }
   };
@@ -204,7 +213,7 @@ export default function AdminSmartSearch() {
   const runManualKeywordSearch = async () => {
     if (!manualKeyword.trim()) return;
     setManualSearching(true);
-    addLog(`수동 키워드 검색: "${manualKeyword}"`);
+    addLog(`수동 키워드 검색: "${manualKeyword}"`, 'info');
 
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/smart-product-search`, {
@@ -226,13 +235,14 @@ export default function AdminSmartSearch() {
 
       const newResults: SmartResult[] = (data.results || []).map((r: SmartResult) => ({ ...r }));
       const existingAsins = new Set(results.map(r => r.asin));
-      const deduplicated = newResults.filter(r => r.asin && !existingAsins.has(r.asin));
+      const deduped = newResults.filter(r => r.asin && !existingAsins.has(r.asin));
 
-      setResults(prev => [...prev, ...deduplicated]);
-      setKeywordCount(prev => prev + deduplicated.length);
-      addLog(`키워드 검색으로 ${deduplicated.length}개 새 상품 추가 (중복 ${newResults.length - deduplicated.length}개 제외)`);
+      setResults(prev => [...prev, ...deduped]);
+      setKeywordCount(prev => prev + deduped.length);
+      addLog(`"${manualKeyword}" → ${deduped.length}개 추가 (중복 ${newResults.length - deduped.length}개 제외)`, 'success');
+      setManualKeyword('');
     } catch (err) {
-      addLog(`키워드 검색 오류: ${(err as Error).message}`);
+      addLog(`키워드 검색 오류: ${(err as Error).message}`, 'error');
     } finally {
       setManualSearching(false);
     }
@@ -247,21 +257,17 @@ export default function AdminSmartSearch() {
   };
 
   const toggleSelectAll = () => {
-    const available = results.filter(p => !savedAsins.has(p.asin)).map(p => p.asin);
-    const allSelected = available.every(a => selected.has(a)) && available.length > 0;
-    if (allSelected) {
-      setSelected(prev => {
-        const next = new Set(prev);
-        available.forEach(a => next.delete(a));
-        return next;
-      });
+    const available = filteredResults.filter(p => !savedAsins.has(p.asin)).map(p => p.asin);
+    const allSel = available.length > 0 && available.every(a => selected.has(a));
+    if (allSel) {
+      setSelected(prev => { const next = new Set(prev); available.forEach(a => next.delete(a)); return next; });
     } else {
       setSelected(prev => new Set([...prev, ...available]));
     }
   };
 
   const analyzeAndSave = async () => {
-    const toSave = results.filter(p => selected.has(p.asin) && !savedAsins.has(p.asin));
+    const toSave = filteredResults.filter(p => selected.has(p.asin) && !savedAsins.has(p.asin));
     if (toSave.length === 0) return;
 
     setSavingAll(true);
@@ -280,10 +286,7 @@ export default function AdminSmartSearch() {
           body: { product, gender, body_type: bodyType, vibe, season },
         });
 
-        if (error) {
-          const msg = data?.error || error.message || 'Edge function error';
-          throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-        }
+        if (error) throw new Error(data?.error || error.message);
         if (!data) throw new Error('Empty response');
         if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
 
@@ -292,7 +295,7 @@ export default function AdminSmartSearch() {
         );
         setSavedAsins(prev => new Set([...prev, product.asin]));
         setSelected(prev => { const next = new Set(prev); next.delete(product.asin); return next; });
-        addLog(`DB 등록: ${data.result.name?.slice(0, 40)}...`);
+        addLog(`DB 등록 완료: ${data.result.name?.slice(0, 40)}`, 'success');
       } catch (err) {
         setResults(prev =>
           prev.map(p => p.asin === product.asin
@@ -300,7 +303,7 @@ export default function AdminSmartSearch() {
             : p
           )
         );
-        addLog(`등록 실패: ${(err as Error).message.slice(0, 50)}`);
+        addLog(`등록 실패: ${(err as Error).message.slice(0, 50)}`, 'error');
       }
 
       setSaveProgress(prev => ({ ...prev, done: i + 1 }));
@@ -309,23 +312,38 @@ export default function AdminSmartSearch() {
     setSavingAll(false);
   };
 
+  // Category filter tabs
+  const categoryCounts = results.reduce((acc, r) => {
+    const cat = r.analyzed?.category || r.category;
+    if (cat) acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const filteredResults = activeCategory === 'all'
+    ? results
+    : results.filter(r => (r.analyzed?.category || r.category) === activeCategory);
+
   const isSearching = phase !== 'idle' && phase !== 'done';
   const selectedCount = selected.size;
-  const availableCount = results.filter(p => !savedAsins.has(p.asin)).length;
-  const allSelected = availableCount > 0 && selected.size === availableCount;
+  const availableCount = filteredResults.filter(p => !savedAsins.has(p.asin)).length;
+  const allSelected = availableCount > 0 && filteredResults.filter(p => !savedAsins.has(p.asin)).every(p => selected.has(p.asin));
+
+  const availableCategoryTabs = [
+    'all', 'outer', 'mid', 'top', 'bottom', 'shoes', 'bag', 'accessory'
+  ].filter(cat => cat === 'all' || categoryCounts[cat] > 0);
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white flex">
       {/* Left Panel */}
-      <div className="w-80 shrink-0 border-r border-white/8 bg-[#141414] flex flex-col">
+      <div className="w-72 shrink-0 border-r border-white/8 bg-[#141414] flex flex-col">
         <div className="p-5 border-b border-white/8">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center">
-              <Camera className="w-4.5 h-4.5 text-white" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center shrink-0">
+              <Camera className="w-4 h-4 text-white" />
             </div>
             <div>
               <h2 className="font-semibold text-sm">Smart Search</h2>
-              <p className="text-white/30 text-[10px]">Image + AI Keyword</p>
+              <p className="text-white/30 text-[10px]">Visual + AI Keyword (방법 2+3)</p>
             </div>
           </div>
         </div>
@@ -340,45 +358,57 @@ export default function AdminSmartSearch() {
               <input
                 type="url"
                 value={imageUrl}
-                onChange={e => setImageUrl(e.target.value)}
-                placeholder="https://example.com/product.jpg"
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-all"
+                onChange={e => { setImageUrl(e.target.value); setImagePreviewError(false); }}
+                placeholder="https://m.media-amazon.com/..."
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-all pr-8"
               />
               {imageUrl && (
                 <button
-                  onClick={() => setImageUrl('')}
+                  onClick={() => { setImageUrl(''); setImagePreviewError(false); }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50 transition-colors"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
-            {imageUrl && (
-              <div className="mt-2 rounded-lg overflow-hidden border border-white/10 bg-white/5">
+
+            {/* Image Preview */}
+            {imageUrl && !imagePreviewError && (
+              <div className="mt-2 rounded-lg overflow-hidden border border-white/10 bg-white relative">
                 <img
                   src={imageUrl}
                   alt="Preview"
-                  className="w-full h-40 object-contain bg-white"
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  className="w-full object-contain max-h-52"
+                  onError={() => setImagePreviewError(true)}
                 />
               </div>
             )}
+            {imageUrl && imagePreviewError && (
+              <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5 flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                <p className="text-red-400/70 text-[11px] leading-snug">
+                  이미지를 불러올 수 없습니다. CDN 직접 URL을 사용하세요.
+                </p>
+              </div>
+            )}
+            <p className="text-white/20 text-[10px] mt-1.5 leading-relaxed">
+              Amazon, CDN 직접 URL 권장. Pinterest/SNS URL은 Visual Search가 제한될 수 있습니다.
+            </p>
           </div>
 
           {/* Filters Toggle */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center justify-between w-full text-[10px] font-semibold text-white/40 uppercase tracking-widest"
+            className="flex items-center justify-between w-full"
           >
-            <span>Context Filters</span>
-            {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            <span className="text-[10px] font-semibold text-white/40 uppercase tracking-widest">Context Filters</span>
+            {showFilters ? <ChevronUp className="w-3.5 h-3.5 text-white/25" /> : <ChevronDown className="w-3.5 h-3.5 text-white/25" />}
           </button>
 
           {showFilters && (
             <div className="space-y-4">
-              {/* Gender */}
               <div>
-                <label className="block text-[10px] font-semibold text-white/30 mb-2">Gender</label>
+                <label className="block text-[10px] font-semibold text-white/30 mb-1.5">Gender</label>
                 <div className="flex gap-1.5">
                   {GENDER_OPTIONS.map(opt => (
                     <button
@@ -387,7 +417,7 @@ export default function AdminSmartSearch() {
                       className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-all ${
                         gender === opt.value
                           ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40'
-                          : 'text-white/40 hover:text-white/60 bg-white/3 border border-transparent hover:bg-white/5'
+                          : 'text-white/40 bg-white/3 border border-transparent hover:bg-white/5 hover:text-white/60'
                       }`}
                     >
                       {opt.label}
@@ -396,9 +426,8 @@ export default function AdminSmartSearch() {
                 </div>
               </div>
 
-              {/* Body Type */}
               <div>
-                <label className="block text-[10px] font-semibold text-white/30 mb-2">Body Type</label>
+                <label className="block text-[10px] font-semibold text-white/30 mb-1.5">Body Type</label>
                 <div className="flex gap-1.5">
                   {BODY_TYPE_OPTIONS.map(opt => (
                     <button
@@ -407,7 +436,7 @@ export default function AdminSmartSearch() {
                       className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-all ${
                         bodyType === opt.value
                           ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40'
-                          : 'text-white/40 hover:text-white/60 bg-white/3 border border-transparent hover:bg-white/5'
+                          : 'text-white/40 bg-white/3 border border-transparent hover:bg-white/5 hover:text-white/60'
                       }`}
                     >
                       {opt.label}
@@ -416,9 +445,8 @@ export default function AdminSmartSearch() {
                 </div>
               </div>
 
-              {/* Vibe */}
               <div>
-                <label className="block text-[10px] font-semibold text-white/30 mb-2">Style Vibe</label>
+                <label className="block text-[10px] font-semibold text-white/30 mb-1.5">Style Vibe</label>
                 <div className="grid grid-cols-2 gap-1.5">
                   {VIBE_OPTIONS.map(opt => (
                     <button
@@ -427,7 +455,7 @@ export default function AdminSmartSearch() {
                       className={`px-2 py-1.5 rounded-lg text-[11px] transition-all text-left ${
                         vibe === opt.value
                           ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40'
-                          : 'text-white/40 hover:text-white/60 bg-white/3 border border-transparent hover:bg-white/5'
+                          : 'text-white/40 bg-white/3 border border-transparent hover:bg-white/5 hover:text-white/60'
                       }`}
                     >
                       {opt.label}
@@ -436,9 +464,8 @@ export default function AdminSmartSearch() {
                 </div>
               </div>
 
-              {/* Season */}
               <div>
-                <label className="block text-[10px] font-semibold text-white/30 mb-2">Season</label>
+                <label className="block text-[10px] font-semibold text-white/30 mb-1.5">Season</label>
                 <div className="grid grid-cols-2 gap-1.5">
                   {SEASON_OPTIONS.map(opt => (
                     <button
@@ -447,7 +474,7 @@ export default function AdminSmartSearch() {
                       className={`px-2 py-1.5 rounded-lg text-xs transition-all ${
                         season === opt.value
                           ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40'
-                          : 'text-white/40 hover:text-white/60 bg-white/3 border border-transparent hover:bg-white/5'
+                          : 'text-white/40 bg-white/3 border border-transparent hover:bg-white/5 hover:text-white/60'
                       }`}
                     >
                       {opt.label}
@@ -459,8 +486,8 @@ export default function AdminSmartSearch() {
           )}
         </div>
 
-        {/* Bottom CTA */}
-        <div className="p-5 border-t border-white/8 space-y-2.5">
+        {/* CTA */}
+        <div className="p-5 border-t border-white/8">
           <button
             onClick={runSmartSearch}
             disabled={!imageUrl.trim() || isSearching}
@@ -474,52 +501,50 @@ export default function AdminSmartSearch() {
             {isSearching ? 'Smart Search 진행 중...' : 'Smart Search 실행'}
           </button>
           {!imageUrl.trim() && (
-            <p className="text-white/20 text-xs text-center">이미지 URL을 입력하세요</p>
+            <p className="text-white/20 text-xs text-center mt-2">이미지 URL을 입력하세요</p>
           )}
         </div>
       </div>
 
       {/* Right Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Status Badges */}
+
+        {/* Status Bar */}
         {phase !== 'idle' && (
-          <div className="border-b border-white/8 px-6 py-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <SearchPhaseBadge phase={phase} />
+          <div className="border-b border-white/8 px-6 py-3 space-y-2">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <StatusBadge phase={phase} />
 
               {phase === 'done' && (
                 <>
-                  <div className="flex items-center gap-1.5 bg-teal-500/10 text-teal-400 px-3 py-1 rounded-full text-xs font-medium">
+                  <div className="flex items-center gap-1.5 bg-teal-500/10 text-teal-400 px-3 py-1 rounded-full text-xs font-medium border border-teal-500/15">
                     <Eye className="w-3.5 h-3.5" />
-                    Lens: {lensCount}
-                    {allVisualMatches > 0 && (
-                      <span className="text-teal-400/50">({allVisualMatches} visual)</span>
-                    )}
+                    Visual: {visualCount}
+                    {allVisualMatches > 0 && <span className="text-teal-400/50 text-[10px]">/{allVisualMatches}건</span>}
                   </div>
-                  {fallbackUsed && (
-                    <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-3 py-1 rounded-full text-xs font-medium">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Keyword Fallback: +{keywordCount}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1.5 bg-white/5 text-white/50 px-3 py-1 rounded-full text-xs">
+                  <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-3 py-1 rounded-full text-xs font-medium border border-amber-500/15">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    AI 키워드: +{keywordCount}
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-white/5 text-white/40 px-3 py-1 rounded-full text-xs border border-white/8">
                     Total: {results.length}
                   </div>
                 </>
               )}
             </div>
 
-            {/* Used Keywords */}
-            {usedKeywords.length > 0 && (
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-[10px] text-white/25 uppercase tracking-wider">AI Keywords:</span>
-                <div className="flex gap-1.5 flex-wrap">
-                  {usedKeywords.map((kw, i) => (
-                    <span key={i} className="text-[11px] bg-amber-500/10 text-amber-400/70 px-2 py-0.5 rounded-full">
-                      {kw}
+            {/* Category Keywords Summary */}
+            {categoryKeywords.length > 0 && (
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">감지된 카테고리:</span>
+                {categoryKeywords.map((ck, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[ck.category] || 'bg-white/8 text-white/40'}`}>
+                      {ck.category}
                     </span>
-                  ))}
-                </div>
+                    <span className="text-[10px] text-white/20 hidden sm:inline">{ck.keywords[0]?.slice(0, 25)}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -536,15 +561,15 @@ export default function AdminSmartSearch() {
               {showLog ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
             {showLog && (
-              <div className="px-6 pb-3 max-h-32 overflow-y-auto space-y-0.5">
-                {searchLog.map((line, i) => (
+              <div className="px-6 pb-3 max-h-36 overflow-y-auto space-y-0.5 bg-black/20">
+                {searchLog.map((entry, i) => (
                   <p key={i} className={`text-[11px] font-mono ${
-                    line.includes('완료') || line.includes('DB 등록') ? 'text-emerald-400/70' :
-                    line.includes('실패') || line.includes('오류') ? 'text-red-400/70' :
-                    line.includes('fallback') || line.includes('키워드') ? 'text-amber-400/60' :
+                    entry.type === 'success' ? 'text-emerald-400/70' :
+                    entry.type === 'error' ? 'text-red-400/70' :
+                    entry.type === 'warn' ? 'text-amber-400/60' :
                     'text-white/30'
                   }`}>
-                    {line}
+                    {entry.msg}
                   </p>
                 ))}
               </div>
@@ -552,47 +577,65 @@ export default function AdminSmartSearch() {
           </div>
         )}
 
+        {/* Category Filter Tabs */}
+        {results.length > 0 && availableCategoryTabs.length > 2 && (
+          <div className="border-b border-white/8 px-6 flex items-center gap-0 overflow-x-auto">
+            {availableCategoryTabs.map(cat => {
+              const count = cat === 'all' ? results.length : (categoryCounts[cat] || 0);
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-all capitalize ${
+                    activeCategory === cat
+                      ? 'border-teal-400 text-teal-400'
+                      : 'border-transparent text-white/35 hover:text-white/60'
+                  }`}
+                >
+                  {cat === 'all' ? '전체' : cat}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    activeCategory === cat ? 'bg-teal-500/20 text-teal-400' : 'bg-white/8 text-white/30'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Manual Keyword Search */}
         {phase === 'done' && (
-          <div className="border-b border-white/8 px-6 py-3">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">추가 키워드:</span>
-              <div className="flex-1 flex gap-2">
-                <input
-                  type="text"
-                  value={manualKeyword}
-                  onChange={e => setManualKeyword(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && runManualKeywordSearch()}
-                  placeholder="수동 키워드로 추가 검색..."
-                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-teal-500/40 transition-all"
-                />
-                <button
-                  onClick={runManualKeywordSearch}
-                  disabled={!manualKeyword.trim() || manualSearching}
-                  className="flex items-center gap-1.5 bg-white/8 hover:bg-white/15 disabled:opacity-30 text-white/60 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                >
-                  {manualSearching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
-                  검색
-                </button>
-              </div>
-            </div>
+          <div className="border-b border-white/8 px-6 py-2.5 flex items-center gap-2">
+            <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">추가 검색:</span>
+            <input
+              type="text"
+              value={manualKeyword}
+              onChange={e => setManualKeyword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && runManualKeywordSearch()}
+              placeholder="키워드 직접 입력..."
+              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-teal-500/40 transition-all"
+            />
+            <button
+              onClick={runManualKeywordSearch}
+              disabled={!manualKeyword.trim() || manualSearching}
+              className="flex items-center gap-1.5 bg-white/8 hover:bg-white/15 disabled:opacity-30 text-white/60 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0"
+            >
+              {manualSearching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+              검색
+            </button>
           </div>
         )}
 
         {/* Action Bar */}
-        {results.length > 0 && (
-          <div className="border-b border-white/8 px-6 py-3 flex items-center justify-between gap-4">
+        {filteredResults.length > 0 && (
+          <div className="border-b border-white/8 px-6 py-2.5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <button
-                onClick={toggleSelectAll}
-                className="flex items-center gap-2 text-sm text-white/50 hover:text-white/80 transition-colors"
-              >
+              <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm text-white/50 hover:text-white/80 transition-colors">
                 <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                  allSelected
-                    ? 'bg-teal-500 border-teal-500'
-                    : selectedCount > 0
-                    ? 'bg-teal-500/40 border-teal-500/60'
-                    : 'border-white/20'
+                  allSelected ? 'bg-teal-500 border-teal-500' :
+                  selectedCount > 0 ? 'bg-teal-500/40 border-teal-500/60' :
+                  'border-white/20'
                 }`}>
                   {allSelected && <Check className="w-3 h-3 text-white" />}
                   {!allSelected && selectedCount > 0 && <Square className="w-2 h-2 text-teal-400 fill-teal-400" />}
@@ -603,64 +646,55 @@ export default function AdminSmartSearch() {
                 <span className="text-xs text-teal-400 font-medium">{selectedCount}개 선택됨</span>
               )}
             </div>
-
             <div className="flex items-center gap-3">
               {savingAll && (
-                <span className="text-xs text-white/40">
-                  {saveProgress.done}/{saveProgress.total} 처리 중...
-                </span>
+                <span className="text-xs text-white/40">{saveProgress.done}/{saveProgress.total} 처리 중...</span>
               )}
               <button
                 onClick={analyzeAndSave}
                 disabled={selectedCount === 0 || savingAll}
                 className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all"
               >
-                {savingAll ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Tag className="w-4 h-4" />
-                )}
+                {savingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Tag className="w-4 h-4" />}
                 {savingAll ? 'AI 분석 & 등록 중...' : `${selectedCount}개 AI 분석 & DB 등록`}
               </button>
             </div>
           </div>
         )}
 
-        {/* Results Grid */}
+        {/* Results */}
         <div className="flex-1 overflow-y-auto p-6">
           {phase === 'idle' && (
-            <div className="flex-1 flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500/10 to-cyan-500/10 flex items-center justify-center mx-auto mb-5 border border-teal-500/10">
-                  <Camera className="w-10 h-10 text-teal-500/30" />
-                </div>
-                <p className="text-white/40 text-base font-medium mb-2">Smart Product Search</p>
-                <p className="text-white/20 text-sm max-w-md mx-auto leading-relaxed">
-                  상품 이미지 URL을 입력하면 Google Lens로 시각적 유사 상품을 찾고,
-                  결과가 부족하면 AI 키워드로 자동 보완합니다.
-                </p>
-                <div className="flex items-center justify-center gap-6 mt-6">
-                  <StepIndicator step={1} label="이미지 검색" icon={<Eye className="w-4 h-4" />} />
-                  <ArrowRight className="w-4 h-4 text-white/10" />
-                  <StepIndicator step={2} label="AI 키워드 Fallback" icon={<Sparkles className="w-4 h-4" />} />
-                  <ArrowRight className="w-4 h-4 text-white/10" />
-                  <StepIndicator step={3} label="AI 분석 & DB 등록" icon={<Tag className="w-4 h-4" />} />
-                </div>
+            <div className="flex flex-col items-center justify-center h-full text-center py-20">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border border-teal-500/10 flex items-center justify-center mx-auto mb-5">
+                <Camera className="w-10 h-10 text-teal-500/30" />
+              </div>
+              <p className="text-white/40 text-base font-medium mb-2">Smart Product Search</p>
+              <p className="text-white/20 text-sm max-w-sm mx-auto leading-relaxed">
+                패션 이미지 URL을 입력하면 Visual Search로 시각적 유사 상품을 찾고,
+                AI가 이미지 속 모든 카테고리를 감지해 키워드로 자동 보완합니다.
+              </p>
+              <div className="flex items-center justify-center gap-4 mt-8">
+                <StepBadge num={1} label="Visual Search" sub="Google Lens" icon={<Eye className="w-4 h-4" />} />
+                <ArrowRight className="w-4 h-4 text-white/10" />
+                <StepBadge num={2} label="AI 카테고리 분석" sub="Gemini" icon={<Sparkles className="w-4 h-4" />} />
+                <ArrowRight className="w-4 h-4 text-white/10" />
+                <StepBadge num={3} label="DB 등록" sub="analyze & save" icon={<Tag className="w-4 h-4" />} />
               </div>
             </div>
           )}
 
           {isSearching && (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="relative">
+            <div className="flex flex-col items-center justify-center py-24">
+              <div className="relative mb-4">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 flex items-center justify-center">
                   <Loader2 className="w-8 h-8 animate-spin text-teal-400" />
                 </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-teal-500 animate-ping" />
+                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-teal-500 animate-ping opacity-75" />
               </div>
-              <p className="text-white/50 text-sm mt-4 font-medium">
-                {phase === 'lens_searching' && 'Google Lens로 이미지 분석 중...'}
-                {phase === 'generating_keywords' && 'AI 키워드 생성 중...'}
+              <p className="text-white/50 text-sm font-medium">
+                {phase === 'visual_searching' && 'Visual Search (SerpAPI Google Lens) 이미지 분석 중...'}
+                {phase === 'generating_keywords' && 'Gemini AI가 카테고리별 키워드 분석 중...'}
                 {phase === 'keyword_searching' && 'Amazon 키워드 검색 중...'}
               </p>
             </div>
@@ -673,44 +707,38 @@ export default function AdminSmartSearch() {
             </div>
           )}
 
-          {!isSearching && results.length > 0 && (
+          {!isSearching && filteredResults.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {results.map(product => {
+              {filteredResults.map(product => {
                 const isSaved = savedAsins.has(product.asin);
                 const isSelected = selected.has(product.asin);
                 const isAnalyzing = product.analyzing;
+                const displayCategory = product.analyzed?.category || product.category;
 
                 return (
                   <div
                     key={product.asin}
                     onClick={() => !isSaved && !isAnalyzing && toggleSelect(product.asin)}
                     className={`group relative rounded-xl overflow-hidden border transition-all cursor-pointer ${
-                      isSaved
-                        ? 'border-emerald-500/30 bg-emerald-500/5 cursor-default'
-                        : isSelected
-                        ? 'border-teal-500/60 bg-teal-500/8 ring-2 ring-teal-500/20'
-                        : 'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
+                      isSaved ? 'border-emerald-500/30 bg-emerald-500/5 cursor-default' :
+                      isSelected ? 'border-teal-500/60 bg-teal-500/8 ring-2 ring-teal-500/20' :
+                      'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
                     }`}
                   >
                     {/* Source badge */}
                     <div className={`absolute top-2 right-2 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                      product.source === 'lens'
-                        ? 'bg-teal-500/80 text-white'
-                        : 'bg-amber-500/80 text-white'
+                      product.source === 'lens' ? 'bg-teal-500/90 text-white' : 'bg-amber-500/90 text-white'
                     }`}>
-                      {product.source === 'lens' ? 'LENS' : 'KW'}
+                      {product.source === 'lens' ? 'VISUAL' : 'KW'}
                     </div>
 
                     {/* Checkbox */}
                     <div className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
-                      isSaved
-                        ? 'bg-emerald-500 border-emerald-500'
-                        : isSelected
-                        ? 'bg-teal-500 border-teal-500'
-                        : 'bg-black/40 border-white/20 group-hover:border-white/40'
+                      isSaved ? 'bg-emerald-500 border-emerald-500' :
+                      isSelected ? 'bg-teal-500 border-teal-500' :
+                      'bg-black/40 border-white/20 group-hover:border-white/40'
                     }`}>
-                      {isSaved && <Check className="w-3 h-3 text-white" />}
-                      {isSelected && !isSaved && <Check className="w-3 h-3 text-white" />}
+                      {(isSaved || isSelected) && <Check className="w-3 h-3 text-white" />}
                     </div>
 
                     {isAnalyzing && (
@@ -760,23 +788,23 @@ export default function AdminSmartSearch() {
                         )}
                       </div>
 
-                      {product.analyzed && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${CATEGORY_COLORS[product.analyzed.category] || 'bg-white/8 text-white/40'}`}>
-                            {product.analyzed.category}
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {displayCategory && (
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${CATEGORY_COLORS[displayCategory] || 'bg-white/8 text-white/40'}`}>
+                            {displayCategory}
                           </span>
-                          {product.analyzed.silhouette && (
-                            <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded">
-                              {product.analyzed.silhouette}
-                            </span>
-                          )}
-                          {product.analyzed.color_family && (
-                            <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded">
-                              {product.analyzed.color_family}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        )}
+                        {product.analyzed?.silhouette && (
+                          <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded">
+                            {product.analyzed.silhouette}
+                          </span>
+                        )}
+                        {product.analyzed?.color_family && (
+                          <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded">
+                            {product.analyzed.color_family}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <a
@@ -794,11 +822,11 @@ export default function AdminSmartSearch() {
             </div>
           )}
 
-          {phase === 'done' && results.length === 0 && !searchError && (
+          {phase === 'done' && filteredResults.length === 0 && !searchError && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Search className="w-12 h-12 text-white/10 mb-3" />
               <p className="text-white/30 text-sm">검색 결과가 없습니다</p>
-              <p className="text-white/15 text-xs mt-1">다른 이미지 URL을 시도해보세요</p>
+              <p className="text-white/15 text-xs mt-1">CDN 직접 이미지 URL을 사용하거나 위의 추가 검색을 이용해보세요</p>
             </div>
           )}
         </div>
@@ -807,32 +835,32 @@ export default function AdminSmartSearch() {
   );
 }
 
-function SearchPhaseBadge({ phase }: { phase: SearchPhase }) {
-  if (phase === 'idle') return null;
-
-  const config = {
-    lens_searching: { label: 'Lens 검색 중...', color: 'bg-teal-500/15 text-teal-400', spinning: true },
-    generating_keywords: { label: 'AI 키워드 생성 중...', color: 'bg-amber-500/15 text-amber-400', spinning: true },
-    keyword_searching: { label: '키워드 검색 중...', color: 'bg-amber-500/15 text-amber-400', spinning: true },
-    done: { label: 'Search Complete', color: 'bg-emerald-500/15 text-emerald-400', spinning: false },
-  }[phase];
-
+function StatusBadge({ phase }: { phase: SearchPhase }) {
+  const config: Record<SearchPhase, { label: string; color: string; spin: boolean }> = {
+    idle: { label: '', color: '', spin: false },
+    visual_searching: { label: 'Visual Search 진행 중...', color: 'bg-teal-500/15 text-teal-400 border-teal-500/20', spin: true },
+    generating_keywords: { label: 'AI 카테고리 분석 중...', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20', spin: true },
+    keyword_searching: { label: '키워드 검색 중...', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20', spin: true },
+    done: { label: 'Search Complete', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', spin: false },
+  };
+  const c = config[phase];
+  if (!c.label) return null;
   return (
-    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${config.color}`}>
-      {config.spinning && <Loader2 className="w-3 h-3 animate-spin" />}
-      {!config.spinning && <Check className="w-3 h-3" />}
-      {config.label}
+    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${c.color}`}>
+      {c.spin ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+      {c.label}
     </div>
   );
 }
 
-function StepIndicator({ step, label, icon }: { step: number; label: string; icon: React.ReactNode }) {
+function StepBadge({ num, label, sub, icon }: { num: number; label: string; sub: string; icon: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-1.5">
-      <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center text-white/25">
+      <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center text-white/20">
         {icon}
       </div>
-      <span className="text-[10px] text-white/25">{label}</span>
+      <span className="text-[10px] text-white/30 font-medium">{label}</span>
+      <span className="text-[9px] text-white/15">{sub}</span>
     </div>
   );
 }
