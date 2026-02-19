@@ -76,13 +76,13 @@ Deno.serve(async (req: Request) => {
 
     const categoryInstructions = CATEGORY_DEFS.map(cat => {
       const subList = cat.subCategories.map(sub => `"${sub}"`).join(", ");
-      if (cat.key === "outer") return `- outer: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.outerFit}", season "${seasonLabel}"`;
-      if (cat.key === "mid")   return `- mid: generate 1 keyword per sub-type [${subList}] — mid-layer worn between top and outer`;
-      if (cat.key === "top")   return `- top: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.topFit}"`;
-      if (cat.key === "bottom") return `- bottom: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.bottomFit}"`;
-      if (cat.key === "shoes") return `- shoes: generate 1 keyword per sub-type [${subList}] — matching "${vibeLabel}" vibe`;
-      if (cat.key === "bag")   return `- bag: generate 1 keyword per sub-type [${subList}] — matching "${vibeLabel}" vibe`;
-      return                          `- accessory: generate 1 keyword per sub-type [${subList}] — matching "${vibeLabel}" vibe`;
+      if (cat.key === "outer") return `- outer: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.outerFit}", "${vibeLabel}" vibe, season "${seasonLabel}"`;
+      if (cat.key === "mid")   return `- mid: generate 1 keyword per sub-type [${subList}] — mid-layer, "${vibeLabel}" vibe, season "${seasonLabel}"`;
+      if (cat.key === "top")   return `- top: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.topFit}", "${vibeLabel}" vibe, season "${seasonLabel}"`;
+      if (cat.key === "bottom") return `- bottom: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.bottomFit}", "${vibeLabel}" vibe, season "${seasonLabel}"`;
+      if (cat.key === "shoes") return `- shoes: generate 1 keyword per sub-type [${subList}] — "${vibeLabel}" vibe, season "${seasonLabel}"`;
+      if (cat.key === "bag")   return `- bag: generate 1 keyword per sub-type [${subList}] — "${vibeLabel}" vibe, season "${seasonLabel}"`;
+      return                          `- accessory: generate 1 keyword per sub-type [${subList}] — "${vibeLabel}" vibe, season "${seasonLabel}"`;
     }).join("\n");
 
     const exampleJson = CATEGORY_DEFS.map(cat =>
@@ -110,7 +110,7 @@ ${exampleJson}
 }`;
 
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
