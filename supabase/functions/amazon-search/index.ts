@@ -27,10 +27,14 @@ Deno.serve(async (req: Request) => {
       engine: "amazon",
       k: query,
       api_key: SERPAPI_KEY,
-      page: String(page),
     });
 
-    const serpResponse = await fetch(`https://serpapi.com/search?${params.toString()}`);
+    if (page > 1) {
+      params.set("page", String(page));
+    }
+
+    const serpUrl = `https://serpapi.com/search.json?${params.toString()}`;
+    const serpResponse = await fetch(serpUrl);
 
     if (!serpResponse.ok) {
       const errText = await serpResponse.text();
@@ -42,16 +46,23 @@ Deno.serve(async (req: Request) => {
 
     const serpData = await serpResponse.json();
 
+    if (serpData.error) {
+      return new Response(JSON.stringify({ error: serpData.error }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const results = (serpData.organic_results || []).map((item: any) => ({
       asin: item.asin || "",
       title: item.title || "",
-      brand: item.brand || extractBrand(item.title || ""),
+      brand: item.brand || "",
       price: item.price?.value ?? item.extracted_price ?? null,
       currency: item.price?.currency ?? "USD",
       image: item.thumbnail || item.image || "",
       rating: item.rating ?? null,
-      reviews_count: item.reviews ?? null,
-      url: item.link || `https://www.amazon.com/dp/${item.asin}`,
+      reviews_count: item.reviews ?? item.reviews_count ?? null,
+      url: item.link || (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
       is_prime: item.is_prime ?? false,
       delivery: item.delivery ?? "",
     }));
@@ -63,9 +74,7 @@ Deno.serve(async (req: Request) => {
         page,
         query,
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), {
@@ -74,8 +83,3 @@ Deno.serve(async (req: Request) => {
     });
   }
 });
-
-function extractBrand(title: string): string {
-  const words = title.split(" ");
-  return words.slice(0, 2).join(" ");
-}

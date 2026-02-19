@@ -1,5 +1,9 @@
-import { useState } from 'react';
-import { Search, ShoppingBag, Plus, Check, Star, ExternalLink, ChevronLeft, ChevronRight, Loader2, AlertCircle, Tag } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import {
+  ShoppingBag, Search, Sparkles, Plus, Check, Star, ExternalLink,
+  ChevronLeft, ChevronRight, Loader2, AlertCircle, X, Tag,
+  RefreshCw, Filter
+} from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
 interface AmazonProduct {
@@ -13,518 +17,631 @@ interface AmazonProduct {
   reviews_count: number | null;
   url: string;
   is_prime: boolean;
-  delivery: string;
 }
 
-interface TaggingState {
-  category: string;
-  gender: string;
-  color: string;
-  color_family: string;
-  vibe: string[];
-  body_type: string[];
-  season: string[];
+interface AnalyzedProduct extends AmazonProduct {
+  analyzed?: {
+    brand: string;
+    name: string;
+    category: string;
+    sub_category: string;
+    gender: string;
+    color: string;
+    color_family: string;
+    color_tone: string;
+    silhouette: string;
+    material: string;
+    pattern: string;
+    vibe: string[];
+    body_type: string[];
+    season: string[];
+    formality: number;
+    warmth: number;
+    stock_status: string;
+    image_url: string;
+    product_link: string;
+    price: number | null;
+  };
+  analyzing?: boolean;
+  analyzeError?: string;
 }
 
-const CATEGORY_OPTIONS = ['outer', 'mid', 'top', 'bottom', 'shoes', 'bag', 'accessory'];
-const GENDER_OPTIONS = ['MALE', 'FEMALE', 'UNISEX'];
-const VIBE_OPTIONS = ['ELEVATED_COOL', 'EFFORTLESS_NATURAL', 'ARTISTIC_MINIMAL', 'RETRO_LUXE', 'SPORT_MODERN', 'CREATIVE_LAYERED'];
-const BODY_TYPE_OPTIONS = ['slim', 'regular', 'plus-size'];
-const SEASON_OPTIONS = ['spring', 'summer', 'fall', 'winter'];
-const COLOR_FAMILY_OPTIONS = ['black', 'white', 'gray', 'navy', 'blue', 'green', 'red', 'pink', 'yellow', 'orange', 'brown', 'beige', 'purple', 'multicolor'];
+type Step = 'filter' | 'results';
 
-const defaultTagging = (): TaggingState => ({
-  category: '',
-  gender: '',
-  color: '',
-  color_family: '',
-  vibe: [],
-  body_type: [],
-  season: [],
-});
+const GENDER_OPTIONS = [
+  { value: 'MALE', label: 'Men' },
+  { value: 'FEMALE', label: 'Women' },
+  { value: 'UNISEX', label: 'Unisex' },
+];
+const BODY_TYPE_OPTIONS = [
+  { value: 'slim', label: 'Slim' },
+  { value: 'regular', label: 'Regular' },
+  { value: 'plus-size', label: 'Plus-size' },
+];
+const VIBE_OPTIONS = [
+  { value: 'ELEVATED_COOL', label: 'Elevated Cool' },
+  { value: 'EFFORTLESS_NATURAL', label: 'Effortless Natural' },
+  { value: 'ARTISTIC_MINIMAL', label: 'Artistic Minimal' },
+  { value: 'RETRO_LUXE', label: 'Retro Luxe' },
+  { value: 'SPORT_MODERN', label: 'Sport Modern' },
+  { value: 'CREATIVE_LAYERED', label: 'Creative Layered' },
+];
+const SEASON_OPTIONS = [
+  { value: 'spring', label: 'Spring' },
+  { value: 'summer', label: 'Summer' },
+  { value: 'fall', label: 'Fall' },
+  { value: 'winter', label: 'Winter' },
+];
 
 export default function AdminAmazonSearch() {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<AmazonProduct[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [step, setStep] = useState<Step>('filter');
+
+  const [gender, setGender] = useState('');
+  const [bodyType, setBodyType] = useState('');
+  const [vibe, setVibe] = useState('');
+  const [season, setSeason] = useState('');
+
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [generatingKeywords, setGeneratingKeywords] = useState(false);
+  const [keywordsError, setKeywordsError] = useState('');
+
+  const [activeKeyword, setActiveKeyword] = useState('');
+  const [products, setProducts] = useState<AnalyzedProduct[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const [selectedProduct, setSelectedProduct] = useState<AmazonProduct | null>(null);
-  const [tagging, setTagging] = useState<TaggingState>(defaultTagging());
-  const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
+  const [savingAll, setSavingAll] = useState(false);
+  const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
 
-  const search = async (p = 1) => {
-    if (!query.trim()) return;
-    setLoading(true);
-    setError('');
-    setPage(p);
+  const canGenerate = gender && vibe;
+
+  const generateKeywords = async () => {
+    if (!canGenerate) return;
+    setGeneratingKeywords(true);
+    setKeywordsError('');
+    setKeywords([]);
+    setProducts([]);
+    setSelected(new Set());
+    setStep('results');
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('amazon-search', {
-        body: { query: query.trim(), page: p },
+      const { data, error } = await supabase.functions.invoke('generate-amazon-keywords', {
+        body: { gender, body_type: bodyType, vibe, season },
       });
-
-      if (fnError) throw new Error(fnError.message);
+      if (error) throw new Error(error.message);
       if (data.error) throw new Error(data.error);
+      setKeywords(data.keywords || []);
+    } catch (err) {
+      setKeywordsError((err as Error).message);
+    } finally {
+      setGeneratingKeywords(false);
+    }
+  };
 
-      setResults(data.results || []);
+  const searchByKeyword = useCallback(async (kw: string, p = 1) => {
+    setActiveKeyword(kw);
+    setSearchLoading(true);
+    setSearchError('');
+    setPage(p);
+    setProducts([]);
+    setSelected(new Set());
+
+    try {
+      const { data, error } = await supabase.functions.invoke('amazon-search', {
+        body: { query: kw, page: p },
+      });
+      if (error) throw new Error(error.message);
+      if (data.error) throw new Error(data.error);
+      setProducts((data.results || []).map((r: AmazonProduct) => ({ ...r })));
       setTotal(data.total || 0);
     } catch (err) {
-      setError((err as Error).message);
-      setResults([]);
+      setSearchError((err as Error).message);
     } finally {
-      setLoading(false);
+      setSearchLoading(false);
+    }
+  }, []);
+
+  const toggleSelect = (asin: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(asin) ? next.delete(asin) : next.add(asin);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const available = products.filter(p => !savedAsins.has(p.asin)).map(p => p.asin);
+    if (selected.size === available.length && available.length > 0) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(available));
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') search(1);
-  };
+  const analyzeAndSave = async () => {
+    const toSave = products.filter(p => selected.has(p.asin) && !savedAsins.has(p.asin));
+    if (toSave.length === 0) return;
 
-  const openTagging = (product: AmazonProduct) => {
-    setSelectedProduct(product);
-    setTagging(defaultTagging());
-  };
+    setSavingAll(true);
+    setSaveProgress({ done: 0, total: toSave.length });
 
-  const closeTagging = () => {
-    setSelectedProduct(null);
-    setTagging(defaultTagging());
-  };
+    for (let i = 0; i < toSave.length; i++) {
+      const product = toSave[i];
 
-  const toggleArrayField = (field: 'vibe' | 'body_type' | 'season', value: string) => {
-    setTagging(prev => ({
-      ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field].filter(v => v !== value)
-        : [...prev[field], value],
-    }));
-  };
+      setProducts(prev =>
+        prev.map(p => p.asin === product.asin ? { ...p, analyzing: true, analyzeError: undefined } : p)
+      );
 
-  const handleSave = async () => {
-    if (!selectedProduct) return;
-    if (!tagging.category || !tagging.gender) {
-      alert('카테고리와 성별은 필수입니다.');
-      return;
+      try {
+        const { data, error } = await supabase.functions.invoke('analyze-amazon-product', {
+          body: { product, gender, body_type: bodyType, vibe, season },
+        });
+
+        if (error) throw new Error(error.message);
+        if (data.error) throw new Error(data.error);
+
+        const analyzed = data.result;
+
+        const { error: insertError } = await supabase.from('products').insert({
+          brand: analyzed.brand,
+          name: analyzed.name,
+          category: analyzed.category,
+          sub_category: analyzed.sub_category,
+          gender: analyzed.gender,
+          color: analyzed.color,
+          color_family: analyzed.color_family,
+          color_tone: analyzed.color_tone,
+          silhouette: analyzed.silhouette,
+          material: analyzed.material,
+          pattern: analyzed.pattern,
+          vibe: analyzed.vibe,
+          body_type: analyzed.body_type,
+          season: analyzed.season,
+          formality: analyzed.formality,
+          warmth: analyzed.warmth,
+          stock_status: analyzed.stock_status,
+          image_url: analyzed.image_url,
+          product_link: analyzed.product_link,
+          price: analyzed.price,
+        });
+
+        if (insertError) throw insertError;
+
+        setProducts(prev =>
+          prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed } : p)
+        );
+        setSavedAsins(prev => new Set([...prev, product.asin]));
+        setSelected(prev => { const next = new Set(prev); next.delete(product.asin); return next; });
+      } catch (err) {
+        setProducts(prev =>
+          prev.map(p => p.asin === product.asin
+            ? { ...p, analyzing: false, analyzeError: (err as Error).message }
+            : p
+          )
+        );
+      }
+
+      setSaveProgress({ done: i + 1, total: toSave.length });
     }
 
-    setSaving(true);
-    try {
-      const insertData = {
-        brand: selectedProduct.brand || selectedProduct.title.split(' ')[0],
-        name: selectedProduct.title,
-        category: tagging.category,
-        gender: tagging.gender,
-        color: tagging.color,
-        color_family: tagging.color_family,
-        vibe: tagging.vibe,
-        body_type: tagging.body_type,
-        season: tagging.season,
-        image_url: selectedProduct.image,
-        product_link: selectedProduct.url,
-        price: selectedProduct.price,
-        stock_status: 'in_stock',
-        silhouette: '',
-        material: '',
-      };
-
-      const { error: insertError } = await supabase.from('products').insert(insertData);
-      if (insertError) throw insertError;
-
-      setSavedAsins(prev => new Set([...prev, selectedProduct.asin]));
-      closeTagging();
-      alert(`"${selectedProduct.title.slice(0, 40)}..." 제품이 등록되었습니다.`);
-    } catch (err) {
-      alert('저장 실패: ' + (err as Error).message);
-    } finally {
-      setSaving(false);
-    }
+    setSavingAll(false);
   };
 
-  const totalPages = Math.ceil(total / 15) || 1;
+  const selectedCount = selected.size;
+  const availableCount = products.filter(p => !savedAsins.has(p.asin)).length;
 
   return (
-    <div className="min-h-screen bg-[#111] text-white">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <ShoppingBag className="w-7 h-7 text-amber-400" />
-            <h1 className="text-2xl font-bold">Amazon 상품 검색</h1>
+    <div className="min-h-screen bg-[#0f0f0f] text-white flex">
+      {/* Left: Filter Panel */}
+      <div className="w-72 shrink-0 border-r border-white/8 bg-[#141414] flex flex-col">
+        <div className="p-5 border-b border-white/8">
+          <div className="flex items-center gap-2.5">
+            <ShoppingBag className="w-5 h-5 text-amber-400" />
+            <h2 className="font-semibold text-sm">Amazon 상품 검색</h2>
           </div>
-          <p className="text-white/50 text-sm">SerpApi를 통해 Amazon 상품을 검색하고 제품 DB에 등록하세요</p>
+          <p className="text-white/30 text-xs mt-1">조건 설정 후 AI 키워드를 생성하세요</p>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative mb-8">
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
-              <input
-                type="text"
-                placeholder="예: men's slim fit chino pants, women's oversized hoodie..."
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white placeholder-white/30 focus:outline-none focus:border-amber-400/60 focus:bg-white/8 transition-all"
-              />
-            </div>
-            <button
-              onClick={() => search(1)}
-              disabled={loading || !query.trim()}
-              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold px-6 py-3.5 rounded-xl transition-all"
-            >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
-              검색
-            </button>
-          </div>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-6">
-            <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-            <p className="text-red-300 text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Results Info */}
-        {results.length > 0 && (
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-white/40 text-sm">
-              총 약 {total.toLocaleString()}개 결과 · 페이지 {page} / {totalPages}
-            </p>
-            <p className="text-white/40 text-sm">
-              {savedAsins.size > 0 && <span className="text-emerald-400">{savedAsins.size}개 등록됨</span>}
-            </p>
-          </div>
-        )}
-
-        {/* Loading Skeleton */}
-        {loading && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="bg-white/5 rounded-xl overflow-hidden animate-pulse">
-                <div className="w-full aspect-square bg-white/10" />
-                <div className="p-3 space-y-2">
-                  <div className="h-3 bg-white/10 rounded w-3/4" />
-                  <div className="h-3 bg-white/10 rounded w-1/2" />
-                  <div className="h-3 bg-white/10 rounded w-1/3" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Results Grid */}
-        {!loading && results.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {results.map(product => {
-              const isSaved = savedAsins.has(product.asin);
-              return (
-                <div
-                  key={product.asin}
-                  className={`group bg-white/5 border rounded-xl overflow-hidden transition-all hover:bg-white/8 ${
-                    isSaved ? 'border-emerald-500/40' : 'border-white/10 hover:border-white/20'
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          {/* Gender */}
+          <div>
+            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2.5">
+              Gender <span className="text-amber-400">*</span>
+            </label>
+            <div className="space-y-1.5">
+              {GENDER_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setGender(opt.value)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
+                    gender === opt.value
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                      : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
                   }`}
                 >
-                  <div className="relative aspect-square bg-white overflow-hidden">
-                    {product.image ? (
-                      <img
-                        src={product.image}
-                        alt={product.title}
-                        className="w-full h-full object-contain p-2"
-                        onError={e => {
-                          (e.currentTarget as HTMLImageElement).src =
-                            'https://via.placeholder.com/200x200?text=No+Image';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-white/10">
-                        <ShoppingBag className="w-8 h-8 text-white/20" />
-                      </div>
-                    )}
-                    {isSaved && (
-                      <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
-                        <div className="bg-emerald-500 rounded-full p-2">
-                          <Check className="w-5 h-5 text-white" />
-                        </div>
-                      </div>
-                    )}
-                    {product.is_prime && (
-                      <div className="absolute top-1.5 left-1.5 bg-[#232F3E] text-[#FF9900] text-[9px] font-bold px-1.5 py-0.5 rounded">
-                        prime
-                      </div>
-                    )}
-                  </div>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                  <div className="p-3">
-                    <p className="text-white/80 text-xs leading-snug line-clamp-2 mb-2 min-h-[2.5rem]">
-                      {product.title}
+          {/* Body Type */}
+          <div>
+            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2.5">
+              Body Type
+            </label>
+            <div className="space-y-1.5">
+              {BODY_TYPE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setBodyType(prev => prev === opt.value ? '' : opt.value)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
+                    bodyType === opt.value
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                      : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Vibe */}
+          <div>
+            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2.5">
+              Style Vibe <span className="text-amber-400">*</span>
+            </label>
+            <div className="space-y-1.5">
+              {VIBE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setVibe(opt.value)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
+                    vibe === opt.value
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                      : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Season */}
+          <div>
+            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2.5">
+              Season
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {SEASON_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setSeason(prev => prev === opt.value ? '' : opt.value)}
+                  className={`px-3 py-2 rounded-lg text-xs transition-all ${
+                    season === opt.value
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                      : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Generate Button */}
+        <div className="p-5 border-t border-white/8">
+          <button
+            onClick={generateKeywords}
+            disabled={!canGenerate || generatingKeywords}
+            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm"
+          >
+            {generatingKeywords ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            {generatingKeywords ? 'AI 키워드 생성 중...' : 'AI 키워드 생성'}
+          </button>
+          {!canGenerate && (
+            <p className="text-white/25 text-xs text-center mt-2">Gender와 Vibe를 선택하세요</p>
+          )}
+        </div>
+      </div>
+
+      {/* Right: Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {step === 'filter' && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                <Filter className="w-8 h-8 text-white/20" />
+              </div>
+              <p className="text-white/30 text-base font-medium">왼쪽에서 조건을 설정하세요</p>
+              <p className="text-white/15 text-sm mt-1">Gender와 Style Vibe는 필수입니다</p>
+            </div>
+          </div>
+        )}
+
+        {step === 'results' && (
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Keywords Bar */}
+            <div className="border-b border-white/8 px-6 py-4">
+              {generatingKeywords ? (
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                  <span className="text-white/50 text-sm">Gemini가 키워드를 생성하고 있습니다...</span>
+                </div>
+              ) : keywordsError ? (
+                <div className="flex items-center gap-2 text-red-400 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  {keywordsError}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-white/30 uppercase tracking-wider font-semibold">
+                      AI 생성 키워드 ({keywords.length}) — 클릭해서 검색
                     </p>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-amber-400 font-semibold text-sm">
-                        {product.price != null
-                          ? `$${product.price.toFixed(2)}`
-                          : '가격 없음'}
-                      </span>
-                      {product.rating != null && (
-                        <div className="flex items-center gap-1">
-                          <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                          <span className="text-white/50 text-xs">{product.rating}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-1.5">
+                    <button
+                      onClick={generateKeywords}
+                      className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      재생성
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {keywords.map(kw => (
                       <button
-                        onClick={() => openTagging(product)}
-                        disabled={isSaved}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-amber-400 text-xs font-medium py-2 rounded-lg transition-all"
+                        key={kw}
+                        onClick={() => searchByKeyword(kw, 1)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                          activeKeyword === kw
+                            ? 'bg-amber-500 text-black'
+                            : 'bg-white/8 text-white/60 hover:bg-white/15 hover:text-white'
+                        }`}
                       >
-                        {isSaved ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            등록됨
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-3.5 h-3.5" />
-                            등록
-                          </>
-                        )}
+                        {kw}
                       </button>
-                      <a
-                        href={product.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center w-8 h-8 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5 text-white/40" />
-                      </a>
-                    </div>
+                    ))}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              )}
+            </div>
 
-        {/* Empty State */}
-        {!loading && results.length === 0 && !error && (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <ShoppingBag className="w-16 h-16 text-white/10 mb-4" />
-            <p className="text-white/30 text-lg font-medium">Amazon 상품을 검색해보세요</p>
-            <p className="text-white/20 text-sm mt-1">키워드를 입력하고 검색 버튼을 누르세요</p>
-          </div>
-        )}
+            {/* Action Bar */}
+            {products.length > 0 && (
+              <div className="border-b border-white/8 px-6 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-2 text-sm text-white/50 hover:text-white/80 transition-colors"
+                  >
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                      selectedCount > 0 && selectedCount === availableCount
+                        ? 'bg-amber-500 border-amber-500'
+                        : 'border-white/20'
+                    }`}>
+                      {selectedCount > 0 && selectedCount === availableCount && (
+                        <Check className="w-3 h-3 text-black" />
+                      )}
+                    </div>
+                    전체 선택
+                  </button>
+                  {selectedCount > 0 && (
+                    <span className="text-xs text-amber-400 font-medium">{selectedCount}개 선택됨</span>
+                  )}
+                </div>
 
-        {/* Pagination */}
-        {results.length > 0 && !loading && (
-          <div className="flex items-center justify-center gap-3 mt-8">
-            <button
-              onClick={() => search(page - 1)}
-              disabled={page <= 1}
-              className="flex items-center gap-1.5 px-4 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm text-white/70 transition-all"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              이전
-            </button>
-            <span className="text-white/40 text-sm px-2">
-              {page} / {totalPages}
-            </span>
-            <button
-              onClick={() => search(page + 1)}
-              disabled={page >= totalPages}
-              className="flex items-center gap-1.5 px-4 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm text-white/70 transition-all"
-            >
-              다음
-              <ChevronRight className="w-4 h-4" />
-            </button>
+                <div className="flex items-center gap-3">
+                  {savingAll && (
+                    <span className="text-xs text-white/40">
+                      {saveProgress.done}/{saveProgress.total} 처리 중...
+                    </span>
+                  )}
+                  <button
+                    onClick={analyzeAndSave}
+                    disabled={selectedCount === 0 || savingAll}
+                    className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black text-sm font-semibold px-4 py-2 rounded-lg transition-all"
+                  >
+                    {savingAll ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Tag className="w-4 h-4" />
+                    )}
+                    {savingAll ? 'AI 분석 & 등록 중...' : `${selectedCount}개 AI 분석 & DB 등록`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Results */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {searchLoading && (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {Array.from({ length: 15 }).map((_, i) => (
+                    <div key={i} className="bg-white/5 rounded-xl overflow-hidden animate-pulse">
+                      <div className="aspect-square bg-white/8" />
+                      <div className="p-3 space-y-2">
+                        <div className="h-2.5 bg-white/8 rounded w-3/4" />
+                        <div className="h-2.5 bg-white/8 rounded w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {searchError && (
+                <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                  <p className="text-red-300 text-sm">{searchError}</p>
+                </div>
+              )}
+
+              {!searchLoading && !searchError && products.length === 0 && activeKeyword && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Search className="w-12 h-12 text-white/10 mb-3" />
+                  <p className="text-white/25 text-sm">검색 결과가 없습니다</p>
+                </div>
+              )}
+
+              {!searchLoading && products.length > 0 && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {products.map(product => {
+                      const isSaved = savedAsins.has(product.asin);
+                      const isSelected = selected.has(product.asin);
+                      const isAnalyzing = product.analyzing;
+
+                      return (
+                        <div
+                          key={product.asin}
+                          onClick={() => !isSaved && !isAnalyzing && toggleSelect(product.asin)}
+                          className={`group relative rounded-xl overflow-hidden border transition-all cursor-pointer ${
+                            isSaved
+                              ? 'border-emerald-500/30 bg-emerald-500/5 cursor-default'
+                              : isSelected
+                              ? 'border-amber-500/60 bg-amber-500/8 ring-2 ring-amber-500/20'
+                              : 'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
+                          }`}
+                        >
+                          {/* Selection indicator */}
+                          <div className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                            isSaved
+                              ? 'bg-emerald-500 border-emerald-500'
+                              : isSelected
+                              ? 'bg-amber-500 border-amber-500'
+                              : 'bg-black/40 border-white/20 group-hover:border-white/40'
+                          }`}>
+                            {isSaved && <Check className="w-3 h-3 text-white" />}
+                            {isSelected && !isSaved && <Check className="w-3 h-3 text-black" />}
+                          </div>
+
+                          {/* Analyzing overlay */}
+                          {isAnalyzing && (
+                            <div className="absolute inset-0 z-20 bg-black/60 flex flex-col items-center justify-center gap-2">
+                              <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
+                              <span className="text-xs text-amber-400 font-medium">AI 분석 중...</span>
+                            </div>
+                          )}
+
+                          {/* Error overlay */}
+                          {product.analyzeError && (
+                            <div className="absolute inset-0 z-20 bg-red-900/60 flex flex-col items-center justify-center gap-1 p-2">
+                              <AlertCircle className="w-5 h-5 text-red-400" />
+                              <span className="text-[10px] text-red-300 text-center leading-tight">
+                                {product.analyzeError.slice(0, 60)}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Image */}
+                          <div className="aspect-square bg-white overflow-hidden">
+                            {product.image ? (
+                              <img
+                                src={product.image}
+                                alt={product.title}
+                                className="w-full h-full object-contain p-2"
+                                onError={e => {
+                                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <ShoppingBag className="w-8 h-8 text-gray-300" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Info */}
+                          <div className="p-2.5">
+                            <p className="text-white/70 text-[11px] leading-snug line-clamp-2 mb-1.5 min-h-[2.5em]">
+                              {product.title}
+                            </p>
+                            <div className="flex items-center justify-between">
+                              <span className={`font-semibold text-xs ${isSaved ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                {isSaved ? '등록됨' : product.price != null ? `$${product.price.toFixed(2)}` : '-'}
+                              </span>
+                              {product.rating != null && (
+                                <div className="flex items-center gap-0.5">
+                                  <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                  <span className="text-white/35 text-[10px]">{product.rating}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Analyzed tags preview */}
+                            {product.analyzed && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded">
+                                  {product.analyzed.category}
+                                </span>
+                                {product.analyzed.color_family && (
+                                  <span className="text-[9px] bg-white/8 text-white/40 px-1.5 py-0.5 rounded">
+                                    {product.analyzed.color_family}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* External link */}
+                          <a
+                            href={product.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="absolute top-2 right-2 z-10 w-6 h-6 bg-black/40 hover:bg-black/70 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <ExternalLink className="w-3 h-3 text-white/60" />
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-center gap-3 mt-6">
+                    <button
+                      onClick={() => searchByKeyword(activeKeyword, page - 1)}
+                      disabled={page <= 1 || searchLoading}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-xs text-white/60 transition-all"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      이전
+                    </button>
+                    <span className="text-white/30 text-xs">페이지 {page}</span>
+                    <button
+                      onClick={() => searchByKeyword(activeKeyword, page + 1)}
+                      disabled={searchLoading}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-xs text-white/60 transition-all"
+                    >
+                      다음
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {!searchLoading && products.length === 0 && keywords.length > 0 && !activeKeyword && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Search className="w-12 h-12 text-white/10 mb-3" />
+                  <p className="text-white/30 text-base font-medium">키워드를 클릭해서 상품을 검색하세요</p>
+                  <p className="text-white/15 text-sm mt-1">위의 키워드 중 하나를 선택하세요</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
-
-      {/* Tagging Modal */}
-      {selectedProduct && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-white/10">
-              <div className="flex items-start gap-4">
-                <img
-                  src={selectedProduct.image}
-                  alt={selectedProduct.title}
-                  className="w-20 h-20 object-contain bg-white rounded-lg p-1 shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-white font-semibold text-sm leading-snug line-clamp-2">
-                    {selectedProduct.title}
-                  </h3>
-                  <p className="text-amber-400 font-bold mt-1">
-                    {selectedProduct.price != null ? `$${selectedProduct.price.toFixed(2)}` : '가격 없음'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-5">
-              <div className="flex items-center gap-2 text-amber-400 mb-1">
-                <Tag className="w-4 h-4" />
-                <span className="text-sm font-semibold">제품 태깅 (필수: 카테고리, 성별)</span>
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-xs text-white/50 mb-2 uppercase tracking-wider">카테고리 *</label>
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORY_OPTIONS.map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => setTagging(p => ({ ...p, category: opt }))}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        tagging.category === opt
-                          ? 'bg-amber-500 text-black'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10'
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Gender */}
-              <div>
-                <label className="block text-xs text-white/50 mb-2 uppercase tracking-wider">성별 *</label>
-                <div className="flex gap-2">
-                  {GENDER_OPTIONS.map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => setTagging(p => ({ ...p, gender: opt }))}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        tagging.gender === opt
-                          ? 'bg-amber-500 text-black'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10'
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Color */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-white/50 mb-2 uppercase tracking-wider">색상 이름</label>
-                  <input
-                    type="text"
-                    placeholder="예: Navy Blue, Off-White..."
-                    value={tagging.color}
-                    onChange={e => setTagging(p => ({ ...p, color: e.target.value }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-amber-400/50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-white/50 mb-2 uppercase tracking-wider">색상 계열</label>
-                  <select
-                    value={tagging.color_family}
-                    onChange={e => setTagging(p => ({ ...p, color_family: e.target.value }))}
-                    className="w-full bg-[#222] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-400/50"
-                  >
-                    <option value="">선택</option>
-                    {COLOR_FAMILY_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Vibe */}
-              <div>
-                <label className="block text-xs text-white/50 mb-2 uppercase tracking-wider">분위기 (복수 선택)</label>
-                <div className="flex flex-wrap gap-2">
-                  {VIBE_OPTIONS.map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => toggleArrayField('vibe', opt)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        tagging.vibe.includes(opt)
-                          ? 'bg-amber-500 text-black'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10'
-                      }`}
-                    >
-                      {opt.replace(/_/g, ' ')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Body Type */}
-              <div>
-                <label className="block text-xs text-white/50 mb-2 uppercase tracking-wider">체형 (복수 선택)</label>
-                <div className="flex gap-2">
-                  {BODY_TYPE_OPTIONS.map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => toggleArrayField('body_type', opt)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        tagging.body_type.includes(opt)
-                          ? 'bg-amber-500 text-black'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10'
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Season */}
-              <div>
-                <label className="block text-xs text-white/50 mb-2 uppercase tracking-wider">시즌 (복수 선택)</label>
-                <div className="flex gap-2">
-                  {SEASON_OPTIONS.map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => toggleArrayField('season', opt)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        tagging.season.includes(opt)
-                          ? 'bg-amber-500 text-black'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10'
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-white/10 flex gap-3">
-              <button
-                onClick={closeTagging}
-                className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-sm font-medium transition-all"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !tagging.category || !tagging.gender}
-                className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black text-sm font-semibold transition-all flex items-center justify-center gap-2"
-              >
-                {saving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-                DB에 등록
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
