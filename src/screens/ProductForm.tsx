@@ -467,7 +467,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     setAnalyzing(true);
     try {
       const analysis = await analyzeFashionImage(formData.image_url);
-      applyAnalysisToForm(analysis as any);
+      applyAnalysisToForm(analysis as any, false);
       alert('AI 분석이 완료되었습니다! 필요한 부분은 수정해주세요.');
     } catch (error) {
       console.error('AI analysis error:', error);
