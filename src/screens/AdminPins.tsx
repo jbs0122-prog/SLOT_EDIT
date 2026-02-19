@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Save, ArrowLeft, Package, Users, Key, ChevronDown } from 'lucide-react';
+import { X, Save, ArrowLeft, Package, ChevronDown } from 'lucide-react';
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -305,29 +305,6 @@ export default function AdminPins() {
                 <p className="text-gray-600 font-semibold">
                   총 {filteredOutfits.length}개의 코디 (전체: {outfits.length}개)
                 </p>
-                <div className="flex gap-2">
-                  <a
-                    href="#test-gemini"
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-pink-700 shadow-md"
-                  >
-                    <Key size={18} />
-                    API 테스트
-                  </a>
-                  <a
-                    href="#admin-users"
-                    className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-                  >
-                    <Users size={18} />
-                    회원 관리
-                  </a>
-                  <a
-                    href="#admin-products"
-                    className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-                  >
-                    <Package size={18} />
-                    제품 관리
-                  </a>
-                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

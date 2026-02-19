@@ -6,7 +6,7 @@ import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
-import { Plus, Upload, Link as LinkIcon, Package, Pin, Sparkles, Trash2, Users, Key, Scissors, CheckSquare, Square, XSquare, ChevronDown } from 'lucide-react';
+import { Plus, Upload, Link as LinkIcon, Package, Sparkles, Trash2, CheckSquare, Square, XSquare, ChevronDown } from 'lucide-react';
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -358,36 +358,6 @@ export default function AdminProducts() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">제품 관리자</h1>
             <p className="text-gray-600">제품을 추가하고 코디와 연결하세요</p>
-          </div>
-          <div className="flex gap-2">
-            <a
-              href="#admin-extract"
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-cyan-700 shadow-md"
-            >
-              <Scissors size={18} />
-              누끼 추출
-            </a>
-            <a
-              href="#test-gemini"
-              className="flex items-center gap-2 bg-gradient-to-r from-gray-700 to-gray-900 text-white px-4 py-2 rounded-lg hover:from-gray-800 hover:to-black shadow-md"
-            >
-              <Key size={18} />
-              API 테스트
-            </a>
-            <a
-              href="#admin-users"
-              className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-            >
-              <Users size={18} />
-              회원 관리
-            </a>
-            <a
-              href="#admin"
-              className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-            >
-              <Pin size={18} />
-              핀 관리
-            </a>
           </div>
         </div>
 

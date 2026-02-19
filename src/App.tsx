@@ -432,7 +432,11 @@ function App() {
           <AdminAmazonSearch />
         </AdminLayout>
       )}
-      {currentScreen === 'test-gemini' && <GeminiKeyTest />}
+      {currentScreen === 'test-gemini' && (
+        <AdminLayout currentPage="api-test">
+          <GeminiKeyTest />
+        </AdminLayout>
+      )}
       {currentScreen === 'privacy-policy' && <PrivacyPolicy />}
       {currentScreen === 'terms-of-service' && <TermsOfService />}
       {currentScreen === 'affiliate-disclosure' && <AffiliateDisclosure />}

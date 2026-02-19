@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { LogOut, Package, MapPin, Users, ShoppingBag } from 'lucide-react';
+import { LogOut, Package, MapPin, Users, ShoppingBag, Key } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { Session } from '@supabase/supabase-js';
 import AdminLogin from './AdminLogin';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage?: 'pins' | 'products' | 'users' | 'amazon-search';
+  currentPage?: 'pins' | 'products' | 'users' | 'amazon-search' | 'api-test';
 }
 
 export default function AdminLayout({ children, currentPage }: AdminLayoutProps) {
@@ -19,6 +19,7 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
     { id: 'products' as const, label: 'Products', icon: Package, href: '#admin-products' },
     { id: 'amazon-search' as const, label: 'Amazon Search', icon: ShoppingBag, href: '#admin-amazon' },
     { id: 'users' as const, label: 'Users', icon: Users, href: '#admin-users' },
+    { id: 'api-test' as const, label: 'API 테스트', icon: Key, href: '#test-gemini' },
   ];
 
   useEffect(() => {
