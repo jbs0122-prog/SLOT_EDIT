@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Input from './screens/Input';
 import Results from './screens/Results';
 import Loading from './screens/Loading';
+import GeneratingLoading from './screens/GeneratingLoading';
 import AdminPins from './screens/AdminPins';
 import AdminProducts from './screens/AdminProducts';
 import AdminUsers from './screens/AdminUsers';
@@ -23,7 +24,7 @@ import { Outfit } from './data/outfits';
 import { fetchOutfits, fetchOutfitById } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature, getTargetWarmth } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'admin-extract' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
+type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'admin-extract' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
 
 const RESULTS_KEY = 'slotedit_results';
 
@@ -268,7 +269,7 @@ function App() {
     return () => window.removeEventListener('hashchange', handler);
   }, []);
 
-  const handleGenerate = (gender: string, bodyType: string, vibe: string, weather: WeatherData) => {
+  const handleGenerate = async (gender: string, bodyType: string, vibe: string, weather: WeatherData) => {
     const normalizedGender = normalizeString(gender);
     const normalizedBodyType = normalizeString(bodyType);
     const normalizedVibe = normalizeString(vibe);
@@ -298,13 +299,45 @@ function App() {
     setSelectedOutfits(sorted);
     setContext(ctx);
     setActiveTab('home');
-    setCurrentScreen('results');
+    setCurrentScreen('generating');
+
+    const imageUrls: string[] = [];
+    sorted.slice(0, 5).forEach(outfit => {
+      if (outfit.image_url_flatlay) imageUrls.push(outfit.image_url_flatlay);
+      if (outfit.image_url_on_model) imageUrls.push(outfit.image_url_on_model);
+      if (outfit.image_url_flatlay_clean) imageUrls.push(outfit.image_url_flatlay_clean);
+    });
+
+    const MIN_DISPLAY_MS = 1800;
+    const MAX_WAIT_MS = 4000;
+    const startTime = Date.now();
+
+    const preloadImage = (url: string) =>
+      new Promise<void>(resolve => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        img.src = url;
+      });
+
+    const preloadAll = Promise.all(imageUrls.map(preloadImage));
+    const timeout = new Promise<void>(resolve => setTimeout(resolve, MAX_WAIT_MS));
+
+    await Promise.race([preloadAll, timeout]);
+
+    const elapsed = Date.now() - startTime;
+    if (elapsed < MIN_DISPLAY_MS) {
+      await new Promise(resolve => setTimeout(resolve, MIN_DISPLAY_MS - elapsed));
+    }
+
     persistResults(sorted, ctx);
 
     const currentHash = getHash();
     if (!currentHash.startsWith('results')) {
       window.location.hash = 'results';
     }
+
+    setCurrentScreen('results');
   };
 
   const handleBack = () => {
@@ -328,6 +361,7 @@ function App() {
   return (
     <>
       {currentScreen === 'loading' && <Loading />}
+      {currentScreen === 'generating' && <GeneratingLoading />}
       {currentScreen === 'input' && (
         <>
           <Input onGenerate={handleGenerate} />
