@@ -19,6 +19,8 @@ export default function AdminPins() {
   const [filterGender, setFilterGender] = useState<string>('');
   const [filterBodyType, setFilterBodyType] = useState<string>('');
   const [filterVibe, setFilterVibe] = useState<string>('');
+  const [filterSeason, setFilterSeason] = useState<string>('');
+  const [outfitSeasonsMap, setOutfitSeasonsMap] = useState<Map<string, string[]>>(new Map());
   const [tpo, setTpo] = useState<string>('');
 
   useEffect(() => {
@@ -28,14 +30,27 @@ export default function AdminPins() {
 
   const loadOutfits = async () => {
     try {
-      const { data, error } = await supabase
-        .from('outfits')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [outfitsResult, itemsResult] = await Promise.all([
+        supabase.from('outfits').select('*').order('created_at', { ascending: false }),
+        supabase.from('outfit_items').select('outfit_id, product:products(season)'),
+      ]);
 
-      if (error) throw error;
+      if (outfitsResult.error) throw outfitsResult.error;
+      if (itemsResult.error) throw itemsResult.error;
 
-      const outfitsData: Outfit[] = data?.map(row => ({
+      const seasonsMap = new Map<string, string[]>();
+      itemsResult.data?.forEach((item: any) => {
+        const seasons: string[] = item.product?.season || [];
+        if (!seasonsMap.has(item.outfit_id)) seasonsMap.set(item.outfit_id, []);
+        seasons.forEach(s => {
+          if (!seasonsMap.get(item.outfit_id)!.includes(s)) {
+            seasonsMap.get(item.outfit_id)!.push(s);
+          }
+        });
+      });
+      setOutfitSeasonsMap(seasonsMap);
+
+      const outfitsData: Outfit[] = outfitsResult.data?.map(row => ({
         id: row.id,
         gender: row.gender,
         body_type: row.body_type,
@@ -240,6 +255,10 @@ export default function AdminPins() {
     if (filterGender && outfit.gender !== filterGender) return false;
     if (filterBodyType && outfit.body_type !== filterBodyType) return false;
     if (filterVibe && outfit.vibe !== filterVibe) return false;
+    if (filterSeason) {
+      const seasons = outfitSeasonsMap.get(outfit.id) || [];
+      if (!seasons.includes(filterSeason)) return false;
+    }
     return true;
   });
 
@@ -291,7 +310,7 @@ export default function AdminPins() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     성별
@@ -338,6 +357,23 @@ export default function AdminPins() {
                     <option value="RETRO_LUXE">Retro Luxe</option>
                     <option value="SPORT_MODERN">Sport Modern</option>
                     <option value="CREATIVE_LAYERED">Creative Layered</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    계절
+                  </label>
+                  <select
+                    value={filterSeason}
+                    onChange={(e) => setFilterSeason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="spring">봄</option>
+                    <option value="summer">여름</option>
+                    <option value="fall">가을</option>
+                    <option value="winter">겨울</option>
                   </select>
                 </div>
               </div>

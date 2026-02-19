@@ -39,8 +39,9 @@ export default function AdminProducts() {
   const [filterGender, setFilterGenderRaw] = useState<string>(savedFilters?.filterGender ?? 'all');
   const [filterBodyType, setFilterBodyTypeRaw] = useState<string>(savedFilters?.filterBodyType ?? 'all');
   const [filterVibe, setFilterVibeRaw] = useState<string>(savedFilters?.filterVibe ?? 'all');
+  const [filterSeason, setFilterSeasonRaw] = useState<string>(savedFilters?.filterSeason ?? 'all');
 
-  const saveFilters = (updates: Partial<{ searchTerm: string; filterCategory: string; filterGender: string; filterBodyType: string; filterVibe: string }>) => {
+  const saveFilters = (updates: Partial<{ searchTerm: string; filterCategory: string; filterGender: string; filterBodyType: string; filterVibe: string; filterSeason: string }>) => {
     try {
       const current = loadSavedFilters() || {};
       sessionStorage.setItem(FILTER_KEY, JSON.stringify({ ...current, ...updates }));
@@ -52,10 +53,13 @@ export default function AdminProducts() {
   const setFilterGender = (v: string) => { setFilterGenderRaw(v); saveFilters({ filterGender: v }); };
   const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); saveFilters({ filterBodyType: v }); };
   const setFilterVibe = (v: string) => { setFilterVibeRaw(v); saveFilters({ filterVibe: v }); };
+  const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); saveFilters({ filterSeason: v }); };
 
   const [outfitFilterGender, setOutfitFilterGender] = useState('');
   const [outfitFilterBodyType, setOutfitFilterBodyType] = useState('');
   const [outfitFilterVibe, setOutfitFilterVibe] = useState('');
+  const [outfitFilterSeason, setOutfitFilterSeason] = useState('');
+  const [outfitSeasonsMap, setOutfitSeasonsMap] = useState<Map<string, string[]>>(new Map());
   const [productUsageCounts, setProductUsageCounts] = useState<Record<string, number>>({});
   const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
 
@@ -63,6 +67,7 @@ export default function AdminProducts() {
     loadProducts();
     loadOutfits();
     loadProductUsageCounts();
+    loadOutfitSeasonsMap();
   }, []);
 
   const loadProducts = async () => {
@@ -164,6 +169,30 @@ export default function AdminProducts() {
     }
   };
 
+  const loadOutfitSeasonsMap = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('outfit_items')
+        .select('outfit_id, product:products(season)');
+
+      if (error) throw error;
+
+      const seasonsMap = new Map<string, string[]>();
+      data?.forEach((item: any) => {
+        const seasons: string[] = item.product?.season || [];
+        if (!seasonsMap.has(item.outfit_id)) seasonsMap.set(item.outfit_id, []);
+        seasons.forEach(s => {
+          if (!seasonsMap.get(item.outfit_id)!.includes(s)) {
+            seasonsMap.get(item.outfit_id)!.push(s);
+          }
+        });
+      });
+      setOutfitSeasonsMap(seasonsMap);
+    } catch (error) {
+      console.error('Failed to load outfit seasons:', error);
+    }
+  };
+
   const handleAddProduct = () => {
     setEditingProduct(null);
     setShowProductForm(true);
@@ -202,6 +231,7 @@ export default function AdminProducts() {
   const handleLinksUpdated = () => {
     loadOutfits();
     loadProductUsageCounts();
+    loadOutfitSeasonsMap();
   };
 
   const handleDeleteOutfit = async (outfitId: string) => {
@@ -283,13 +313,19 @@ export default function AdminProducts() {
     const matchesBodyType = filterBodyType === 'all' ||
                            (Array.isArray(product.body_type) && product.body_type.includes(filterBodyType));
     const matchesVibe = filterVibe === 'all' || product.vibe.includes(filterVibe);
-    return matchesSearch && matchesCategory && matchesGender && matchesBodyType && matchesVibe;
+    const matchesSeason = filterSeason === 'all' ||
+                         (Array.isArray(product.season) && product.season.includes(filterSeason));
+    return matchesSearch && matchesCategory && matchesGender && matchesBodyType && matchesVibe && matchesSeason;
   });
 
   const filteredOutfits = outfits.filter(outfit => {
     if (outfitFilterGender && outfit.gender !== outfitFilterGender) return false;
     if (outfitFilterBodyType && outfit.body_type !== outfitFilterBodyType) return false;
     if (outfitFilterVibe && outfit.vibe !== outfitFilterVibe) return false;
+    if (outfitFilterSeason) {
+      const seasons = outfitSeasonsMap.get(outfit.id) || [];
+      if (!seasons.includes(outfitFilterSeason)) return false;
+    }
     return true;
   });
 
@@ -390,7 +426,7 @@ export default function AdminProducts() {
         {viewMode === 'products' ? (
           <>
             <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 <input
                   type="text"
                   placeholder="제품명 또는 브랜드 검색..."
@@ -445,6 +481,17 @@ export default function AdminProducts() {
                   <option value="SPORT_MODERN">Sport Modern</option>
                   <option value="CREATIVE_LAYERED">Creative Layered</option>
                 </select>
+                <select
+                  value={filterSeason}
+                  onChange={(e) => setFilterSeason(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">전체 계절</option>
+                  <option value="spring">봄</option>
+                  <option value="summer">여름</option>
+                  <option value="fall">가을</option>
+                  <option value="winter">겨울</option>
+                </select>
               </div>
             </div>
 
@@ -465,7 +512,7 @@ export default function AdminProducts() {
         ) : (
           <>
             <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     성별
@@ -512,6 +559,23 @@ export default function AdminProducts() {
                     <option value="RETRO_LUXE">Retro Luxe</option>
                     <option value="SPORT_MODERN">Sport Modern</option>
                     <option value="CREATIVE_LAYERED">Creative Layered</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    계절
+                  </label>
+                  <select
+                    value={outfitFilterSeason}
+                    onChange={(e) => setOutfitFilterSeason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="spring">봄</option>
+                    <option value="summer">여름</option>
+                    <option value="fall">가을</option>
+                    <option value="winter">겨울</option>
                   </select>
                 </div>
               </div>
