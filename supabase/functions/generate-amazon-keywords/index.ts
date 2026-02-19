@@ -167,10 +167,10 @@ Fill every empty string value with a keyword. Return only the JSON, nothing else
     );
 
     if (!geminiRes.ok) {
-      const fallback = getFallbackKeywords(gender, body_type, vibe, season || "");
+      const errText = await geminiRes.text();
       return new Response(
-        JSON.stringify({ keywords: fallback.keywords, categories: fallback.categories, source: "fallback" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Gemini API error", detail: errText }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -179,14 +179,13 @@ Fill every empty string value with a keyword. Return only the JSON, nothing else
 
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      const fallback = getFallbackKeywords(gender, body_type, vibe, season || "");
       return new Response(
-        JSON.stringify({ keywords: fallback.keywords, categories: fallback.categories, source: "fallback" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Gemini returned no valid JSON", raw: rawText }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    let cleanedJson = jsonMatch[0]
+    const cleanedJson = jsonMatch[0]
       .replace(/\/\/[^\n]*/g, "")
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/,(\s*[}\]])/g, "$1");
@@ -194,11 +193,10 @@ Fill every empty string value with a keyword. Return only the JSON, nothing else
     let parsed: Record<string, Record<string, string> | string[]>;
     try {
       parsed = JSON.parse(cleanedJson) as Record<string, Record<string, string> | string[]>;
-    } catch {
-      const fallback = getFallbackKeywords(gender, body_type, vibe, season || "");
+    } catch (parseErr) {
       return new Response(
-        JSON.stringify({ keywords: fallback.keywords, categories: fallback.categories, source: "fallback" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Failed to parse Gemini JSON", detail: (parseErr as Error).message, raw: rawText }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -229,76 +227,3 @@ Fill every empty string value with a keyword. Return only the JSON, nothing else
   }
 });
 
-function getFallbackKeywords(
-  gender: string,
-  body_type: string,
-  vibe: string,
-  season: string
-): { keywords: string[]; categories: Record<string, string[]> } {
-  const g = gender === "MALE" ? "men" : gender === "FEMALE" ? "women" : "unisex";
-  const bodyFit = BODY_TYPE_SILHOUETTE[body_type] || BODY_TYPE_SILHOUETTE["regular"];
-  const topFit = bodyFit.topFit.split(",")[0].trim();
-  const bottomFit = bodyFit.bottomFit.split(",")[0].trim();
-  const outerFit = bodyFit.outerFit.split(",")[0].trim();
-
-  const isWinter = season === "winter";
-  const isSummer = season === "summer";
-
-  const categories: Record<string, string[]> = {
-    outer: [
-      `${g} ${outerFit} puffer jacket`,
-      `${g} ${outerFit} ${isWinter ? "warm wool" : "classic"} coat`,
-      `${g} ${outerFit} tailored blazer`,
-      `${g} ${outerFit} casual jacket`,
-      `${g} ${outerFit} trench coat`,
-    ],
-    mid: [
-      `${g} ribbed knit sweater`,
-      `${g} open-front cardigan`,
-      `${g} crewneck sweater`,
-      `${g} knit vest`,
-      `${g} ${isWinter ? "sherpa" : "lightweight"} fleece`,
-      `${g} ${outerFit} hoodie`,
-      `${g} pullover sweatshirt`,
-    ],
-    top: [
-      `${g} ${topFit} ${isSummer ? "lightweight" : "cotton"} tshirt`,
-      `${g} ${topFit} ${isSummer ? "linen" : "oxford"} shirt`,
-      `${g} ${topFit} polo shirt`,
-      `${g} ${topFit} turtleneck`,
-      `${g} ${isSummer ? "sleeveless" : topFit} tank top`,
-    ],
-    bottom: [
-      `${g} ${bottomFit} ${isSummer ? "light wash" : "dark wash"} denim jeans`,
-      `${g} ${bottomFit} tailored slacks`,
-      `${g} ${bottomFit} chino pants`,
-      `${g} ${bottomFit} jogger pants`,
-      `${g} ${bottomFit} cargo pants`,
-      `${g} ${isSummer ? "linen" : bottomFit} shorts`,
-    ],
-    shoes: [
-      `${g} casual sneakers`,
-      `${g} leather derby shoes`,
-      `${g} slip-on loafers`,
-      `${g} ${isWinter ? "waterproof" : "leather"} boots`,
-      `${g} running shoes`,
-    ],
-    bag: [
-      `${g} canvas tote bag`,
-      `${g} casual backpack`,
-      `${g} leather crossbody bag`,
-      `${g} duffle bag`,
-    ],
-    accessory: [
-      `${g} woven necktie`,
-      `${g} leather belt`,
-      `${g} ${isSummer ? "baseball" : "wool"} cap`,
-      `${g} ${isWinter ? "cashmere" : "light"} scarf`,
-      `${g} ${isWinter ? "knit" : "leather"} gloves`,
-      `${g} classic watch`,
-    ],
-  };
-
-  const keywords = Object.values(categories).flat();
-  return { keywords, categories };
-}
