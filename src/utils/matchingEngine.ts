@@ -32,6 +32,23 @@ export interface OutfitCandidate {
 
 export { scoreOutfit } from './matchingScoring';
 
+function weightedPickRandom<T extends { id: string }>(arr: T[], usageCounts: Record<string, number>): T {
+  const weights = arr.map(item => {
+    const usage = usageCounts[item.id] ?? 0;
+    if (usage === 0) return 3.0;
+    if (usage === 1) return 2.0;
+    if (usage <= 3) return 1.0;
+    return 0.5;
+  });
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  let rand = Math.random() * total;
+  for (let i = 0; i < arr.length; i++) {
+    rand -= weights[i];
+    if (rand <= 0) return arr[i];
+  }
+  return arr[arr.length - 1];
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const result = [...arr];
   for (let i = result.length - 1; i > 0; i--) {
@@ -125,7 +142,8 @@ export function generateOutfitCombinations(
     targetWarmth?: number;
     targetSeason?: string;
   },
-  anchor?: AnchorItem
+  anchor?: AnchorItem,
+  usageCounts: Record<string, number> = {}
 ): OutfitCandidate[] {
   const filterProducts = (category: string) => {
     return products.filter(p => {
@@ -165,7 +183,7 @@ export function generateOutfitCombinations(
     return [];
   }
 
-  return generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor);
+  return generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
 }
 
 function generateSampled(
@@ -177,7 +195,8 @@ function generateSampled(
   bags: Product[],
   accessories: Product[],
   filters: { targetSeason?: string },
-  anchor?: AnchorItem
+  anchor?: AnchorItem,
+  usageCounts: Record<string, number> = {}
 ): OutfitCandidate[] {
   const MAX_SAMPLES = 10000;
   const seen = new Set<string>();
@@ -186,47 +205,48 @@ function generateSampled(
   const anchorProduct = anchor?.product;
 
   for (let i = 0; i < MAX_SAMPLES; i++) {
-    const top = anchorSlot === 'top' ? anchorProduct! : pickRandom(tops);
-    const bottom = anchorSlot === 'bottom' ? anchorProduct! : pickRandom(bottoms);
-    const shoe = anchorSlot === 'shoes' ? anchorProduct! : pickRandom(shoes);
+    const top = anchorSlot === 'top' ? anchorProduct! : weightedPickRandom(tops, usageCounts);
+    const bottom = anchorSlot === 'bottom' ? anchorProduct! : weightedPickRandom(bottoms, usageCounts);
+    const shoe = anchorSlot === 'shoes' ? anchorProduct! : weightedPickRandom(shoes, usageCounts);
 
     let outer: Product | undefined;
     if (anchorSlot === 'outer') {
       outer = anchorProduct!;
     } else {
-      outer = outers.length > 0 ? pickRandom(outers) : undefined;
+      outer = outers.length > 0 ? weightedPickRandom(outers, usageCounts) : undefined;
     }
 
     let mid: Product | undefined;
     if (anchorSlot === 'mid') {
       mid = anchorProduct!;
     } else {
-      mid = mids.length > 0 ? (Math.random() < 0.85 ? pickRandom(mids) : undefined) : undefined;
+      mid = mids.length > 0 ? (Math.random() < 0.85 ? weightedPickRandom(mids, usageCounts) : undefined) : undefined;
     }
 
     let bag: Product | undefined;
     if (anchorSlot === 'bag') {
       bag = anchorProduct!;
     } else {
-      bag = bags.length > 0 ? (Math.random() < 0.8 ? pickRandom(bags) : undefined) : undefined;
+      bag = bags.length > 0 ? (Math.random() < 0.8 ? weightedPickRandom(bags, usageCounts) : undefined) : undefined;
     }
 
     let accessory: Product | undefined;
     if (anchorSlot === 'accessory') {
       accessory = anchorProduct!;
     } else {
-      accessory = accessories.length > 0 ? (Math.random() < 0.7 ? pickRandom(accessories) : undefined) : undefined;
+      accessory = accessories.length > 0 ? (Math.random() < 0.7 ? weightedPickRandom(accessories, usageCounts) : undefined) : undefined;
     }
 
     let accessory2: Product | undefined;
     if (anchorSlot === 'accessory_2') {
       accessory2 = anchorProduct!;
       if (!accessory && accessories.length > 0) {
-        accessory = pickRandom(accessories.filter(a => a.id !== anchorProduct!.id));
+        const remaining = accessories.filter(a => a.id !== anchorProduct!.id);
+        if (remaining.length > 0) accessory = weightedPickRandom(remaining, usageCounts);
       }
     } else if (accessory && accessories.length > 1 && Math.random() < 0.4) {
       const remaining = accessories.filter(a => a.id !== accessory!.id);
-      if (remaining.length > 0) accessory2 = pickRandom(remaining);
+      if (remaining.length > 0) accessory2 = weightedPickRandom(remaining, usageCounts);
     }
 
     const key = [
@@ -344,9 +364,10 @@ export function findBestOutfits(
     targetSeason?: string;
   },
   topN: number = 10,
-  anchor?: AnchorItem
+  anchor?: AnchorItem,
+  usageCounts: Record<string, number> = {}
 ): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
-  const combinations = generateOutfitCombinations(products, filters, anchor);
+  const combinations = generateOutfitCombinations(products, filters, anchor, usageCounts);
 
   const scoredOutfits = combinations.map(outfit => ({
     outfit,

@@ -105,7 +105,8 @@ export async function generateOutfitsAutomatically(
       targetSeason,
     },
     count,
-    anchor
+    anchor,
+    usageCounts
   );
 
   if (bestOutfits.length === 0) {
