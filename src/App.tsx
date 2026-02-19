@@ -7,6 +7,7 @@ import AdminPins from './screens/AdminPins';
 import AdminProducts from './screens/AdminProducts';
 import AdminUsers from './screens/AdminUsers';
 import AdminLayout from './screens/AdminLayout';
+import AdminAmazonSearch from './screens/AdminAmazonSearch';
 import GeminiKeyTest from './screens/GeminiKeyTest';
 import BottomNav, { NavTab } from './screens/BottomNav';
 import DesktopSidebar from './screens/DesktopSidebar';
@@ -23,7 +24,7 @@ import { Outfit } from './data/outfits';
 import { fetchOutfits, fetchOutfitById } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature, getTargetWarmth } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
+type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'admin-amazon' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
 
 const RESULTS_KEY = 'slotedit_results';
 
@@ -35,6 +36,7 @@ function screenFromHash(h: string): Screen {
   if (h === 'admin') return 'admin';
   if (h === 'admin-products') return 'admin-products';
   if (h === 'admin-users') return 'admin-users';
+  if (h === 'admin-amazon') return 'admin-amazon';
   if (h === 'test-gemini') return 'test-gemini';
   if (h === 'privacy-policy') return 'privacy-policy';
   if (h === 'terms-of-service') return 'terms-of-service';
@@ -135,7 +137,7 @@ function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: b
 
 function App() {
   const initialHash = getHash();
-  const isAdmin = initialHash.startsWith('admin');
+  const isAdmin = initialHash.startsWith('admin') || initialHash === 'admin-amazon';
 
   const [currentScreen, setCurrentScreen] = useState<Screen>(isAdmin ? screenFromHash(initialHash) : 'loading');
   const [outfits, setOutfits] = useState<Outfit[]>([]);
@@ -423,6 +425,11 @@ function App() {
       {currentScreen === 'admin-users' && (
         <AdminLayout currentPage="users">
           <AdminUsers />
+        </AdminLayout>
+      )}
+      {currentScreen === 'admin-amazon' && (
+        <AdminLayout currentPage="amazon-search">
+          <AdminAmazonSearch />
         </AdminLayout>
       )}
       {currentScreen === 'test-gemini' && <GeminiKeyTest />}
