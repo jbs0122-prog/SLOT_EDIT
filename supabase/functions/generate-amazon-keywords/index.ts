@@ -99,10 +99,9 @@ Deno.serve(async (req: Request) => {
     const seasonMod = SEASON_MODIFIERS[seasonLabel] || { fabric: [], keywords: [] };
 
     if (!GEMINI_API_KEY) {
-      const fallback = getFallbackKeywords(gender, body_type, vibe, season || "");
       return new Response(
-        JSON.stringify({ keywords: fallback.keywords, categories: fallback.categories, source: "fallback" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "GEMINI_API_KEY not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -123,62 +122,46 @@ Deno.serve(async (req: Request) => {
     const fabric1 = seasonMod.fabric[0] || seasonLabel;
     const fabric2 = seasonMod.fabric[1] || fabric1;
 
-    const prompt = `You are an Amazon fashion search keyword expert. Your job is to generate highly targeted Amazon search queries.
+    const prompt = `You are an Amazon fashion search keyword expert. Generate highly targeted Amazon search queries.
 
-=== INPUT PARAMETERS ===
+INPUT:
 - Gender: ${genderLabel}
-- Body type: ${body_type || "regular"} → fit rule: ${bodyFit.rationale}
-- Style vibe: "${vibeLabel}" → descriptors: ${vibeAdjStr}
-- Season: "${seasonLabel}" → fabrics: ${seasonFabricStr}
+- Body type: ${body_type || "regular"} (fit rule: ${bodyFit.rationale})
+- Style vibe: "${vibeLabel}" (descriptors: ${vibeAdjStr})
+- Season: "${seasonLabel}" (fabrics: ${seasonFabricStr})
 
-=== MANDATORY KEYWORD FORMULA ===
-Every single keyword MUST encode ALL 5 parameters:
-  [gender] + [body-type fit] + [season fabric] + [vibe adjective] + [item]
+KEYWORD FORMULA — every keyword must follow: [gender] [fit] [fabric] [vibe] [item]
+Examples:
+- top/tshirt: "${genderLabel} ${topFit1} ${fabric1} ${vibe1} tshirt"
+- outer/coat: "${genderLabel} ${outerFit1} ${fabric1} ${vibe1} coat"
+- bottom/denim: "${genderLabel} ${bottomFit1} ${vibe1} denim jeans"
+- shoes/sneaker: "${genderLabel} ${vibe1} sneaker"
+- bag/tote: "${genderLabel} ${vibe1} tote bag"
 
-The formula ensures every keyword simultaneously reflects:
-1. gender (${genderLabel})
-2. body-type appropriate fit (${topFit1} / ${bottomFit1} / ${outerFit1})
-3. season-appropriate fabric (${fabric1}, ${fabric2})
-4. style vibe character (${vibe1}, ${vibe2})
-5. item sub-category
+RULES:
+- 4 to 6 words per keyword
+- Must include fit word (${topFit1} / ${bottomFit1} / ${outerFit1}) and at least one of: ${vibeAdjStr}
+- No generic keywords — every keyword must have style identity
 
-=== CONCRETE EXAMPLES (use as template) ===
-- top / tshirt   → "${genderLabel} ${topFit1} ${fabric1} ${vibe1} tshirt"
-- top / shirt    → "${genderLabel} ${topFit1} ${fabric1} ${vibe2} shirt"
-- outer / coat   → "${genderLabel} ${outerFit1} ${fabric1} ${vibe1} coat"
-- outer / puffer → "${genderLabel} ${outerFit1} ${fabric2} ${vibe2} puffer jacket"
-- bottom / denim → "${genderLabel} ${bottomFit1} ${vibe1} denim jeans"
-- bottom / slacks → "${genderLabel} ${bottomFit1} ${fabric1} ${vibe2} slacks"
-- shoes / sneaker → "${genderLabel} ${vibe1} ${fabric1} sneaker"
-- bag / tote     → "${genderLabel} ${vibe1} ${fabric1} tote bag"
+OUTPUT: Return a single valid JSON object with exactly this structure (one string per sub-category key):
+${JSON.stringify(
+  Object.fromEntries(CATEGORY_DEFS.map(cat => [
+    cat.key,
+    Object.fromEntries(cat.subCategories.map(s => [s, ""]))
+  ])),
+  null, 2
+)}
 
-=== CATEGORIES — generate exactly 1 keyword per sub-type ===
-${CATEGORY_DEFS.map(cat => {
-  const subList = cat.subCategories.map(s => `"${s}"`).join(", ");
-  const fit = cat.key === "outer" ? outerFit1 : cat.key === "bottom" ? bottomFit1 : topFit1;
-  return `- ${cat.key} [${subList}]: each keyword = "${genderLabel} ${fit} ${fabric1} ${vibe1} [item]" pattern`;
-}).join("\n")}
-
-=== NON-NEGOTIABLE RULES ===
-1. keyword length: 4–6 words only (Amazon search best practice)
-2. must include body-type fit word (${topFit1}, ${bottomFit1}, or ${outerFit1})
-3. must include at least one season fabric (${seasonFabricStr})
-4. must include at least one vibe adjective (${vibeAdjStr})
-5. NEVER output bland generic keywords — every keyword must have style identity
-6. Return ONLY valid JSON, no markdown, no explanation, no trailing commas
-
-{
-${exampleJson}
-}`;
+Fill every empty string value with a keyword. Return only the JSON, nothing else.`;
 
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.6, maxOutputTokens: 2000 },
+          generationConfig: { temperature: 0.6, maxOutputTokens: 2000, responseMimeType: "application/json" },
         }),
       }
     );
