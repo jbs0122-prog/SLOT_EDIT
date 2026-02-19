@@ -25,7 +25,8 @@ Deno.serve(async (req: Request) => {
 
     const params = new URLSearchParams({
       engine: "amazon",
-      k: query,
+      k: String(query),
+      i: "fashion",
       api_key: SERPAPI_KEY,
     });
 
@@ -35,35 +36,36 @@ Deno.serve(async (req: Request) => {
 
     const serpUrl = `https://serpapi.com/search.json?${params.toString()}`;
     const serpResponse = await fetch(serpUrl);
+    const responseText = await serpResponse.text();
 
-    if (!serpResponse.ok) {
-      const errText = await serpResponse.text();
-      return new Response(JSON.stringify({ error: "SerpApi error", detail: errText }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let serpData: any;
+    try {
+      serpData = JSON.parse(responseText);
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Failed to parse SerpApi response", detail: responseText.slice(0, 500) }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const serpData = await serpResponse.json();
-
-    if (serpData.error) {
-      return new Response(JSON.stringify({ error: serpData.error }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!serpResponse.ok || serpData.error) {
+      return new Response(
+        JSON.stringify({ error: serpData.error || `SerpApi HTTP ${serpResponse.status}`, detail: serpData }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const results = (serpData.organic_results || []).map((item: any) => ({
       asin: item.asin || "",
       title: item.title || "",
       brand: item.brand || "",
-      price: item.price?.value ?? item.extracted_price ?? null,
+      price: item.extracted_price ?? item.price?.value ?? null,
       currency: item.price?.currency ?? "USD",
       image: item.thumbnail || item.image || "",
       rating: item.rating ?? null,
       reviews_count: item.reviews ?? item.reviews_count ?? null,
       url: item.link || (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
-      is_prime: item.is_prime ?? false,
+      is_prime: item.is_prime ?? item.prime ?? false,
       delivery: item.delivery ?? "",
     }));
 
@@ -77,9 +79,9 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: (err as Error).message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });

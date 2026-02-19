@@ -82,6 +82,7 @@ export default function AdminAmazonSearch() {
   const [season, setSeason] = useState('');
 
   const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywordsSource, setKeywordsSource] = useState<'gemini' | 'fallback' | ''>('');
   const [generatingKeywords, setGeneratingKeywords] = useState(false);
   const [keywordsError, setKeywordsError] = useState('');
 
@@ -104,6 +105,7 @@ export default function AdminAmazonSearch() {
     setGeneratingKeywords(true);
     setKeywordsError('');
     setKeywords([]);
+    setKeywordsSource('');
     setProducts([]);
     setSelected(new Set());
     setStep('results');
@@ -115,6 +117,7 @@ export default function AdminAmazonSearch() {
       if (error) throw new Error(error.message);
       if (data.error) throw new Error(data.error);
       setKeywords(data.keywords || []);
+      setKeywordsSource(data.source || 'fallback');
     } catch (err) {
       setKeywordsError((err as Error).message);
     } finally {
@@ -135,7 +138,7 @@ export default function AdminAmazonSearch() {
         body: { query: kw, page: p },
       });
       if (error) throw new Error(error.message);
-      if (data.error) throw new Error(data.error);
+      if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
       setProducts((data.results || []).map((r: AmazonProduct) => ({ ...r })));
       setTotal(data.total || 0);
     } catch (err) {
@@ -387,9 +390,21 @@ export default function AdminAmazonSearch() {
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-white/30 uppercase tracking-wider font-semibold">
-                      AI 생성 키워드 ({keywords.length}) — 클릭해서 검색
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-white/30 uppercase tracking-wider font-semibold">
+                        키워드 ({keywords.length}) — 클릭해서 검색
+                      </p>
+                      {keywordsSource === 'gemini' && (
+                        <span className="text-[10px] bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full font-medium">
+                          Gemini AI
+                        </span>
+                      )}
+                      {keywordsSource === 'fallback' && (
+                        <span className="text-[10px] bg-white/8 text-white/30 px-2 py-0.5 rounded-full">
+                          기본 키워드
+                        </span>
+                      )}
+                    </div>
                     <button
                       onClick={generateKeywords}
                       className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors"
