@@ -62,7 +62,7 @@ Extract and return ONLY a valid JSON object with these exact fields:
   "color_tone": "one of: warm|cool|neutral",
   "silhouette": "one of: slim|regular|oversized|relaxed|fitted|wide-leg|straight|cropped",
   "material": "primary material e.g. '100% Cotton', 'Polyester Blend'",
-  "pattern": "one of: solid|stripe|check|plaid|floral|graphic|animal|geometric|abstract",
+  "pattern": "one of: solid|stripe|check|graphic|print|other",
   "vibe": ["array of matching vibes from: ELEVATED_COOL, EFFORTLESS_NATURAL, ARTISTIC_MINIMAL, RETRO_LUXE, SPORT_MODERN, CREATIVE_LAYERED"],
   "body_type": ["array from: slim, regular, plus-size"],
   "season": ["array from: spring, summer, fall, winter"],
@@ -100,15 +100,24 @@ Rules:
     const geminiData = await geminiRes.json();
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return new Response(JSON.stringify({ error: "Failed to parse product data", raw: rawText }), {
+      return new Response(JSON.stringify({ error: "Failed to parse product data", raw: rawText.slice(0, 500) }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const analyzed = JSON.parse(jsonMatch[0]);
+    let analyzed: any;
+    try {
+      analyzed = JSON.parse(jsonMatch[0]);
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON from Gemini", raw: jsonMatch[0].slice(0, 500) }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const VALID_COLOR_FAMILIES = new Set([
       "black", "white", "grey", "navy", "beige", "brown", "blue", "green",
@@ -163,7 +172,32 @@ Rules:
 
     const VALID_CATEGORIES = new Set(["outer", "mid", "top", "bottom", "shoes", "bag", "accessory"]);
     const VALID_SILHOUETTES = new Set(["slim", "regular", "oversized", "relaxed", "fitted", "wide-leg", "straight", "cropped"]);
-    const VALID_PATTERNS = new Set(["solid", "stripe", "check", "plaid", "floral", "graphic", "animal", "geometric", "abstract"]);
+    const VALID_PATTERNS = new Set(["solid", "stripe", "check", "graphic", "print", "other"]);
+    const PATTERN_MAP: Record<string, string> = {
+      plaid: "check",
+      floral: "print",
+      animal: "print",
+      geometric: "graphic",
+      abstract: "graphic",
+      camo: "print",
+      camouflage: "print",
+      tie_dye: "print",
+      "tie-dye": "print",
+      paisley: "print",
+      houndstooth: "check",
+      tartan: "check",
+      argyle: "check",
+    };
+    const normalizePattern = (raw: string): string => {
+      if (!raw) return "solid";
+      const lower = raw.toLowerCase().trim();
+      if (VALID_PATTERNS.has(lower)) return lower;
+      if (PATTERN_MAP[lower]) return PATTERN_MAP[lower];
+      for (const key of Object.keys(PATTERN_MAP)) {
+        if (lower.includes(key)) return PATTERN_MAP[key];
+      }
+      return "other";
+    };
     const VALID_COLOR_TONES = new Set(["warm", "cool", "neutral"]);
 
     const result = {
@@ -177,7 +211,7 @@ Rules:
       color_tone: VALID_COLOR_TONES.has(analyzed.color_tone) ? analyzed.color_tone : "neutral",
       silhouette: VALID_SILHOUETTES.has(analyzed.silhouette) ? analyzed.silhouette : "regular",
       material: analyzed.material || "",
-      pattern: VALID_PATTERNS.has(analyzed.pattern) ? analyzed.pattern : "solid",
+      pattern: normalizePattern(analyzed.pattern),
       vibe: Array.isArray(analyzed.vibe) ? analyzed.vibe : [vibe],
       body_type: Array.isArray(analyzed.body_type) ? analyzed.body_type : [body_type || "regular"],
       season: Array.isArray(analyzed.season) ? analyzed.season : [season || "all"],
