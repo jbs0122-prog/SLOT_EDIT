@@ -183,3 +183,37 @@ export function downloadBlob(blob: Blob, filename: string): void {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+export async function downloadHighQualityImage(
+  imageUrl: string,
+  filename: string,
+  supabaseUrl?: string
+): Promise<void> {
+  const fetchUrl = supabaseUrl
+    ? `${supabaseUrl}/functions/v1/fetch-ibb-image?url=${encodeURIComponent(imageUrl)}`
+    : imageUrl;
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('이미지 로드 실패'));
+    el.src = fetchUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas context 생성 실패');
+  ctx.drawImage(img, 0, 0);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error('PNG 변환 실패'))),
+      'image/png'
+    );
+  });
+
+  downloadBlob(blob, filename);
+}

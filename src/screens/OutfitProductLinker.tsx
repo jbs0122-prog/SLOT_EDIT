@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outfit, Product, OutfitItem } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader } from 'lucide-react';
+import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader, Download } from 'lucide-react';
 import { reviseModelPhoto } from '../utils/modelPhotoGenerator';
+import { downloadHighQualityImage } from '../utils/imageCompression';
 import FlatlayRenderer from './FlatlayRenderer';
 
 interface OutfitProductLinkerProps {
@@ -47,6 +48,8 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const [modelRevisionError, setModelRevisionError] = useState('');
   const [currentModelUrl, setCurrentModelUrl] = useState(outfit.image_url_on_model);
   const [currentCleanUrl, setCurrentCleanUrl] = useState(outfit.image_url_flatlay_clean || '');
+  const [downloadingFlatlay, setDownloadingFlatlay] = useState(false);
+  const [downloadingModel, setDownloadingModel] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef<number | null>(null);
 
@@ -263,6 +266,38 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     }
   };
 
+  const handleDownloadFlatlay = async () => {
+    if (!outfit.image_url_flatlay) return;
+    setDownloadingFlatlay(true);
+    try {
+      await downloadHighQualityImage(
+        outfit.image_url_flatlay,
+        `flatlay_${outfit.id}.png`,
+        import.meta.env.VITE_SUPABASE_URL
+      );
+    } catch (err) {
+      console.error('Download failed:', err);
+    } finally {
+      setDownloadingFlatlay(false);
+    }
+  };
+
+  const handleDownloadModel = async () => {
+    if (!currentModelUrl) return;
+    setDownloadingModel(true);
+    try {
+      await downloadHighQualityImage(
+        currentModelUrl,
+        `model_${outfit.id}.png`,
+        import.meta.env.VITE_SUPABASE_URL
+      );
+    } catch (err) {
+      console.error('Download failed:', err);
+    } finally {
+      setDownloadingModel(false);
+    }
+  };
+
   const getSlotItem = (slotType: string): OutfitItem | undefined => {
     return linkedItems.find(item => item.slot_type === slotType);
   };
@@ -398,7 +433,19 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                   <div className="grid grid-cols-2 gap-3">
                     {outfit.image_url_flatlay && (
                       <div className="bg-gray-50 rounded-lg p-2">
-                        <p className="text-xs text-gray-500 mb-1.5 text-center font-medium">플랫레이</p>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs text-gray-500 font-medium">플랫레이</p>
+                          <button
+                            onClick={handleDownloadFlatlay}
+                            disabled={downloadingFlatlay}
+                            title="고화질 PNG 다운로드"
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
+                          >
+                            {downloadingFlatlay
+                              ? <Loader className="animate-spin" size={12} />
+                              : <Download size={12} />}
+                          </button>
+                        </div>
                         <img
                           src={outfit.image_url_flatlay}
                           alt="Flatlay"
@@ -408,7 +455,19 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                     )}
                     {currentModelUrl && (
                       <div className="bg-gray-50 rounded-lg p-2 relative">
-                        <p className="text-xs text-gray-500 mb-1.5 text-center font-medium">모델컷</p>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs text-gray-500 font-medium">모델컷</p>
+                          <button
+                            onClick={handleDownloadModel}
+                            disabled={downloadingModel || modelRevising}
+                            title="고화질 PNG 다운로드"
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
+                          >
+                            {downloadingModel
+                              ? <Loader className="animate-spin" size={12} />
+                              : <Download size={12} />}
+                          </button>
+                        </div>
                         {modelRevising && (
                           <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center z-10">
                             <div className="flex items-center gap-2 text-gray-700">

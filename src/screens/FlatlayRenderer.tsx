@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Image as ImageIcon, AlertCircle, CheckCircle, Loader, Send, RefreshCw } from 'lucide-react';
+import { X, Image as ImageIcon, AlertCircle, CheckCircle, Loader, Send, RefreshCw, Download } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import {
   prepareFlatlayForEditor,
@@ -12,6 +12,7 @@ import {
 import { removeBackground } from '../utils/backgroundRemoval';
 import { generateAndSaveModelPhoto, reviseModelPhoto } from '../utils/modelPhotoGenerator';
 import { generateInsightForOutfit } from '../utils/outfitService';
+import { downloadHighQualityImage } from '../utils/imageCompression';
 import FlatLayEditor from './FlatLayEditor';
 
 interface FlatlayRendererProps {
@@ -54,6 +55,8 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
   const [revisionText, setRevisionText] = useState('');
   const [revising, setRevising] = useState(false);
   const [revisionError, setRevisionError] = useState('');
+  const [downloadingFlatlay, setDownloadingFlatlay] = useState(false);
+  const [downloadingModel, setDownloadingModel] = useState(false);
 
   useEffect(() => {
     loadOutfitItems();
@@ -244,6 +247,38 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
     }
   };
 
+  const handleDownloadFlatlay = async () => {
+    if (!renderedImageUrl) return;
+    setDownloadingFlatlay(true);
+    try {
+      await downloadHighQualityImage(
+        renderedImageUrl,
+        `flatlay_${outfitId}.png`,
+        import.meta.env.VITE_SUPABASE_URL
+      );
+    } catch (err) {
+      console.error('Download failed:', err);
+    } finally {
+      setDownloadingFlatlay(false);
+    }
+  };
+
+  const handleDownloadModel = async () => {
+    if (!modelImageUrl) return;
+    setDownloadingModel(true);
+    try {
+      await downloadHighQualityImage(
+        modelImageUrl,
+        `model_${outfitId}.png`,
+        import.meta.env.VITE_SUPABASE_URL
+      );
+    } catch (err) {
+      console.error('Download failed:', err);
+    } finally {
+      setDownloadingModel(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -401,7 +436,20 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                   {renderedImageUrl && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900 mb-2">플랫레이</h3>
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-semibold text-gray-900">플랫레이</h3>
+                          <button
+                            onClick={handleDownloadFlatlay}
+                            disabled={downloadingFlatlay}
+                            title="고화질 PNG 다운로드"
+                            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+                          >
+                            {downloadingFlatlay
+                              ? <Loader className="animate-spin" size={13} />
+                              : <Download size={13} />}
+                            <span>다운로드</span>
+                          </button>
+                        </div>
                         <div className="bg-gray-50 rounded-lg p-3">
                           <img
                             src={renderedImageUrl}
@@ -411,7 +459,22 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900 mb-2">AI 모델컷</h3>
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-semibold text-gray-900">AI 모델컷</h3>
+                          {modelImageUrl && (
+                            <button
+                              onClick={handleDownloadModel}
+                              disabled={downloadingModel || revising}
+                              title="고화질 PNG 다운로드"
+                              className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+                            >
+                              {downloadingModel
+                                ? <Loader className="animate-spin" size={13} />
+                                : <Download size={13} />}
+                              <span>다운로드</span>
+                            </button>
+                          )}
+                        </div>
                         {modelImageUrl ? (
                           <div className="bg-gray-50 rounded-lg p-3 relative">
                             {revising && (
