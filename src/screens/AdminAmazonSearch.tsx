@@ -238,8 +238,12 @@ export default function AdminAmazonSearch() {
           body: { product, gender, body_type: bodyType, vibe, season },
         });
 
-        if (error) throw new Error(error.message);
-        if (data.error) throw new Error(data.error);
+        if (error) {
+          const msg = data?.error || error.message || 'Edge function error';
+          throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        }
+        if (!data) throw new Error('Empty response from server');
+        if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
 
         const analyzed = data.result;
 
@@ -305,7 +309,12 @@ export default function AdminAmazonSearch() {
               { body: { product, gender, body_type: bodyType, vibe, season } }
             );
 
-            if (analyzeError || analyzeData.error) throw new Error(analyzeError?.message || analyzeData.error);
+            if (analyzeError) {
+              const msg = analyzeData?.error || analyzeError.message || 'Edge function error';
+              throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+            }
+            if (!analyzeData) throw new Error('Empty response from server');
+            if (analyzeData.error) throw new Error(typeof analyzeData.error === 'string' ? analyzeData.error : JSON.stringify(analyzeData.error));
 
             setProducts(prev =>
               prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed: analyzeData.result } : p)
