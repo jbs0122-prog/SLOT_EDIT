@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Product, Outfit } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import ProductForm from './ProductForm';
@@ -70,6 +70,8 @@ export default function AdminProducts() {
   const [outfitFilterSeason, setOutfitFilterSeason] = useState('');
   const [productUsageCounts, setProductUsageCounts] = useState<Record<string, number>>({});
   const [seasonDropdownOpen, setSeasonDropdownOpen] = useState<string | null>(null);
+  const [seasonDropdownPos, setSeasonDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const seasonBtnRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -692,9 +694,23 @@ export default function AdminProducts() {
                       </div>
                       <div className="relative mb-3">
                         <button
+                          ref={el => {
+                            if (el) seasonBtnRefs.current.set(outfit.id, el);
+                            else seasonBtnRefs.current.delete(outfit.id);
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSeasonDropdownOpen(seasonDropdownOpen === outfit.id ? null : outfit.id);
+                            if (seasonDropdownOpen === outfit.id) {
+                              setSeasonDropdownOpen(null);
+                              setSeasonDropdownPos(null);
+                            } else {
+                              const btn = seasonBtnRefs.current.get(outfit.id);
+                              if (btn) {
+                                const rect = btn.getBoundingClientRect();
+                                setSeasonDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+                              }
+                              setSeasonDropdownOpen(outfit.id);
+                            }
                           }}
                           className="w-full flex items-center justify-between px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-gray-300 bg-gray-50 hover:bg-white transition-colors"
                         >
@@ -705,26 +721,6 @@ export default function AdminProducts() {
                           </span>
                           <ChevronDown size={14} />
                         </button>
-                        {seasonDropdownOpen === outfit.id && (
-                          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2">
-                            {ALL_SEASONS.map(s => (
-                              <button
-                                key={s}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOutfitSeasonToggle(outfit.id, s, outfit.season || []);
-                                }}
-                                className={`w-full text-left px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                                  (outfit.season || []).includes(s)
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'text-gray-600 hover:bg-gray-100'
-                                }`}
-                              >
-                                {SEASON_LABELS[s]}
-                              </button>
-                            ))}
-                          </div>
-                        )}
                       </div>
                       <button
                         onClick={() => handleLinkOutfit(outfit)}
@@ -775,6 +771,40 @@ export default function AdminProducts() {
           }}
         />
       )}
+
+      {seasonDropdownOpen && seasonDropdownPos && (() => {
+        const outfit = outfits.find(o => o.id === seasonDropdownOpen);
+        if (!outfit) return null;
+        return (
+          <>
+            <div
+              className="fixed inset-0 z-30"
+              onClick={() => { setSeasonDropdownOpen(null); setSeasonDropdownPos(null); }}
+            />
+            <div
+              className="fixed z-40 bg-white border border-gray-200 rounded-lg shadow-xl p-2"
+              style={{ top: seasonDropdownPos.top, left: seasonDropdownPos.left, width: seasonDropdownPos.width }}
+            >
+              {ALL_SEASONS.map(s => (
+                <button
+                  key={s}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOutfitSeasonToggle(outfit.id, s, outfit.season || []);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    (outfit.season || []).includes(s)
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {SEASON_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
