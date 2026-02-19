@@ -95,7 +95,7 @@ export async function generateOutfitsAutomatically(
     }
   }
 
-  const bestOutfits = findBestOutfits(
+  const bestOutfits = await findBestOutfits(
     productList,
     {
       gender,

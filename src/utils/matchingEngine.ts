@@ -186,7 +186,7 @@ export function generateOutfitCombinations(
   }
 
   const totalCore = tops.length * bottoms.length * shoes.length;
-  const EXHAUSTIVE_THRESHOLD = 3000;
+  const EXHAUSTIVE_THRESHOLD = 500;
 
   if (totalCore <= EXHAUSTIVE_THRESHOLD) {
     return generateExhaustive(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
@@ -255,7 +255,7 @@ function generateSampled(
   anchor?: AnchorItem,
   usageCounts: Record<string, number> = {}
 ): OutfitCandidate[] {
-  const MAX_SAMPLES = 15000;
+  const MAX_SAMPLES = 5000;
   const seen = new Set<string>();
   const combinations: OutfitCandidate[] = [];
   const anchorSlot = anchor?.slotType;
@@ -471,7 +471,11 @@ function computeUsagePenalty(outfit: OutfitCandidate, usageCounts: Record<string
   return Math.min(40, (maxUsage * 0.6 + avgUsage * 0.4) * USAGE_PENALTY_SCALE);
 }
 
-export function findBestOutfits(
+function yieldToMain(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+export async function findBestOutfits(
   products: Product[],
   filters: {
     gender?: string;
@@ -483,16 +487,26 @@ export function findBestOutfits(
   topN: number = 10,
   anchor?: AnchorItem,
   usageCounts: Record<string, number> = {}
-): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
+): Promise<Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>> {
   const combinations = generateOutfitCombinations(products, filters, anchor, usageCounts);
 
-  const scoredOutfits = combinations.map(outfit => ({
-    outfit,
-    matchScore: scoreOutfit(outfit, {
-      targetWarmth: filters.targetWarmth,
-      targetSeason: filters.targetSeason,
-    }),
-  }));
+  await yieldToMain();
+
+  const CHUNK = 500;
+  const scoredOutfits: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
+  for (let i = 0; i < combinations.length; i += CHUNK) {
+    const chunk = combinations.slice(i, i + CHUNK);
+    for (const outfit of chunk) {
+      scoredOutfits.push({
+        outfit,
+        matchScore: scoreOutfit(outfit, {
+          targetWarmth: filters.targetWarmth,
+          targetSeason: filters.targetSeason,
+        }),
+      });
+    }
+    await yieldToMain();
+  }
 
   const hasAnyZeroUsage = combinations.some(outfit => {
     const items = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
