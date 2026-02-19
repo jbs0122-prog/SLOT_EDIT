@@ -10,10 +10,7 @@ import {
   Bookmark,
   ChevronDown,
   ChevronUp,
-  Pin,
-  Package,
   ExternalLink,
-  Key,
 } from 'lucide-react';
 
 interface UserItem {
@@ -234,29 +231,6 @@ export default function AdminUsers() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">회원 관리</h1>
             <p className="text-gray-600">가입한 회원 목록과 활동 통계</p>
-          </div>
-          <div className="flex gap-2">
-            <a
-              href="#test-gemini"
-              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-pink-700 shadow-md"
-            >
-              <Key size={18} />
-              API 테스트
-            </a>
-            <a
-              href="#admin"
-              className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-            >
-              <Pin size={18} />
-              핀 관리
-            </a>
-            <a
-              href="#admin-products"
-              className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-            >
-              <Package size={18} />
-              제품 관리
-            </a>
           </div>
         </div>
 
