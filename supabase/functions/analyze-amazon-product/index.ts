@@ -110,23 +110,79 @@ Rules:
 
     const analyzed = JSON.parse(jsonMatch[0]);
 
+    const VALID_COLOR_FAMILIES = new Set([
+      "black", "white", "grey", "navy", "beige", "brown", "blue", "green",
+      "red", "yellow", "purple", "pink", "orange", "metallic", "multi",
+      "khaki", "cream", "ivory", "burgundy", "wine", "olive", "mustard",
+      "coral", "charcoal", "tan", "camel", "rust", "sage", "mint",
+      "lavender", "teal", "sky_blue", "denim",
+    ]);
+
+    const COLOR_FAMILY_MAP: Record<string, string> = {
+      gray: "grey",
+      multicolor: "multi",
+      "multi-color": "multi",
+      "multi color": "multi",
+      nude: "beige",
+      sand: "beige",
+      taupe: "beige",
+      "light blue": "sky_blue",
+      "sky blue": "sky_blue",
+      "dark blue": "navy",
+      "light brown": "tan",
+      maroon: "burgundy",
+      "dark red": "burgundy",
+      turquoise: "teal",
+      cyan: "teal",
+      "light green": "sage",
+      "light pink": "pink",
+      gold: "metallic",
+      silver: "metallic",
+      copper: "metallic",
+      "light gray": "grey",
+      "dark gray": "charcoal",
+      "dark grey": "charcoal",
+      off_white: "cream",
+      "off-white": "cream",
+      ecru: "ivory",
+    };
+
+    const normalizeColorFamily = (raw: string): string => {
+      if (!raw) return "black";
+      const lower = raw.toLowerCase().trim();
+      if (VALID_COLOR_FAMILIES.has(lower)) return lower;
+      if (COLOR_FAMILY_MAP[lower]) return COLOR_FAMILY_MAP[lower];
+      for (const key of Object.keys(COLOR_FAMILY_MAP)) {
+        if (lower.includes(key)) return COLOR_FAMILY_MAP[key];
+      }
+      for (const valid of VALID_COLOR_FAMILIES) {
+        if (lower.includes(valid)) return valid;
+      }
+      return "black";
+    };
+
+    const VALID_CATEGORIES = new Set(["outer", "mid", "top", "bottom", "shoes", "bag", "accessory"]);
+    const VALID_SILHOUETTES = new Set(["slim", "regular", "oversized", "relaxed", "fitted", "wide-leg", "straight", "cropped"]);
+    const VALID_PATTERNS = new Set(["solid", "stripe", "check", "plaid", "floral", "graphic", "animal", "geometric", "abstract"]);
+    const VALID_COLOR_TONES = new Set(["warm", "cool", "neutral"]);
+
     const result = {
       brand: analyzed.brand || product.brand || "",
       name: analyzed.name || product.title,
-      category: analyzed.category || "top",
+      category: VALID_CATEGORIES.has(analyzed.category) ? analyzed.category : "top",
       sub_category: analyzed.sub_category || "",
-      gender: analyzed.gender || gender || "UNISEX",
+      gender: ["MALE", "FEMALE", "UNISEX"].includes(analyzed.gender) ? analyzed.gender : (gender || "UNISEX"),
       color: analyzed.color || "",
-      color_family: analyzed.color_family || "",
-      color_tone: analyzed.color_tone || "neutral",
-      silhouette: analyzed.silhouette || "regular",
+      color_family: normalizeColorFamily(analyzed.color_family),
+      color_tone: VALID_COLOR_TONES.has(analyzed.color_tone) ? analyzed.color_tone : "neutral",
+      silhouette: VALID_SILHOUETTES.has(analyzed.silhouette) ? analyzed.silhouette : "regular",
       material: analyzed.material || "",
-      pattern: analyzed.pattern || "solid",
+      pattern: VALID_PATTERNS.has(analyzed.pattern) ? analyzed.pattern : "solid",
       vibe: Array.isArray(analyzed.vibe) ? analyzed.vibe : [vibe],
       body_type: Array.isArray(analyzed.body_type) ? analyzed.body_type : [body_type || "regular"],
       season: Array.isArray(analyzed.season) ? analyzed.season : [season || "all"],
-      formality: typeof analyzed.formality === "number" ? analyzed.formality : 3,
-      warmth: typeof analyzed.warmth === "number" ? analyzed.warmth : 3,
+      formality: typeof analyzed.formality === "number" ? Math.min(5, Math.max(1, analyzed.formality)) : 3,
+      warmth: typeof analyzed.warmth === "number" ? Math.min(5, Math.max(1, analyzed.warmth)) : 3,
       stock_status: "in_stock",
       image_url: product.image || "",
       product_link: product.url || "",
