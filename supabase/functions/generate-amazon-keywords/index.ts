@@ -38,15 +38,15 @@ const BODY_TYPE_SILHOUETTE: Record<string, {
   },
 };
 
-// Matches the 7 product.category values: outer | mid | top | bottom | shoes | bag | accessory
+// Matches the 7 product.category values + their sub_categories from ProductForm.tsx
 const CATEGORY_DEFS = [
-  { key: "outer", label: "Outer", count: 2 },
-  { key: "mid", label: "Mid-layer", count: 1 },
-  { key: "top", label: "Top", count: 2 },
-  { key: "bottom", label: "Bottom", count: 2 },
-  { key: "shoes", label: "Shoes", count: 2 },
-  { key: "bag", label: "Bag", count: 1 },
-  { key: "accessory", label: "Accessory", count: 2 },
+  { key: "outer",     label: "Outer",     count: 2, subCategories: ["puffer", "coat", "blazer", "jacket", "trench"] },
+  { key: "mid",       label: "Mid-layer", count: 1, subCategories: ["knit", "cardigan", "sweater", "vest", "fleece", "hoodie", "sweatshirt"] },
+  { key: "top",       label: "Top",       count: 2, subCategories: ["tshirt", "shirt", "polo", "turtleneck", "tank"] },
+  { key: "bottom",    label: "Bottom",    count: 2, subCategories: ["denim", "slacks", "chinos", "jogger", "cargo", "shorts"] },
+  { key: "shoes",     label: "Shoes",     count: 2, subCategories: ["sneaker", "derby", "loafer", "boot", "runner"] },
+  { key: "bag",       label: "Bag",       count: 1, subCategories: ["tote", "backpack", "crossbody", "duffle"] },
+  { key: "accessory", label: "Accessory", count: 2, subCategories: ["necktie", "belt", "cap", "scarf", "glove", "watch"] },
 ];
 
 Deno.serve(async (req: Request) => {
@@ -79,13 +79,14 @@ Deno.serve(async (req: Request) => {
     }
 
     const categoryInstructions = CATEGORY_DEFS.map(cat => {
-      if (cat.key === "outer") return `- outer (${cat.count} keywords): outerwear/coats, use fit "${bodyFit.outerFit}"`;
-      if (cat.key === "mid") return `- mid (${cat.count} keyword): mid-layer e.g. knit sweater, cardigan, hoodie, fleece — worn between top and outer`;
-      if (cat.key === "top") return `- top (${cat.count} keywords): shirts/t-shirts/blouses, use fit "${bodyFit.topFit}"`;
-      if (cat.key === "bottom") return `- bottom (${cat.count} keywords): pants/skirts/jeans, use fit "${bodyFit.bottomFit}"`;
-      if (cat.key === "shoes") return `- shoes (${cat.count} keywords): footwear matching "${vibeLabel}" vibe`;
-      if (cat.key === "bag") return `- bag (${cat.count} keyword): bag/purse matching "${vibeLabel}" vibe`;
-      return `- accessory (${cat.count} keywords): hat/watch/belt/jewelry/scarf matching "${vibeLabel}" vibe`;
+      const subs = cat.subCategories.join(", ");
+      if (cat.key === "outer") return `- outer (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}], fit "${bodyFit.outerFit}"`;
+      if (cat.key === "mid") return `- mid (${cat.count} keyword): pick 1 sub-type from [${subs}] — worn as mid-layer`;
+      if (cat.key === "top") return `- top (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}], fit "${bodyFit.topFit}"`;
+      if (cat.key === "bottom") return `- bottom (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}], fit "${bodyFit.bottomFit}"`;
+      if (cat.key === "shoes") return `- shoes (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}] matching "${vibeLabel}"`;
+      if (cat.key === "bag") return `- bag (${cat.count} keyword): pick 1 sub-type from [${subs}] matching "${vibeLabel}"`;
+      return `- accessory (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}] matching "${vibeLabel}"`;
     }).join("\n");
 
     const totalCount = CATEGORY_DEFS.reduce((s, c) => s + c.count, 0);
