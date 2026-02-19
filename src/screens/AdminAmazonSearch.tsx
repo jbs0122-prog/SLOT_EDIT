@@ -103,6 +103,8 @@ export default function AdminAmazonSearch() {
   const [season, setSeason] = useState('');
 
   const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywordCategories, setKeywordCategories] = useState<Record<string, string[]>>({});
+  const [activeKeywordCategory, setActiveKeywordCategory] = useState<string>('all');
   const [keywordsSource, setKeywordsSource] = useState<'gemini' | 'fallback' | ''>('');
   const [generatingKeywords, setGeneratingKeywords] = useState(false);
   const [keywordsError, setKeywordsError] = useState('');
@@ -134,6 +136,8 @@ export default function AdminAmazonSearch() {
     setGeneratingKeywords(true);
     setKeywordsError('');
     setKeywords([]);
+    setKeywordCategories({});
+    setActiveKeywordCategory('all');
     setKeywordsSource('');
     setProducts([]);
     setSelected(new Set());
@@ -148,6 +152,7 @@ export default function AdminAmazonSearch() {
       if (error) throw new Error(error.message);
       if (data.error) throw new Error(data.error);
       setKeywords(data.keywords || []);
+      setKeywordCategories(data.categories || {});
       setKeywordsSource(data.source || 'fallback');
     } catch (err) {
       setKeywordsError((err as Error).message);
@@ -520,24 +525,25 @@ export default function AdminAmazonSearch() {
         {step === 'results' && (
           <div className="flex-1 flex flex-col min-h-0">
             {/* Keywords Bar */}
-            <div className="border-b border-white/8 px-6 py-4">
+            <div className="border-b border-white/8">
               {generatingKeywords ? (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 px-6 py-4">
                   <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                  <span className="text-white/50 text-sm">Gemini가 키워드를 생성하고 있습니다...</span>
+                  <span className="text-white/50 text-sm">Gemini가 카테고리별 키워드를 생성하고 있습니다...</span>
                 </div>
               ) : keywordsError ? (
-                <div className="flex items-center gap-2 text-red-400 text-sm">
+                <div className="flex items-center gap-2 text-red-400 text-sm px-6 py-4">
                   <AlertCircle className="w-4 h-4" />
                   {keywordsError}
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+              ) : keywords.length > 0 ? (
+                <div>
+                  {/* Header row */}
+                  <div className="flex items-center justify-between px-6 pt-3 pb-2">
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-white/30 uppercase tracking-wider font-semibold">
-                        키워드 ({keywords.length}) — 클릭해서 검색
-                      </p>
+                      <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">
+                        AI 생성 키워드 ({keywords.length}) — 클릭해서 검색
+                      </span>
                       {keywordsSource === 'gemini' && (
                         <span className="text-[10px] bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full font-medium">
                           Gemini AI
@@ -558,8 +564,49 @@ export default function AdminAmazonSearch() {
                       재생성
                     </button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {keywords.map(kw => (
+
+                  {/* Category tabs for keywords */}
+                  {Object.keys(keywordCategories).length > 0 && (
+                    <div className="flex items-center gap-0 px-4 overflow-x-auto border-b border-white/5">
+                      {[
+                        { key: 'all', label: '전체' },
+                        { key: 'outer', label: 'Outer' },
+                        { key: 'top', label: 'Top' },
+                        { key: 'bottom', label: 'Bottom' },
+                        { key: 'shoes', label: 'Shoes' },
+                        { key: 'bag', label: 'Bag' },
+                        { key: 'accessory', label: 'Acc' },
+                      ].map(tab => {
+                        const count = tab.key === 'all'
+                          ? keywords.length
+                          : (keywordCategories[tab.key]?.length || 0);
+                        if (tab.key !== 'all' && count === 0) return null;
+                        return (
+                          <button
+                            key={tab.key}
+                            onClick={() => setActiveKeywordCategory(tab.key)}
+                            className={`flex items-center gap-1 px-3 py-2 text-[11px] font-medium whitespace-nowrap border-b-2 transition-all ${
+                              activeKeywordCategory === tab.key
+                                ? 'border-amber-400 text-amber-400'
+                                : 'border-transparent text-white/30 hover:text-white/55'
+                            }`}
+                          >
+                            <span>{tab.label}</span>
+                            <span className={`text-[9px] px-1 rounded ${
+                              activeKeywordCategory === tab.key ? 'text-amber-400/70' : 'text-white/20'
+                            }`}>{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Keyword chips */}
+                  <div className="flex flex-wrap gap-2 px-6 py-3">
+                    {(activeKeywordCategory === 'all'
+                      ? keywords
+                      : (keywordCategories[activeKeywordCategory] || [])
+                    ).map(kw => (
                       <button
                         key={kw}
                         onClick={() => !autoRunning && searchByKeyword(kw, 1)}
@@ -575,7 +622,7 @@ export default function AdminAmazonSearch() {
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Auto Mode Log */}
