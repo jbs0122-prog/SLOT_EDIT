@@ -278,14 +278,14 @@ function selectDiverse(
 ): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
   if (scored.length <= topN) return scored;
 
-  const pool = scored.slice(0, Math.min(scored.length, topN * 20));
+  const pool = scored.slice(0, Math.min(scored.length, topN * 50));
   const selected: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
   const outerCounts = new Map<string, number>();
   const paletteCounts = new Map<string, number>();
   const productCounts = new Map<string, number>();
   const maxOuterRepeat = Math.max(2, Math.ceil(topN / 3));
   const maxPaletteRepeat = Math.max(2, Math.ceil(topN / 3));
-  const maxProductRepeat = topN <= 5 ? 2 : Math.max(2, Math.ceil(topN / 4));
+  const maxProductRepeat = 1;
   const anchorOuterId = anchor?.slotType === 'outer' ? anchor.product.id : null;
   const anchorProductId = anchor?.product.id ?? null;
 
@@ -343,11 +343,28 @@ function selectDiverse(
   }
 
   if (selected.length < topN) {
+    const relaxedMax = 2;
     for (const candidate of pool) {
       if (selected.length >= topN) break;
-      if (!selected.includes(candidate)) {
+      if (selected.includes(candidate)) continue;
+      const coreIds = getCoreIds(candidate.outfit);
+      const blocked = coreIds.some(id => {
+        if (id === anchorProductId) return false;
+        return (productCounts.get(id) || 0) >= relaxedMax;
+      });
+      if (!blocked) {
         selected.push(candidate);
+        for (const id of [...getCoreIds(candidate.outfit), ...getOptionalIds(candidate.outfit)]) {
+          if (id !== anchorProductId) productCounts.set(id, (productCounts.get(id) || 0) + 1);
+        }
       }
+    }
+  }
+
+  if (selected.length < topN) {
+    for (const candidate of pool) {
+      if (selected.length >= topN) break;
+      if (!selected.includes(candidate)) selected.push(candidate);
     }
   }
 
