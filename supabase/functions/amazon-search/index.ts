@@ -55,13 +55,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const upgradeImageResolution = (url: string): string => {
+      if (!url) return url;
+      return url.replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.");
+    };
+
     const results = (serpData.organic_results || []).map((item: any) => ({
       asin: item.asin || "",
       title: item.title || "",
       brand: item.brand || "",
       price: item.extracted_price ?? item.price?.value ?? null,
       currency: item.price?.currency ?? "USD",
-      image: item.thumbnail || item.image || "",
+      image: upgradeImageResolution(item.thumbnail || item.image || ""),
       rating: item.rating ?? null,
       reviews_count: item.reviews ?? item.reviews_count ?? null,
       url: item.link || (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
