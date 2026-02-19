@@ -186,7 +186,7 @@ export async function generateOutfitCombinations(
   }
 
   const totalCore = tops.length * bottoms.length * shoes.length;
-  const EXHAUSTIVE_THRESHOLD = 3000;
+  const EXHAUSTIVE_THRESHOLD = 500;
 
   if (totalCore <= EXHAUSTIVE_THRESHOLD) {
     return await generateExhaustive(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
@@ -262,8 +262,8 @@ async function generateSampled(
   anchor?: AnchorItem,
   usageCounts: Record<string, number> = {}
 ): Promise<OutfitCandidate[]> {
-  const MAX_SAMPLES = 15000;
-  const YIELD_INTERVAL = 1000;
+  const MAX_SAMPLES = 3000;
+  const YIELD_INTERVAL = 500;
   const seen = new Set<string>();
   const combinations: OutfitCandidate[] = [];
   const anchorSlot = anchor?.slotType;
@@ -503,7 +503,7 @@ export async function findBestOutfits(
 
   await yieldToMain();
 
-  const CHUNK = 500;
+  const CHUNK = 200;
   const scoredOutfits: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
   for (let i = 0; i < combinations.length; i += CHUNK) {
     const chunk = combinations.slice(i, i + CHUNK);
@@ -516,7 +516,9 @@ export async function findBestOutfits(
         }),
       });
     }
-    await yieldToMain();
+    if (i % (CHUNK * 5) === 0) {
+      await yieldToMain();
+    }
   }
 
   const hasAnyZeroUsage = combinations.some(outfit => {
