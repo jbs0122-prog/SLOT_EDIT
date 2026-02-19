@@ -108,49 +108,64 @@ Deno.serve(async (req: Request) => {
 
     const totalCount = CATEGORY_DEFS.reduce((s, c) => s + c.subCategories.length, 0);
 
-    const categoryInstructions = CATEGORY_DEFS.map(cat => {
-      const subList = cat.subCategories.map(sub => `"${sub}"`).join(", ");
-      if (cat.key === "outer") return `- outer: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.outerFit}", "${vibeLabel}" vibe, season "${seasonLabel}"`;
-      if (cat.key === "mid")   return `- mid: generate 1 keyword per sub-type [${subList}] — mid-layer, "${vibeLabel}" vibe, season "${seasonLabel}"`;
-      if (cat.key === "top")   return `- top: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.topFit}", "${vibeLabel}" vibe, season "${seasonLabel}"`;
-      if (cat.key === "bottom") return `- bottom: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.bottomFit}", "${vibeLabel}" vibe, season "${seasonLabel}"`;
-      if (cat.key === "shoes") return `- shoes: generate 1 keyword per sub-type [${subList}] — "${vibeLabel}" vibe, season "${seasonLabel}"`;
-      if (cat.key === "bag")   return `- bag: generate 1 keyword per sub-type [${subList}] — "${vibeLabel}" vibe, season "${seasonLabel}"`;
-      return                          `- accessory: generate 1 keyword per sub-type [${subList}] — "${vibeLabel}" vibe, season "${seasonLabel}"`;
-    }).join("\n");
-
     const exampleJson = CATEGORY_DEFS.map(cat =>
       `  "${cat.key}": { ${cat.subCategories.map(s => `"${s}": "keyword"`).join(", ")} }`
     ).join(",\n");
 
-    const vibeAdjStr = vibeAdjs.slice(0, 3).join(", ");
-    const seasonFabricStr = seasonMod.fabric.slice(0, 3).join(", ") || seasonLabel;
-    const seasonKwStr = seasonMod.keywords.slice(0, 2).join(", ") || seasonLabel;
+    const vibeAdjStr = vibeAdjs.slice(0, 4).join(" / ");
+    const seasonFabricStr = seasonMod.fabric.slice(0, 3).join(" / ") || seasonLabel;
 
-    const prompt = `You are a fashion search expert for Amazon. Generate Amazon search keywords for a ${genderLabel} with ${body_type || "regular"} body type.
+    const topFit1 = bodyFit.topFit.split(",")[0].trim();
+    const bottomFit1 = bodyFit.bottomFit.split(",")[0].trim();
+    const outerFit1 = bodyFit.outerFit.split(",")[0].trim();
+    const vibe1 = vibeAdjs[0];
+    const vibe2 = vibeAdjs[1] || vibeAdjs[0];
+    const fabric1 = seasonMod.fabric[0] || seasonLabel;
+    const fabric2 = seasonMod.fabric[1] || fabric1;
 
-=== STYLE REQUIREMENTS (MANDATORY) ===
-Body type fit principle: ${bodyFit.rationale}
-Style vibe: "${vibeLabel}" → use adjectives like: ${vibeAdjStr}
-Season: "${seasonLabel}" → prefer fabrics like: ${seasonFabricStr} | season keywords: ${seasonKwStr}
+    const prompt = `You are an Amazon fashion search keyword expert. Your job is to generate highly targeted Amazon search queries.
 
-=== KEYWORD FORMAT ===
-Each keyword MUST follow this pattern:
-  "${genderLabel} [FIT] [VIBE-ADJECTIVE or SEASON-FABRIC] [item]"
+=== INPUT PARAMETERS ===
+- Gender: ${genderLabel}
+- Body type: ${body_type || "regular"} → fit rule: ${bodyFit.rationale}
+- Style vibe: "${vibeLabel}" → descriptors: ${vibeAdjStr}
+- Season: "${seasonLabel}" → fabrics: ${seasonFabricStr}
 
-Examples for "${vibeLabel}" vibe + "${seasonLabel}" season:
-- top/tshirt → "${genderLabel} ${bodyFit.topFit.split(",")[0].trim()} ${vibeAdjs[0]} tshirt"
-- outer/coat → "${genderLabel} ${bodyFit.outerFit.split(",")[0].trim()} ${seasonFabricStr.split(",")[0].trim()} coat"
-- bottom/denim → "${genderLabel} ${bodyFit.bottomFit.split(",")[0].trim()} ${vibeAdjs[1] || vibeAdjs[0]} denim jeans"
+=== MANDATORY KEYWORD FORMULA ===
+Every single keyword MUST encode ALL 5 parameters:
+  [gender] + [body-type fit] + [season fabric] + [vibe adjective] + [item]
 
-=== CATEGORIES (generate exactly 1 keyword per sub-type) ===
-${categoryInstructions}
+The formula ensures every keyword simultaneously reflects:
+1. gender (${genderLabel})
+2. body-type appropriate fit (${topFit1} / ${bottomFit1} / ${outerFit1})
+3. season-appropriate fabric (${fabric1}, ${fabric2})
+4. style vibe character (${vibe1}, ${vibe2})
+5. item sub-category
 
-=== STRICT RULES ===
-1. EVERY keyword MUST contain at least one vibe adjective (${vibeAdjStr}) OR season fabric (${seasonFabricStr})
-2. Fit MUST match body type rules
-3. Do NOT output generic keywords like "men cotton tshirt" — they must have style character
-4. Return ONLY valid JSON, no markdown, no explanation
+=== CONCRETE EXAMPLES (use as template) ===
+- top / tshirt   → "${genderLabel} ${topFit1} ${fabric1} ${vibe1} tshirt"
+- top / shirt    → "${genderLabel} ${topFit1} ${fabric1} ${vibe2} shirt"
+- outer / coat   → "${genderLabel} ${outerFit1} ${fabric1} ${vibe1} coat"
+- outer / puffer → "${genderLabel} ${outerFit1} ${fabric2} ${vibe2} puffer jacket"
+- bottom / denim → "${genderLabel} ${bottomFit1} ${vibe1} denim jeans"
+- bottom / slacks → "${genderLabel} ${bottomFit1} ${fabric1} ${vibe2} slacks"
+- shoes / sneaker → "${genderLabel} ${vibe1} ${fabric1} sneaker"
+- bag / tote     → "${genderLabel} ${vibe1} ${fabric1} tote bag"
+
+=== CATEGORIES — generate exactly 1 keyword per sub-type ===
+${CATEGORY_DEFS.map(cat => {
+  const subList = cat.subCategories.map(s => `"${s}"`).join(", ");
+  const fit = cat.key === "outer" ? outerFit1 : cat.key === "bottom" ? bottomFit1 : topFit1;
+  return `- ${cat.key} [${subList}]: each keyword = "${genderLabel} ${fit} ${fabric1} ${vibe1} [item]" pattern`;
+}).join("\n")}
+
+=== NON-NEGOTIABLE RULES ===
+1. keyword length: 4–6 words only (Amazon search best practice)
+2. must include body-type fit word (${topFit1}, ${bottomFit1}, or ${outerFit1})
+3. must include at least one season fabric (${seasonFabricStr})
+4. must include at least one vibe adjective (${vibeAdjStr})
+5. NEVER output bland generic keywords — every keyword must have style identity
+6. Return ONLY valid JSON, no markdown, no explanation, no trailing commas
 
 {
 ${exampleJson}
