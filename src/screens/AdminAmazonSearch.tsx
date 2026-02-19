@@ -6,6 +6,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 interface AmazonProduct {
   asin: string;
   title: string;
@@ -146,10 +149,17 @@ export default function AdminAmazonSearch() {
     setStep('results');
 
     try {
-      const { data, error } = await supabase.functions.invoke('generate-amazon-keywords', {
-        body: { gender, body_type: bodyType, vibe, season },
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-amazon-keywords`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ gender, body_type: bodyType, vibe, season }),
       });
-      if (error) throw new Error(error.message);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       if (data.error) throw new Error(data.error);
       setKeywords(data.keywords || []);
       setKeywordCategories(data.categories || {});
