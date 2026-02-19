@@ -262,26 +262,64 @@ function selectDiverse(
   const selected: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
   const outerCounts = new Map<string, number>();
   const paletteCounts = new Map<string, number>();
+  const productCounts = new Map<string, number>();
   const maxOuterRepeat = Math.max(2, Math.ceil(topN / 3));
   const maxPaletteRepeat = Math.max(2, Math.ceil(topN / 3));
+  const maxProductRepeat = topN <= 5 ? 2 : Math.max(2, Math.ceil(topN / 4));
   const anchorOuterId = anchor?.slotType === 'outer' ? anchor.product.id : null;
+  const anchorProductId = anchor?.product.id ?? null;
 
-  for (const candidate of pool) {
-    if (selected.length >= topN) break;
+  const getCoreIds = (outfit: OutfitCandidate): string[] => [
+    outfit.top.id,
+    outfit.bottom.id,
+    outfit.shoes.id,
+  ];
 
-    const outerId = candidate.outfit.outer?.id || 'none';
-    if (outerId !== anchorOuterId) {
-      const currentOuterCount = outerCounts.get(outerId) || 0;
-      if (currentOuterCount >= maxOuterRepeat) continue;
+  const getOptionalIds = (outfit: OutfitCandidate): string[] =>
+    [outfit.outer, outfit.mid, outfit.bag, outfit.accessory, outfit.accessory_2]
+      .filter((p): p is Product => !!p)
+      .map(p => p.id);
+
+  const trySelect = (enforceProductLimit: boolean) => {
+    for (const candidate of pool) {
+      if (selected.length >= topN) break;
+      if (selected.includes(candidate)) continue;
+
+      const outerId = candidate.outfit.outer?.id || 'none';
+      if (outerId !== anchorOuterId) {
+        const currentOuterCount = outerCounts.get(outerId) || 0;
+        if (currentOuterCount >= maxOuterRepeat) continue;
+      }
+
+      const paletteKey = getOutfitColorKey(candidate.outfit);
+      const currentPaletteCount = paletteCounts.get(paletteKey) || 0;
+      if (!anchor && currentPaletteCount >= maxPaletteRepeat) continue;
+
+      if (enforceProductLimit) {
+        const coreIds = getCoreIds(candidate.outfit);
+        const blocked = coreIds.some(id => {
+          if (id === anchorProductId) return false;
+          return (productCounts.get(id) || 0) >= maxProductRepeat;
+        });
+        if (blocked) continue;
+      }
+
+      selected.push(candidate);
+      outerCounts.set(outerId, (outerCounts.get(outerId) || 0) + 1);
+      paletteCounts.set(paletteKey, currentPaletteCount + 1);
+
+      for (const id of [...getCoreIds(candidate.outfit), ...getOptionalIds(candidate.outfit)]) {
+        if (id !== anchorProductId) {
+          productCounts.set(id, (productCounts.get(id) || 0) + 1);
+        }
+      }
     }
+  };
 
-    const paletteKey = getOutfitColorKey(candidate.outfit);
-    const currentPaletteCount = paletteCounts.get(paletteKey) || 0;
-    if (!anchor && currentPaletteCount >= maxPaletteRepeat) continue;
+  trySelect(true);
 
-    selected.push(candidate);
-    outerCounts.set(outerId, (outerCounts.get(outerId) || 0) + 1);
-    paletteCounts.set(paletteKey, currentPaletteCount + 1);
+  if (selected.length < topN) {
+    trySelect(false);
   }
 
   if (selected.length < topN) {
