@@ -6,12 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// SILHOUETTE_BALANCE from matchingData.ts:
-// oversized/relaxed top → slim/fitted/straight/tapered bottom (and vice versa)
-// slim top → wide/relaxed/oversized bottom
-// fitted top → wide/relaxed/oversized bottom
-// This creates visual balance. slim body type BENEFITS from relaxed/oversized fit
-// to add volume. plus-size BENEFITS from structured/straight to streamline.
 const BODY_TYPE_SILHOUETTE: Record<string, {
   topFit: string;
   bottomFit: string;
@@ -38,15 +32,15 @@ const BODY_TYPE_SILHOUETTE: Record<string, {
   },
 };
 
-// Matches the 7 product.category values + their sub_categories from ProductForm.tsx
+// Each sub-category gets exactly 1 keyword — total = sum of all sub-categories per category
 const CATEGORY_DEFS = [
-  { key: "outer",     label: "Outer",     count: 2, subCategories: ["puffer", "coat", "blazer", "jacket", "trench"] },
-  { key: "mid",       label: "Mid-layer", count: 1, subCategories: ["knit", "cardigan", "sweater", "vest", "fleece", "hoodie", "sweatshirt"] },
-  { key: "top",       label: "Top",       count: 2, subCategories: ["tshirt", "shirt", "polo", "turtleneck", "tank"] },
-  { key: "bottom",    label: "Bottom",    count: 2, subCategories: ["denim", "slacks", "chinos", "jogger", "cargo", "shorts"] },
-  { key: "shoes",     label: "Shoes",     count: 2, subCategories: ["sneaker", "derby", "loafer", "boot", "runner"] },
-  { key: "bag",       label: "Bag",       count: 1, subCategories: ["tote", "backpack", "crossbody", "duffle"] },
-  { key: "accessory", label: "Accessory", count: 2, subCategories: ["necktie", "belt", "cap", "scarf", "glove", "watch"] },
+  { key: "outer",     label: "Outer",     subCategories: ["puffer", "coat", "blazer", "jacket", "trench"] },
+  { key: "mid",       label: "Mid-layer", subCategories: ["knit", "cardigan", "sweater", "vest", "fleece", "hoodie", "sweatshirt"] },
+  { key: "top",       label: "Top",       subCategories: ["tshirt", "shirt", "polo", "turtleneck", "tank"] },
+  { key: "bottom",    label: "Bottom",    subCategories: ["denim", "slacks", "chinos", "jogger", "cargo", "shorts"] },
+  { key: "shoes",     label: "Shoes",     subCategories: ["sneaker", "derby", "loafer", "boot", "runner"] },
+  { key: "bag",       label: "Bag",       subCategories: ["tote", "backpack", "crossbody", "duffle"] },
+  { key: "accessory", label: "Accessory", subCategories: ["necktie", "belt", "cap", "scarf", "glove", "watch"] },
 ];
 
 Deno.serve(async (req: Request) => {
@@ -78,46 +72,42 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const totalCount = CATEGORY_DEFS.reduce((s, c) => s + c.subCategories.length, 0);
+
     const categoryInstructions = CATEGORY_DEFS.map(cat => {
-      const subs = cat.subCategories.join(", ");
-      if (cat.key === "outer") return `- outer (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}], fit "${bodyFit.outerFit}"`;
-      if (cat.key === "mid") return `- mid (${cat.count} keyword): pick 1 sub-type from [${subs}] — worn as mid-layer`;
-      if (cat.key === "top") return `- top (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}], fit "${bodyFit.topFit}"`;
-      if (cat.key === "bottom") return `- bottom (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}], fit "${bodyFit.bottomFit}"`;
-      if (cat.key === "shoes") return `- shoes (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}] matching "${vibeLabel}"`;
-      if (cat.key === "bag") return `- bag (${cat.count} keyword): pick 1 sub-type from [${subs}] matching "${vibeLabel}"`;
-      return `- accessory (${cat.count} keywords): pick ${cat.count} sub-types from [${subs}] matching "${vibeLabel}"`;
+      const subList = cat.subCategories.map(sub => `"${sub}"`).join(", ");
+      if (cat.key === "outer") return `- outer: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.outerFit}", season "${seasonLabel}"`;
+      if (cat.key === "mid")   return `- mid: generate 1 keyword per sub-type [${subList}] — mid-layer worn between top and outer`;
+      if (cat.key === "top")   return `- top: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.topFit}"`;
+      if (cat.key === "bottom") return `- bottom: generate 1 keyword per sub-type [${subList}] — fit "${bodyFit.bottomFit}"`;
+      if (cat.key === "shoes") return `- shoes: generate 1 keyword per sub-type [${subList}] — matching "${vibeLabel}" vibe`;
+      if (cat.key === "bag")   return `- bag: generate 1 keyword per sub-type [${subList}] — matching "${vibeLabel}" vibe`;
+      return                          `- accessory: generate 1 keyword per sub-type [${subList}] — matching "${vibeLabel}" vibe`;
     }).join("\n");
 
-    const totalCount = CATEGORY_DEFS.reduce((s, c) => s + c.count, 0);
+    const exampleJson = CATEGORY_DEFS.map(cat =>
+      `  "${cat.key}": { ${cat.subCategories.map(s => `"${s}": "keyword"`).join(", ")} }`
+    ).join(",\n");
 
-    const prompt = `You are a fashion search expert for Amazon. Generate search keywords for a ${genderLabel} with ${body_type || "regular"} body type.
+    const prompt = `You are a fashion search expert for Amazon. Generate Amazon search keywords for a ${genderLabel} with ${body_type || "regular"} body type.
 
-Body type styling principle: ${bodyFit.rationale}
-
+Body type principle: ${bodyFit.rationale}
 Style vibe: ${vibeLabel}
 Season: ${seasonLabel}
 
-Generate exactly ${totalCount} keywords organized by these 7 categories:
+Generate exactly ${totalCount} keywords — 1 keyword per sub-type, covering ALL sub-types listed below:
 ${categoryInstructions}
 
-IMPORTANT silhouette rules (body type "${body_type || "regular"}"):
-- outer/top fit: ${bodyFit.outerFit} / ${bodyFit.topFit}
-- bottom fit: ${bodyFit.bottomFit}
-- mid-layer: knit, cardigan, or hoodie that layers well
+Rules:
+- Each keyword: "${genderLabel} [fit/style descriptor] [sub-type item name]"
+- e.g. "men relaxed wool coat", "men oversized graphic tshirt", "men wide-leg cargo pants"
+- Fit descriptors MUST match body type silhouette rules above
+- Keywords must reflect the "${vibeLabel}" style vibe and "${seasonLabel}" season
 
-Return ONLY a valid JSON object with exactly these 7 keys, no markdown, no explanation:
+Return ONLY a valid JSON object with this exact structure, no markdown, no explanation:
 {
-  "outer": ["keyword1", "keyword2"],
-  "mid": ["keyword1"],
-  "top": ["keyword1", "keyword2"],
-  "bottom": ["keyword1", "keyword2"],
-  "shoes": ["keyword1", "keyword2"],
-  "bag": ["keyword1"],
-  "accessory": ["keyword1", "keyword2"]
-}
-
-Each keyword format: ${genderLabel} + style/fit descriptor + item name`;
+${exampleJson}
+}`;
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -126,7 +116,7 @@ Each keyword format: ${genderLabel} + style/fit descriptor + item name`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.6, maxOutputTokens: 800 },
+          generationConfig: { temperature: 0.6, maxOutputTokens: 2000 },
         }),
       }
     );
@@ -151,13 +141,20 @@ Each keyword format: ${genderLabel} + style/fit descriptor + item name`;
       );
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as Record<string, string[]>;
+    // parsed shape: { outer: { puffer: "kw", coat: "kw", ... }, top: { ... }, ... }
+    const parsed = JSON.parse(jsonMatch[0]) as Record<string, Record<string, string> | string[]>;
 
     const categories: Record<string, string[]> = {};
     const allKeywords: string[] = [];
 
     for (const cat of CATEGORY_DEFS) {
-      const kws = Array.isArray(parsed[cat.key]) ? parsed[cat.key] : [];
+      const catData = parsed[cat.key];
+      let kws: string[] = [];
+      if (catData && !Array.isArray(catData) && typeof catData === "object") {
+        kws = cat.subCategories.map(sub => (catData as Record<string, string>)[sub]).filter(Boolean);
+      } else if (Array.isArray(catData)) {
+        kws = catData.filter(Boolean);
+      }
       categories[cat.key] = kws;
       allKeywords.push(...kws);
     }
@@ -184,88 +181,66 @@ function getFallbackKeywords(
   const bodyFit = BODY_TYPE_SILHOUETTE[body_type] || BODY_TYPE_SILHOUETTE["regular"];
   const topFit = bodyFit.topFit.split(",")[0].trim();
   const bottomFit = bodyFit.bottomFit.split(",")[0].trim();
-
   const outerFit = bodyFit.outerFit.split(",")[0].trim();
 
-  const vibeItems: Record<string, { outer: string[]; mid: string[]; top: string[]; bottom: string[]; shoes: string[]; bag: string[]; accessory: string[] }> = {
-    ELEVATED_COOL: {
-      outer: [`${g} ${outerFit} wool overcoat`, `${g} tailored blazer`],
-      mid: [`${g} merino wool crewneck sweater`],
-      top: [`${g} ${topFit} turtleneck shirt`, `${g} ${topFit} cotton dress shirt`],
-      bottom: [`${g} ${bottomFit} chino pants`, `${g} ${bottomFit} tailored trousers`],
-      shoes: [`${g} leather chelsea boots`, `${g} suede loafers`],
-      bag: [`${g} leather crossbody bag`],
-      accessory: [`${g} silver watch`, `${g} minimalist leather belt`],
-    },
-    EFFORTLESS_NATURAL: {
-      outer: [`${g} ${outerFit} linen jacket`, `${g} ${outerFit} cotton field jacket`],
-      mid: [`${g} lightweight knit cardigan`],
-      top: [`${g} ${topFit} linen shirt`, `${g} ${topFit} organic cotton tee`],
-      bottom: [`${g} ${bottomFit} linen pants`, `${g} ${bottomFit} chinos`],
-      shoes: [`${g} canvas sneakers`, `${g} leather sandals`],
-      bag: [`${g} canvas tote bag`],
-      accessory: [`${g} woven belt`, `${g} straw hat`],
-    },
-    ARTISTIC_MINIMAL: {
-      outer: [`${g} ${outerFit} structured wool coat`, `${g} ${outerFit} minimalist blazer`],
-      mid: [`${g} fine knit long cardigan`],
-      top: [`${g} ${topFit} boxy t-shirt`, `${g} ${topFit} monochrome shirt`],
-      bottom: [`${g} ${bottomFit} wide leg pants black`, `${g} ${bottomFit} pleated trousers`],
-      shoes: [`${g} minimalist white sneakers`, `${g} slip-on loafers`],
-      bag: [`${g} structured minimal tote bag`],
-      accessory: [`${g} geometric earrings`, `${g} simple silver necklace`],
-    },
-    RETRO_LUXE: {
-      outer: [`${g} ${outerFit} corduroy jacket`, `${g} ${outerFit} heritage wool coat`],
-      mid: [`${g} ribbed knit polo sweater`],
-      top: [`${g} ${topFit} retro polo shirt`, `${g} ${topFit} silk shirt`],
-      bottom: [`${g} ${bottomFit} plaid trousers`, `${g} ${bottomFit} corduroy pants`],
-      shoes: [`${g} leather penny loafers`, `${g} suede chelsea boots`],
-      bag: [`${g} vintage leather bag`],
-      accessory: [`${g} retro watch`, `${g} vintage silk scarf`],
-    },
-    SPORT_MODERN: {
-      outer: [`${g} ${outerFit} windbreaker jacket`, `${g} ${outerFit} technical shell jacket`],
-      mid: [`${g} zip-up fleece hoodie`],
-      top: [`${g} ${topFit} performance t-shirt`, `${g} ${topFit} mesh polo`],
-      bottom: [`${g} ${bottomFit} athletic joggers`, `${g} ${bottomFit} track pants`],
-      shoes: [`${g} running sneakers`, `${g} training shoes`],
-      bag: [`${g} sport crossbody bag`],
-      accessory: [`${g} sport watch`, `${g} athletic cap`],
-    },
-    CREATIVE_LAYERED: {
-      outer: [`${g} ${outerFit} oversized bomber jacket`, `${g} ${outerFit} patchwork jacket`],
-      mid: [`${g} colorblock zip-up hoodie`],
-      top: [`${g} ${topFit} graphic tee`, `${g} ${topFit} printed shirt`],
-      bottom: [`${g} ${bottomFit} cargo pants`, `${g} ${bottomFit} wide leg jeans`],
-      shoes: [`${g} chunky sneakers`, `${g} platform boots`],
-      bag: [`${g} streetwear crossbody bag`],
-      accessory: [`${g} bucket hat`, `${g} layered chain necklace`],
-    },
-  };
-
-  const items = vibeItems[vibe] || vibeItems["ELEVATED_COOL"];
-
-  if (season === "winter") {
-    items.outer[0] = `${g} ${outerFit} warm winter coat`;
-    items.mid[0] = `${g} thermal knit sweater`;
-  } else if (season === "summer") {
-    items.top[0] = `${g} ${topFit} lightweight summer shirt`;
-    items.bottom[0] = `${g} ${bottomFit} linen summer pants`;
-    items.mid[0] = `${g} lightweight open-front cardigan`;
-  }
+  const isWinter = season === "winter";
+  const isSummer = season === "summer";
 
   const categories: Record<string, string[]> = {
-    outer: items.outer,
-    mid: items.mid,
-    top: items.top,
-    bottom: items.bottom,
-    shoes: items.shoes,
-    bag: items.bag,
-    accessory: items.accessory,
+    outer: [
+      `${g} ${outerFit} puffer jacket`,
+      `${g} ${outerFit} ${isWinter ? "warm wool" : "classic"} coat`,
+      `${g} ${outerFit} tailored blazer`,
+      `${g} ${outerFit} casual jacket`,
+      `${g} ${outerFit} trench coat`,
+    ],
+    mid: [
+      `${g} ribbed knit sweater`,
+      `${g} open-front cardigan`,
+      `${g} crewneck sweater`,
+      `${g} knit vest`,
+      `${g} ${isWinter ? "sherpa" : "lightweight"} fleece`,
+      `${g} ${outerFit} hoodie`,
+      `${g} pullover sweatshirt`,
+    ],
+    top: [
+      `${g} ${topFit} ${isSummer ? "lightweight" : "cotton"} tshirt`,
+      `${g} ${topFit} ${isSummer ? "linen" : "oxford"} shirt`,
+      `${g} ${topFit} polo shirt`,
+      `${g} ${topFit} turtleneck`,
+      `${g} ${isSummer ? "sleeveless" : topFit} tank top`,
+    ],
+    bottom: [
+      `${g} ${bottomFit} ${isSummer ? "light wash" : "dark wash"} denim jeans`,
+      `${g} ${bottomFit} tailored slacks`,
+      `${g} ${bottomFit} chino pants`,
+      `${g} ${bottomFit} jogger pants`,
+      `${g} ${bottomFit} cargo pants`,
+      `${g} ${isSummer ? "linen" : bottomFit} shorts`,
+    ],
+    shoes: [
+      `${g} casual sneakers`,
+      `${g} leather derby shoes`,
+      `${g} slip-on loafers`,
+      `${g} ${isWinter ? "waterproof" : "leather"} boots`,
+      `${g} running shoes`,
+    ],
+    bag: [
+      `${g} canvas tote bag`,
+      `${g} casual backpack`,
+      `${g} leather crossbody bag`,
+      `${g} duffle bag`,
+    ],
+    accessory: [
+      `${g} woven necktie`,
+      `${g} leather belt`,
+      `${g} ${isSummer ? "baseball" : "wool"} cap`,
+      `${g} ${isWinter ? "cashmere" : "light"} scarf`,
+      `${g} ${isWinter ? "knit" : "leather"} gloves`,
+      `${g} classic watch`,
+    ],
   };
 
-  const keywords = [...items.outer, ...items.mid, ...items.top, ...items.bottom, ...items.shoes, ...items.bag, ...items.accessory];
-
-  return { keywords: keywords.slice(0, 12), categories };
+  const keywords = Object.values(categories).flat();
+  return { keywords, categories };
 }
