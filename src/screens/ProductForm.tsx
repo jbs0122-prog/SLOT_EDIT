@@ -1,9 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { uploadProductImage, validateImageFile } from '../utils/imageUpload';
+import { uploadProductImage, uploadProductBlob, validateImageFile } from '../utils/imageUpload';
 import { analyzeFashionImage } from '../utils/fashionAnalyzer';
-import { X, Save, Upload, Loader2, Sparkles, Link2, CheckCircle2, AlertCircle, Scissors } from 'lucide-react';
+import { detectItemsInPhoto, extractProductImage } from '../utils/productExtractor';
+import { compressImageToTarget } from '../utils/imageCompression';
+import { X, Save, Upload, Loader2, Sparkles, Link2, CheckCircle2, AlertCircle, Scissors, ScanSearch, Image as ImageIcon, ArrowLeft, Check } from 'lucide-react';
+import type { DetectedItem } from '../utils/productExtractor';
+
+type ExtractionStatus = 'idle' | 'extracting' | 'done' | 'error';
+
+interface ExtractedItemState extends DetectedItem {
+  status: ExtractionStatus;
+  extractedImageUrl?: string;
+  error?: string;
+}
+
+const SLOT_LABELS: Record<string, string> = {
+  outer: '아우터', mid: '미드레이어', top: '상의', bottom: '하의',
+  shoes: '신발', bag: '가방', accessory: '액세서리',
+};
+
+const SLOT_COLORS: Record<string, string> = {
+  outer: 'bg-amber-100 text-amber-800 border-amber-300',
+  mid: 'bg-teal-100 text-teal-800 border-teal-300',
+  top: 'bg-blue-100 text-blue-800 border-blue-300',
+  bottom: 'bg-slate-100 text-slate-800 border-slate-300',
+  shoes: 'bg-orange-100 text-orange-800 border-orange-300',
+  bag: 'bg-rose-100 text-rose-800 border-rose-300',
+  accessory: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+};
 
 interface ProductFormProps {
   product?: Product | null;
@@ -183,9 +209,17 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [removingBg, setRemovingBg] = useState(false);
   const [nobgUrl, setNobgUrl] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [showExtractModal, setShowExtractModal] = useState(false);
+  const [extractSource, setExtractSource] = useState('');
+  const [extractUrlInput, setExtractUrlInput] = useState('');
+  const [extractUploading, setExtractUploading] = useState(false);
+  const [extractDetecting, setExtractDetecting] = useState(false);
+  const [extractItems, setExtractItems] = useState<ExtractedItemState[]>([]);
+  const [extractPhase, setExtractPhase] = useState<'upload' | 'detected' | 'extracting'>('upload');
+  const extractFileRef = useRef<HTMLInputElement>(null);
 
   const [urlInput, setUrlInput] = useState('');
   const [scrapeStatus, setScrapeStatus] = useState<ScrapeStatus>('idle');
@@ -443,38 +477,89 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     }
   };
 
-  const handleRemoveBg = async () => {
-    if (!formData.image_url.trim()) return;
+  const openExtractModal = () => {
+    setExtractSource('');
+    setExtractUrlInput('');
+    setExtractItems([]);
+    setExtractPhase('upload');
+    setShowExtractModal(true);
+  };
 
-    setRemovingBg(true);
+  const handleExtractFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validationError = validateImageFile(file);
+    if (validationError) { alert(validationError); return; }
+    setExtractUploading(true);
+    const result = await uploadProductImage(file);
+    if (result.success && result.url) {
+      setExtractSource(result.url);
+    } else {
+      alert(result.error || '업로드 실패');
+    }
+    setExtractUploading(false);
+    e.target.value = '';
+  };
+
+  const handleExtractDetect = async () => {
+    if (!extractSource) return;
+    setExtractDetecting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error('로그인이 필요합니다');
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${anonKey}`,
-        },
-        body: JSON.stringify({ imageUrl: formData.image_url }),
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || '누끼 추출 실패');
-      }
-
-      const resultUrl = data.url || data.image;
-      setNobgUrl(resultUrl);
+      const detected = await detectItemsInPhoto(extractSource);
+      setExtractItems(detected.map(item => ({ ...item, status: 'idle' as ExtractionStatus })));
+      setExtractPhase('detected');
     } catch (error) {
-      alert('누끼 추출 실패: ' + (error as Error).message);
+      alert('아이템 감지 실패: ' + (error as Error).message);
     } finally {
-      setRemovingBg(false);
+      setExtractDetecting(false);
+    }
+  };
+
+  const handleExtractSingle = async (index: number) => {
+    const item = extractItems[index];
+    setExtractItems(prev => prev.map((it, i) => i === index ? { ...it, status: 'extracting' } : it));
+    try {
+      const result = await extractProductImage(extractSource, item.slot, item.label);
+      setExtractItems(prev => prev.map((it, i) =>
+        i === index ? { ...it, status: 'done', extractedImageUrl: result.imageUrl } : it
+      ));
+    } catch (error) {
+      setExtractItems(prev => prev.map((it, i) =>
+        i === index ? { ...it, status: 'error', error: (error as Error).message } : it
+      ));
+    }
+  };
+
+  const handleExtractAll = async () => {
+    setExtractPhase('extracting');
+    for (let i = 0; i < extractItems.length; i++) {
+      if (extractItems[i].status === 'done') continue;
+      await handleExtractSingle(i);
+    }
+  };
+
+  const handleApplyExtracted = async (index: number) => {
+    const item = extractItems[index];
+    if (!item.extractedImageUrl) return;
+
+    try {
+      const compressed = await compressImageToTarget(item.extractedImageUrl, 500, 2000, 2000, 200);
+      const mimeToExt: Record<string, string> = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpeg' };
+      const ext = mimeToExt[compressed.blob.type] || 'webp';
+      const uploadResult = await uploadProductBlob(compressed.blob, ext);
+      if (!uploadResult.success || !uploadResult.url) throw new Error(uploadResult.error || '업로드 실패');
+
+      handleChange('image_url', uploadResult.url);
+
+      try {
+        const analysis = await analyzeFashionImage(uploadResult.url);
+        applyAnalysisToForm(analysis as any);
+      } catch {}
+
+      setNobgUrl(item.extractedImageUrl);
+      setShowExtractModal(false);
+    } catch (error) {
+      alert('적용 실패: ' + (error as Error).message);
     }
   };
 
@@ -516,6 +601,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
@@ -953,21 +1039,12 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     </button>
                     <button
                       type="button"
-                      onClick={handleRemoveBg}
-                      disabled={removingBg || analyzing || uploading}
+                      onClick={openExtractModal}
+                      disabled={analyzing || uploading}
                       className="px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium shadow-md transition-all"
                     >
-                      {removingBg ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin" />
-                          <span>추출 중...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Scissors size={14} />
-                          <span>누끼 추출</span>
-                        </>
-                      )}
+                      <Scissors size={14} />
+                      <span>누끼 추출</span>
                     </button>
                   </div>
                 </div>
@@ -1005,12 +1082,6 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     </div>
                   )}
 
-                  {removingBg && (
-                    <div className="w-40 h-40 rounded-lg border-2 border-emerald-200 border-dashed flex flex-col items-center justify-center gap-2 bg-emerald-50">
-                      <Loader2 size={24} className="animate-spin text-emerald-500" />
-                      <p className="text-xs text-emerald-600">배경 제거 중...</p>
-                    </div>
-                  )}
                 </div>
 
                 <p className="text-xs text-gray-500 mt-2">
@@ -1065,5 +1136,209 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         </form>
       </div>
     </div>
+
+    {showExtractModal && (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-xl flex items-center justify-center">
+                <Scissors size={18} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">제품 누끼 추출</h2>
+                <p className="text-xs text-gray-500">모델 착용 사진에서 개별 제품을 감지하고 누끼컷으로 추출합니다</p>
+              </div>
+            </div>
+            <button onClick={() => setShowExtractModal(false)} className="text-gray-400 hover:text-gray-600">
+              <X size={22} />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {extractPhase === 'upload' && (
+              <>
+                <div
+                  onClick={() => extractFileRef.current?.click()}
+                  className="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 transition-all group"
+                >
+                  <input
+                    ref={extractFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleExtractFileUpload}
+                    disabled={extractUploading}
+                    className="hidden"
+                  />
+                  {extractUploading ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 size={36} className="text-emerald-600 animate-spin" />
+                      <span className="text-emerald-600 font-medium">업로드 중...</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
+                        <ImageIcon size={24} className="text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                      </div>
+                      <div>
+                        <p className="text-gray-700 font-medium">모델 착용 사진 업로드</p>
+                        <p className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP (최대 5MB)</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+                  <div className="relative flex justify-center"><span className="bg-white px-3 text-xs text-gray-400">또는 URL 입력</span></div>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={extractUrlInput}
+                    onChange={e => setExtractUrlInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (setExtractSource(extractUrlInput.trim()))}
+                    placeholder="https://example.com/model-photo.jpg"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExtractSource(extractUrlInput.trim())}
+                    disabled={!extractUrlInput.trim()}
+                    className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-40 text-sm font-medium"
+                  >
+                    확인
+                  </button>
+                </div>
+
+                {extractSource && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-700">업로드된 이미지</p>
+                      <button type="button" onClick={() => setExtractSource('')} className="text-xs text-gray-500 hover:text-gray-700">다시 선택</button>
+                    </div>
+                    <div className="flex justify-center">
+                      <img src={extractSource} alt="source" className="rounded-xl max-h-64 object-contain border border-gray-200" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExtractDetect}
+                      disabled={extractDetecting}
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 rounded-xl hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 font-medium transition-all"
+                    >
+                      {extractDetecting ? (
+                        <><Loader2 size={18} className="animate-spin" />AI가 아이템을 감지하는 중...</>
+                      ) : (
+                        <><ScanSearch size={18} />AI 아이템 감지 시작</>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {(extractPhase === 'detected' || extractPhase === 'extracting') && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setExtractPhase('upload'); setExtractItems([]); }}
+                      className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      <ArrowLeft size={14} />
+                      처음으로
+                    </button>
+                    <span className="text-sm font-semibold text-gray-900">감지된 아이템 ({extractItems.length}개)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExtractAll}
+                    disabled={extractItems.filter(i => i.status === 'extracting').length > 0 || extractItems.every(i => i.status === 'done')}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 disabled:opacity-40 text-sm font-medium transition-all"
+                  >
+                    {extractItems.every(i => i.status === 'done') ? (
+                      <><Check size={14} />전체 완료</>
+                    ) : (
+                      <><Scissors size={14} />전체 누끼 추출</>
+                    )}
+                  </button>
+                </div>
+
+                {extractItems.map((item, index) => (
+                  <div key={`${item.slot}-${index}`} className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${SLOT_COLORS[item.slot] || 'bg-gray-100 text-gray-700 border-gray-300'}`}>
+                            {SLOT_LABELS[item.slot] || item.slot}
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{item.label}</p>
+                            <p className="text-xs text-gray-500">{item.description}</p>
+                          </div>
+                        </div>
+                        {item.status === 'idle' && (
+                          <button type="button" onClick={() => handleExtractSingle(index)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-700 transition-colors">
+                            <Scissors size={12} />누끼 추출
+                          </button>
+                        )}
+                        {item.status === 'extracting' && (
+                          <div className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs">
+                            <Loader2 size={12} className="animate-spin" />추출 중...
+                          </div>
+                        )}
+                        {item.status === 'error' && (
+                          <button type="button" onClick={() => handleExtractSingle(index)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-xs hover:bg-red-100 transition-colors">
+                            <AlertCircle size={12} />재시도
+                          </button>
+                        )}
+                      </div>
+
+                      {item.status === 'extracting' && (
+                        <div className="bg-blue-50 rounded-lg p-5 flex flex-col items-center gap-2">
+                          <Loader2 size={28} className="text-blue-600 animate-spin" />
+                          <p className="text-xs text-blue-700 font-medium">AI가 제품을 추출하는 중...</p>
+                        </div>
+                      )}
+
+                      {item.status === 'error' && (
+                        <div className="bg-red-50 rounded-lg p-3 flex items-center gap-2">
+                          <AlertCircle size={16} className="text-red-500 shrink-0" />
+                          <p className="text-xs text-red-700">{item.error}</p>
+                        </div>
+                      )}
+
+                      {item.status === 'done' && item.extractedImageUrl && (
+                        <div className="space-y-3">
+                          <div
+                            className="rounded-lg overflow-hidden flex justify-center p-3"
+                            style={{ backgroundImage: 'repeating-conic-gradient(#e5e7eb 0% 25%, white 0% 50%) 0 0 / 16px 16px' }}
+                          >
+                            <img src={item.extractedImageUrl} alt={item.label} className="max-h-52 object-contain" />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyExtracted(index)}
+                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-2.5 rounded-lg text-sm font-medium hover:from-emerald-700 hover:to-teal-700 transition-all"
+                          >
+                            <CheckCircle2 size={15} />
+                            이 이미지를 제품에 적용
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
