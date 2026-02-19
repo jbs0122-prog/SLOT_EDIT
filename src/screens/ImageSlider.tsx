@@ -36,7 +36,12 @@ export default function ImageSlider({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [hoveredPin, setHoveredPin] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleImageLoad = (url: string) => {
+    setLoadedImages(prev => new Set(prev).add(url));
+  };
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -123,12 +128,19 @@ export default function ImageSlider({
     </div>
   );
 
+  const skeletonLoader = (
+    <div className="absolute inset-0 z-20 bg-gray-100 animate-pulse">
+      <div className="w-full h-full bg-gradient-to-br from-gray-100 via-gray-200 to-gray-100" />
+    </div>
+  );
+
   if (images.length === 0) {
     return null;
   }
 
   if (images.length === 1) {
     const pins = getPinsForImage(images[0].label);
+    const isLoaded = loadedImages.has(images[0].url);
 
     return (
       <div>
@@ -138,23 +150,12 @@ export default function ImageSlider({
         onTouchMove={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
       >
-        <div className="absolute inset-0 flex items-center justify-center p-4">
-          <div className="text-center max-w-full">
-            <p className="text-xs text-gray-500 mb-2">{images[0].label}</p>
-            <p className="text-xs text-gray-400 break-all font-mono">{images[0].url || 'No URL'}</p>
-          </div>
-        </div>
+        {!isLoaded && skeletonLoader}
         <img
           src={images[0].url}
           alt={alt}
-          className="w-full h-full object-cover relative z-10"
-          onLoad={(e) => {
-            const parent = e.currentTarget.parentElement;
-            if (parent) {
-              const infoDiv = parent.querySelector('div:nth-child(2)');
-              if (infoDiv) infoDiv.style.display = 'none';
-            }
-          }}
+          className={`w-full h-full object-cover relative z-10 transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => handleImageLoad(images[0].url)}
           onError={(e) => {
             console.error('Image failed to load:', images[0].url);
             e.currentTarget.style.display = 'none';
@@ -274,26 +275,16 @@ export default function ImageSlider({
       >
         {images.map((image, index) => {
           const pins = getPinsForImage(image.label);
+          const isLoaded = loadedImages.has(image.url);
 
           return (
             <div key={index} className="w-full h-full flex-shrink-0 relative bg-gray-100">
-              <div className="absolute inset-0 flex items-center justify-center p-4">
-                <div className="text-center max-w-full">
-                  <p className="text-xs text-gray-500 mb-2">{image.label}</p>
-                  <p className="text-xs text-gray-400 break-all font-mono">{image.url || 'No URL'}</p>
-                </div>
-              </div>
+              {!isLoaded && skeletonLoader}
               <img
                 src={image.url}
                 alt={`${alt} - ${image.label}`}
-                className="w-full h-full object-cover relative z-10"
-                onLoad={(e) => {
-                  const parent = e.currentTarget.parentElement;
-                  if (parent) {
-                    const infoDiv = parent.querySelector('div');
-                    if (infoDiv) infoDiv.style.display = 'none';
-                  }
-                }}
+                className={`w-full h-full object-cover relative z-10 transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                onLoad={() => handleImageLoad(image.url)}
                 onError={(e) => {
                   console.error('Image failed to load:', image.url);
                   e.currentTarget.style.display = 'none';

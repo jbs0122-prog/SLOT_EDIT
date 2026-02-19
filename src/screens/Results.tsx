@@ -92,6 +92,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
 
   useEffect(() => {
     setLocalOutfits(outfits);
+    preloadImages(outfits);
   }, [outfits]);
 
   useEffect(() => {
@@ -135,6 +136,19 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
     created_at: product.created_at, updated_at: product.updated_at,
   });
 
+  const preloadImages = (outfitList: Outfit[]) => {
+    outfitList.forEach(outfit => {
+      if (outfit.image_url_flatlay) {
+        const img = new Image();
+        img.src = outfit.image_url_flatlay;
+      }
+      if (outfit.image_url_on_model) {
+        const img = new Image();
+        img.src = outfit.image_url_on_model;
+      }
+    });
+  };
+
   const refreshOutfitImages = async () => {
     const outfitIds = localOutfits.map(o => o.id);
     if (outfitIds.length === 0) return;
@@ -148,23 +162,25 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
       if (error) throw error;
       if (!data) return;
 
-      setLocalOutfits(prev =>
-        prev.map(outfit => {
-          const updated = data.find((d: any) => d.id === outfit.id);
-          if (updated) {
-            const aiInsight = (updated as any)['AI insight'];
+      setLocalOutfits(prev => {
+        const updated = prev.map(outfit => {
+          const fresh = data.find((d: any) => d.id === outfit.id);
+          if (fresh) {
+            const aiInsight = (fresh as any)['AI insight'];
             return {
               ...outfit,
-              image_url_flatlay: updated.image_url_flatlay || outfit.image_url_flatlay,
-              image_url_on_model: updated.image_url_on_model || outfit.image_url_on_model,
-              flatlay_pins: updated.flatlay_pins || outfit.flatlay_pins,
-              on_model_pins: updated.on_model_pins || outfit.on_model_pins,
+              image_url_flatlay: fresh.image_url_flatlay || outfit.image_url_flatlay,
+              image_url_on_model: fresh.image_url_on_model || outfit.image_url_on_model,
+              flatlay_pins: fresh.flatlay_pins || outfit.flatlay_pins,
+              on_model_pins: fresh.on_model_pins || outfit.on_model_pins,
               ...(aiInsight ? { insight_text: aiInsight } : {}),
             };
           }
           return outfit;
-        })
-      );
+        });
+        preloadImages(updated);
+        return updated;
+      });
     } catch (error) {
       console.error('Failed to refresh outfit images:', error);
     }
