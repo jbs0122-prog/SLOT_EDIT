@@ -3,7 +3,7 @@ import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { uploadProductImage, validateImageFile } from '../utils/imageUpload';
 import { analyzeFashionImage } from '../utils/fashionAnalyzer';
-import { X, Save, Upload, Loader2, Sparkles } from 'lucide-react';
+import { X, Save, Upload, Loader2, Sparkles, Link2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -153,6 +153,8 @@ const SUB_CATEGORIES: Record<string, { value: string; label: string }[]> = {
   ]
 };
 
+type ScrapeStatus = 'idle' | 'loading' | 'success' | 'error';
+
 export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
   const [formData, setFormData] = useState({
     brand: '',
@@ -182,6 +184,11 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [urlInput, setUrlInput] = useState('');
+  const [scrapeStatus, setScrapeStatus] = useState<ScrapeStatus>('idle');
+  const [scrapeError, setScrapeError] = useState('');
+  const [scrapedFields, setScrapedFields] = useState<string[]>([]);
 
   useEffect(() => {
     if (product) {
@@ -253,6 +260,165 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     e.target.value = '';
   };
 
+  const applyAnalysisToForm = (analysis: Record<string, any>) => {
+    const categoryMap: Record<string, string> = {
+      '상의': 'top',
+      '하의': 'bottom',
+      '아우터': 'outer',
+      '미드레이어': 'mid',
+      '신발': 'shoes',
+      '가방': 'bag',
+      '액세서리': 'accessory',
+      '넥타이': 'accessory',
+    };
+
+    const genderMap: Record<string, string> = {
+      '남성': 'MALE',
+      '여성': 'FEMALE',
+      '공용': 'UNISEX'
+    };
+
+    const validColorFamilies = ['black', 'white', 'grey', 'charcoal', 'navy', 'beige', 'cream', 'ivory', 'brown', 'tan', 'camel', 'olive', 'khaki', 'sage', 'rust', 'mustard', 'burgundy', 'wine', 'blue', 'sky_blue', 'denim', 'teal', 'green', 'mint', 'red', 'coral', 'yellow', 'orange', 'pink', 'lavender', 'purple', 'metallic', 'multi'];
+    const validColorTones = ['warm', 'cool', 'neutral'];
+    const validPatterns = ['solid', 'stripe', 'check', 'floral', 'graphic', 'print', 'other'];
+    const validSilhouettes = ['oversized', 'relaxed', 'wide', 'regular', 'straight', 'fitted', 'slim', 'tapered'];
+    const validSeasons = ['spring', 'summer', 'fall', 'winter'];
+    const validVibes = ['ELEVATED_COOL', 'EFFORTLESS_NATURAL', 'ARTISTIC_MINIMAL', 'RETRO_LUXE', 'SPORT_MODERN', 'CREATIVE_LAYERED'];
+
+    const isNecktie = analysis.category === '넥타이';
+
+    setFormData(prev => ({
+      ...prev,
+      name: analysis.description || prev.name,
+      category: (categoryMap[analysis.category] as Product['category']) || prev.category,
+      gender: genderMap[analysis.gender] || prev.gender,
+      color: analysis.color || prev.color,
+      material: analysis.material || prev.material,
+      silhouette: validSilhouettes.includes(analysis.silhouette) ? analysis.silhouette : prev.silhouette,
+      vibe: analysis.vibe?.filter((v: string) => validVibes.includes(v)).length > 0
+        ? analysis.vibe.filter((v: string) => validVibes.includes(v))
+        : prev.vibe,
+      season: analysis.season?.filter((s: string) => validSeasons.includes(s)).length > 0
+        ? analysis.season.filter((s: string) => validSeasons.includes(s))
+        : prev.season,
+      color_family: validColorFamilies.includes(analysis.color_family) ? analysis.color_family : prev.color_family,
+      color_tone: validColorTones.includes(analysis.color_tone) ? analysis.color_tone : prev.color_tone,
+      sub_category: isNecktie ? 'necktie' : (analysis.sub_category || prev.sub_category),
+      pattern: validPatterns.includes(analysis.pattern) ? analysis.pattern : prev.pattern,
+      formality: analysis.formality ? Math.max(1, Math.min(5, Math.round(analysis.formality))) : prev.formality,
+      warmth: analysis.warmth ? Math.max(1, Math.min(5, Math.round(analysis.warmth))) : prev.warmth
+    }));
+  };
+
+  const handleUrlScrape = async () => {
+    const trimmedUrl = urlInput.trim();
+    if (!trimmedUrl) return;
+
+    setScrapeStatus('loading');
+    setScrapeError('');
+    setScrapedFields([]);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('로그인이 필요합니다');
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/scrape-product-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productUrl: trimmedUrl }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || '스크래핑 실패');
+      }
+
+      const { scraped, analysis } = data;
+      const filled: string[] = [];
+
+      setFormData(prev => {
+        const next = { ...prev };
+
+        if (scraped.title && !prev.name) {
+          next.name = scraped.title;
+          filled.push('제품명');
+        }
+        if (scraped.brand && !prev.brand) {
+          next.brand = scraped.brand;
+          filled.push('브랜드');
+        }
+        if (scraped.price && !prev.price) {
+          next.price = scraped.price;
+          filled.push('가격');
+        }
+        if (scraped.imageUrl && !prev.image_url) {
+          next.image_url = scraped.imageUrl;
+          filled.push('이미지');
+        }
+        if (!prev.product_link) {
+          next.product_link = trimmedUrl;
+          filled.push('쇼핑 링크');
+        }
+
+        return next;
+      });
+
+      if (analysis) {
+        const categoryMap: Record<string, string> = {
+          '상의': 'top', '하의': 'bottom', '아우터': 'outer', '미드레이어': 'mid',
+          '신발': 'shoes', '가방': 'bag', '액세서리': 'accessory', '넥타이': 'accessory',
+        };
+        const genderMap: Record<string, string> = { '남성': 'MALE', '여성': 'FEMALE', '공용': 'UNISEX' };
+        const validColorFamilies = ['black', 'white', 'grey', 'charcoal', 'navy', 'beige', 'cream', 'ivory', 'brown', 'tan', 'camel', 'olive', 'khaki', 'sage', 'rust', 'mustard', 'burgundy', 'wine', 'blue', 'sky_blue', 'denim', 'teal', 'green', 'mint', 'red', 'coral', 'yellow', 'orange', 'pink', 'lavender', 'purple', 'metallic', 'multi'];
+        const validColorTones = ['warm', 'cool', 'neutral'];
+        const validPatterns = ['solid', 'stripe', 'check', 'floral', 'graphic', 'print', 'other'];
+        const validSilhouettes = ['oversized', 'relaxed', 'wide', 'regular', 'straight', 'fitted', 'slim', 'tapered'];
+        const validSeasons = ['spring', 'summer', 'fall', 'winter'];
+        const validVibes = ['ELEVATED_COOL', 'EFFORTLESS_NATURAL', 'ARTISTIC_MINIMAL', 'RETRO_LUXE', 'SPORT_MODERN', 'CREATIVE_LAYERED'];
+        const isNecktie = analysis.category === '넥타이';
+
+        setFormData(prev => {
+          const next = { ...prev };
+
+          if (analysis.description) {
+            if (!prev.name || prev.name === scraped.title) {
+              next.name = analysis.description;
+              if (!filled.includes('제품명')) filled.push('제품명');
+            }
+          }
+          if (categoryMap[analysis.category]) { next.category = categoryMap[analysis.category] as Product['category']; filled.push('카테고리'); }
+          if (genderMap[analysis.gender]) { next.gender = genderMap[analysis.gender]; filled.push('성별'); }
+          if (analysis.color) { next.color = analysis.color; filled.push('색상'); }
+          if (analysis.material) { next.material = analysis.material; filled.push('소재'); }
+          if (validSilhouettes.includes(analysis.silhouette)) { next.silhouette = analysis.silhouette; filled.push('실루엣'); }
+          if (analysis.vibe?.filter((v: string) => validVibes.includes(v)).length > 0) { next.vibe = analysis.vibe.filter((v: string) => validVibes.includes(v)); filled.push('스타일 무드'); }
+          if (analysis.season?.filter((s: string) => validSeasons.includes(s)).length > 0) { next.season = analysis.season.filter((s: string) => validSeasons.includes(s)); filled.push('시즌'); }
+          if (validColorFamilies.includes(analysis.color_family)) { next.color_family = analysis.color_family; filled.push('컬러 패밀리'); }
+          if (validColorTones.includes(analysis.color_tone)) { next.color_tone = analysis.color_tone; filled.push('컬러 톤'); }
+          if (isNecktie) { next.sub_category = 'necktie'; filled.push('상세 카테고리'); }
+          else if (analysis.sub_category) { next.sub_category = analysis.sub_category; filled.push('상세 카테고리'); }
+          if (validPatterns.includes(analysis.pattern)) { next.pattern = analysis.pattern; filled.push('패턴'); }
+          if (analysis.formality) { next.formality = Math.max(1, Math.min(5, Math.round(analysis.formality))); filled.push('격식도'); }
+          if (analysis.warmth) { next.warmth = Math.max(1, Math.min(5, Math.round(analysis.warmth))); filled.push('보온감'); }
+
+          return next;
+        });
+      }
+
+      setScrapedFields([...new Set(filled)]);
+      setScrapeStatus('success');
+    } catch (error) {
+      setScrapeError((error as Error).message || '알 수 없는 오류');
+      setScrapeStatus('error');
+    }
+  };
+
   const handleAIAnalysis = async () => {
     if (!formData.image_url.trim()) {
       alert('먼저 이미지를 업로드하거나 URL을 입력해주세요');
@@ -262,51 +428,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     setAnalyzing(true);
     try {
       const analysis = await analyzeFashionImage(formData.image_url);
-
-      const categoryMap: Record<string, string> = {
-        '상의': 'top',
-        '하의': 'bottom',
-        '아우터': 'outer',
-        '미드레이어': 'mid',
-        '신발': 'shoes',
-        '가방': 'bag',
-        '액세서리': 'accessory',
-        '넥타이': 'accessory',
-      };
-
-      const genderMap: Record<string, string> = {
-        '남성': 'MALE',
-        '여성': 'FEMALE',
-        '공용': 'UNISEX'
-      };
-
-      const validColorFamilies = ['black', 'white', 'grey', 'charcoal', 'navy', 'beige', 'cream', 'ivory', 'brown', 'tan', 'camel', 'olive', 'khaki', 'sage', 'rust', 'mustard', 'burgundy', 'wine', 'blue', 'sky_blue', 'denim', 'teal', 'green', 'mint', 'red', 'coral', 'yellow', 'orange', 'pink', 'lavender', 'purple', 'metallic', 'multi'];
-      const validColorTones = ['warm', 'cool', 'neutral'];
-      const validPatterns = ['solid', 'stripe', 'check', 'floral', 'graphic', 'print', 'other'];
-      const validSilhouettes = ['oversized', 'relaxed', 'wide', 'regular', 'straight', 'fitted', 'slim', 'tapered'];
-      const validSeasons = ['spring', 'summer', 'fall', 'winter'];
-      const validVibes = ['ELEVATED_COOL', 'EFFORTLESS_NATURAL', 'ARTISTIC_MINIMAL', 'RETRO_LUXE', 'SPORT_MODERN', 'CREATIVE_LAYERED'];
-
-      const isNecktie = analysis.category === '넥타이';
-
-      setFormData(prev => ({
-        ...prev,
-        name: analysis.description || prev.name,
-        category: (categoryMap[analysis.category] as Product['category']) || prev.category,
-        gender: genderMap[analysis.gender] || prev.gender,
-        color: analysis.color || prev.color,
-        material: analysis.material || prev.material,
-        silhouette: validSilhouettes.includes(analysis.silhouette) ? analysis.silhouette : prev.silhouette,
-        vibe: analysis.vibe?.filter(v => validVibes.includes(v)).length > 0 ? analysis.vibe.filter(v => validVibes.includes(v)) : prev.vibe,
-        season: analysis.season?.filter(s => validSeasons.includes(s)).length > 0 ? analysis.season.filter(s => validSeasons.includes(s)) : prev.season,
-        color_family: validColorFamilies.includes(analysis.color_family) ? analysis.color_family : prev.color_family,
-        color_tone: validColorTones.includes(analysis.color_tone) ? analysis.color_tone : prev.color_tone,
-        sub_category: isNecktie ? 'necktie' : (analysis.sub_category || prev.sub_category),
-        pattern: validPatterns.includes(analysis.pattern) ? analysis.pattern : prev.pattern,
-        formality: analysis.formality ? Math.max(1, Math.min(5, Math.round(analysis.formality))) : prev.formality,
-        warmth: analysis.warmth ? Math.max(1, Math.min(5, Math.round(analysis.warmth))) : prev.warmth
-      }));
-
+      applyAnalysisToForm(analysis as any);
       alert('AI 분석이 완료되었습니다! 필요한 부분은 수정해주세요.');
     } catch (error) {
       console.error('AI analysis error:', error);
@@ -318,44 +440,25 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = '제품명을 입력하세요';
-    }
-    if (!formData.image_url.trim()) {
-      newErrors.image_url = '이미지 URL을 입력하세요';
-    }
-
+    if (!formData.name.trim()) newErrors.name = '제품명을 입력하세요';
+    if (!formData.image_url.trim()) newErrors.image_url = '이미지 URL을 입력하세요';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!validate()) {
-      return;
-    }
+    if (!validate()) return;
 
     setSaving(true);
     try {
-      const dataToSave = {
-        ...formData,
-        updated_at: new Date().toISOString()
-      };
+      const dataToSave = { ...formData, updated_at: new Date().toISOString() };
 
       if (product) {
-        const { error } = await supabase
-          .from('products')
-          .update(dataToSave)
-          .eq('id', product.id);
-
+        const { error } = await supabase.from('products').update(dataToSave).eq('id', product.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('products')
-          .insert([dataToSave]);
-
+        const { error } = await supabase.from('products').insert([dataToSave]);
         if (error) throw error;
       }
 
@@ -375,20 +478,84 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           <h2 className="text-2xl font-bold text-gray-900">
             {product ? '제품 수정' : '제품 추가'}
           </h2>
-          <button
-            onClick={onCancel}
-            className="text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
             <X size={24} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6">
+
+          {/* URL 자동 입력 섹션 */}
+          <div className="mb-8 p-5 bg-gradient-to-br from-blue-50 to-slate-50 border border-blue-200 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Link2 size={18} className="text-blue-600" />
+              <h3 className="text-base font-semibold text-gray-900">URL로 자동 채우기</h3>
+              <span className="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">AI</span>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              제품 페이지 URL을 입력하면 이미지·텍스트·태그를 자동으로 분석합니다
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={urlInput}
+                onChange={e => setUrlInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleUrlScrape())}
+                placeholder="https://www.amazon.com/dp/..."
+                className="flex-1 px-3 py-2 text-sm border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                disabled={scrapeStatus === 'loading'}
+              />
+              <button
+                type="button"
+                onClick={handleUrlScrape}
+                disabled={scrapeStatus === 'loading' || !urlInput.trim()}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap transition-colors"
+              >
+                {scrapeStatus === 'loading' ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    분석 중...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={15} />
+                    자동 분석
+                  </>
+                )}
+              </button>
+            </div>
+
+            {scrapeStatus === 'success' && scrapedFields.length > 0 && (
+              <div className="mt-3 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircle2 size={16} className="text-green-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-green-800 mb-1">자동으로 채워진 항목:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {scrapedFields.map(f => (
+                      <span key={f} className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                        {f}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-green-600 mt-1.5">내용을 확인하고 필요한 부분을 수정해주세요.</p>
+                </div>
+              </div>
+            )}
+
+            {scrapeStatus === 'error' && (
+              <div className="mt-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircle size={16} className="text-red-500 shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-red-700">스크래핑 실패</p>
+                  <p className="text-xs text-red-500">{scrapeError}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                브랜드
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">브랜드</label>
               <input
                 type="text"
                 value={formData.brand}
@@ -406,20 +573,14 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.name ? 'border-red-500' : 'border-gray-300'
-                }`}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="예: 오버사이즈 후드티"
               />
-              {errors.name && (
-                <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-              )}
+              {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                카테고리
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
               <select
                 value={formData.category}
                 onChange={(e) => handleChange('category', e.target.value)}
@@ -432,9 +593,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                성별
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">성별</label>
               <select
                 value={formData.gender}
                 onChange={(e) => handleChange('gender', e.target.value)}
@@ -447,9 +606,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                색상
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">색상</label>
               <input
                 type="text"
                 value={formData.color}
@@ -460,9 +617,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                실루엣
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">실루엣</label>
               <select
                 value={formData.silhouette}
                 onChange={(e) => handleChange('silhouette', e.target.value)}
@@ -481,9 +636,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                가격 ($)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">가격 ($)</label>
               <input
                 type="number"
                 value={formData.price || ''}
@@ -495,9 +648,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                재고 상태
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">재고 상태</label>
               <select
                 value={formData.stock_status}
                 onChange={(e) => handleChange('stock_status', e.target.value)}
@@ -511,20 +662,14 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           </div>
 
           <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              체형 태그
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">체형 태그</label>
             <div className="flex flex-wrap gap-2">
               {BODY_TYPES.map(type => (
                 <button
                   key={type}
                   type="button"
                   onClick={() => toggleArrayValue('body_type', type)}
-                  className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                    formData.body_type.includes(type)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
+                  className={`px-3 py-1 rounded-full text-sm transition-colors ${formData.body_type.includes(type) ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
                 >
                   {type}
                 </button>
@@ -533,20 +678,14 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           </div>
 
           <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              스타일 무드
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">스타일 무드</label>
             <div className="flex flex-wrap gap-2">
               {VIBES.map(vibe => (
                 <button
                   key={vibe}
                   type="button"
                   onClick={() => toggleArrayValue('vibe', vibe)}
-                  className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                    formData.vibe.includes(vibe)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
+                  className={`px-3 py-1 rounded-full text-sm transition-colors ${formData.vibe.includes(vibe) ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
                 >
                   {vibe}
                 </button>
@@ -555,20 +694,14 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           </div>
 
           <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              시즌
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">시즌</label>
             <div className="flex flex-wrap gap-2">
               {SEASONS.map(season => (
                 <button
                   key={season}
                   type="button"
                   onClick={() => toggleArrayValue('season', season)}
-                  className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                    formData.season.includes(season)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
+                  className={`px-3 py-1 rounded-full text-sm transition-colors ${formData.season.includes(season) ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
                 >
                   {season}
                 </button>
@@ -577,9 +710,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           </div>
 
           <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              소재
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">소재</label>
             <input
               type="text"
               value={formData.material}
@@ -597,9 +728,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  컬러 패밀리 (Color Family)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">컬러 패밀리 (Color Family)</label>
                 <select
                   value={formData.color_family}
                   onChange={(e) => handleChange('color_family', e.target.value)}
@@ -613,9 +742,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  컬러 톤 (Color Tone)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">컬러 톤 (Color Tone)</label>
                 <select
                   value={formData.color_tone}
                   onChange={(e) => handleChange('color_tone', e.target.value)}
@@ -629,9 +756,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  상세 카테고리 (Sub Category)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">상세 카테고리 (Sub Category)</label>
                 <select
                   value={formData.sub_category}
                   onChange={(e) => handleChange('sub_category', e.target.value)}
@@ -645,9 +770,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  패턴 (Pattern)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">패턴 (Pattern)</label>
                 <select
                   value={formData.pattern}
                   onChange={(e) => handleChange('pattern', e.target.value)}
@@ -677,11 +800,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <span className="text-xs text-gray-500">포멀</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>1</span>
-                  <span>2</span>
-                  <span>3</span>
-                  <span>4</span>
-                  <span>5</span>
+                  <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">1=매우 캐주얼 / 3=스마트캐주얼 / 5=포멀</p>
               </div>
@@ -703,11 +822,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <span className="text-xs text-gray-500">겨울</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>1</span>
-                  <span>2</span>
-                  <span>3</span>
-                  <span>4</span>
-                  <span>5</span>
+                  <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">1=여름용 / 3=봄가을 / 5=한겨울</p>
               </div>
@@ -759,9 +874,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   value={formData.image_url}
                   onChange={(e) => handleChange('image_url', e.target.value)}
                   disabled={uploading}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.image_url ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.image_url ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="이미지 URL 직접 입력: https://example.com/image.jpg"
                 />
               </div>
@@ -779,7 +892,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     type="button"
                     onClick={handleAIAnalysis}
                     disabled={analyzing || uploading}
-                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium shadow-md transition-all"
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium shadow-md transition-all"
                   >
                     {analyzing ? (
                       <>
@@ -789,7 +902,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     ) : (
                       <>
                         <Sparkles size={16} />
-                        <span>AI 자동 분석</span>
+                        <span>이미지만 다시 분석</span>
                       </>
                     )}
                   </button>
@@ -810,9 +923,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           </div>
 
           <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              쇼핑 링크
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">쇼핑 링크</label>
             <input
               type="url"
               value={formData.product_link}
@@ -823,9 +934,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           </div>
 
           <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Amazon 어필리에이트 링크
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Amazon 어필리에이트 링크</label>
             <input
               type="url"
               value={formData.affiliate_link}
