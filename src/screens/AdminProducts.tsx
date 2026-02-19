@@ -23,11 +23,35 @@ export default function AdminProducts() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [filterGender, setFilterGender] = useState('all');
-  const [filterBodyType, setFilterBodyType] = useState('all');
-  const [filterVibe, setFilterVibe] = useState('all');
+  const FILTER_KEY = 'admin_products_filters';
+
+  const loadSavedFilters = () => {
+    try {
+      const raw = sessionStorage.getItem(FILTER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  };
+
+  const savedFilters = loadSavedFilters();
+
+  const [searchTerm, setSearchTermRaw] = useState<string>(savedFilters?.searchTerm ?? '');
+  const [filterCategory, setFilterCategoryRaw] = useState<string>(savedFilters?.filterCategory ?? 'all');
+  const [filterGender, setFilterGenderRaw] = useState<string>(savedFilters?.filterGender ?? 'all');
+  const [filterBodyType, setFilterBodyTypeRaw] = useState<string>(savedFilters?.filterBodyType ?? 'all');
+  const [filterVibe, setFilterVibeRaw] = useState<string>(savedFilters?.filterVibe ?? 'all');
+
+  const saveFilters = (updates: Partial<{ searchTerm: string; filterCategory: string; filterGender: string; filterBodyType: string; filterVibe: string }>) => {
+    try {
+      const current = loadSavedFilters() || {};
+      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ ...current, ...updates }));
+    } catch { /* ignore */ }
+  };
+
+  const setSearchTerm = (v: string) => { setSearchTermRaw(v); saveFilters({ searchTerm: v }); };
+  const setFilterCategory = (v: string) => { setFilterCategoryRaw(v); saveFilters({ filterCategory: v }); };
+  const setFilterGender = (v: string) => { setFilterGenderRaw(v); saveFilters({ filterGender: v }); };
+  const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); saveFilters({ filterBodyType: v }); };
+  const setFilterVibe = (v: string) => { setFilterVibeRaw(v); saveFilters({ filterVibe: v }); };
 
   const [outfitFilterGender, setOutfitFilterGender] = useState('');
   const [outfitFilterBodyType, setOutfitFilterBodyType] = useState('');
