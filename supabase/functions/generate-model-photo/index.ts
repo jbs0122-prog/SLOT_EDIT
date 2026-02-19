@@ -246,7 +246,7 @@ Photo requirements:
 - Studio lighting with soft shadows
 - Clean white or light gray background
 - Full body shot showing the complete outfit
-- Model should be standing in a natural, confident pose
+- Model should be standing in a natural, confident pose with both hands visible and relaxed at the sides or gently placed — do NOT put hands in pockets
 - Professional fashion photography style
 - High fashion editorial aesthetic
 - The clothing items should match EXACTLY what's shown in the flatlay image
