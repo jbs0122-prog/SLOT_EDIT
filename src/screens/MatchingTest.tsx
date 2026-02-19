@@ -66,10 +66,10 @@ export default function MatchingTest() {
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setLoading(true);
     try {
-      const bestOutfits = findBestOutfits(products, filters, 5);
+      const bestOutfits = await findBestOutfits(products, filters, 5);
       setResults(bestOutfits);
     } catch (error) {
       console.error('Failed to generate outfits:', error);

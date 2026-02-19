@@ -135,7 +135,7 @@ export interface AnchorItem {
   slotType: keyof OutfitCandidate;
 }
 
-export function generateOutfitCombinations(
+export async function generateOutfitCombinations(
   products: Product[],
   filters: {
     gender?: string;
@@ -146,7 +146,7 @@ export function generateOutfitCombinations(
   },
   anchor?: AnchorItem,
   usageCounts: Record<string, number> = {}
-): OutfitCandidate[] {
+): Promise<OutfitCandidate[]> {
   const filterProducts = (category: string) => {
     return products.filter(p => {
       if (p.category !== category) return false;
@@ -186,16 +186,16 @@ export function generateOutfitCombinations(
   }
 
   const totalCore = tops.length * bottoms.length * shoes.length;
-  const EXHAUSTIVE_THRESHOLD = 500;
+  const EXHAUSTIVE_THRESHOLD = 3000;
 
   if (totalCore <= EXHAUSTIVE_THRESHOLD) {
-    return generateExhaustive(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
+    return await generateExhaustive(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
   }
 
-  return generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
+  return await generateSampled(outers, mids, tops, bottoms, shoes, bags, accessories, filters, anchor, usageCounts);
 }
 
-function generateExhaustive(
+async function generateExhaustive(
   outers: Product[],
   mids: Product[],
   tops: Product[],
@@ -206,7 +206,8 @@ function generateExhaustive(
   filters: { targetSeason?: string },
   anchor?: AnchorItem,
   usageCounts: Record<string, number> = {}
-): OutfitCandidate[] {
+): Promise<OutfitCandidate[]> {
+  const YIELD_INTERVAL = 1000;
   const combinations: OutfitCandidate[] = [];
   const anchorSlot = anchor?.slotType;
   const anchorProduct = anchor?.product;
@@ -216,6 +217,7 @@ function generateExhaustive(
   const bagPool = bags.length > 0 ? [undefined, ...bags] : [undefined];
   const accPool = accessories.length > 0 ? [undefined, ...accessories] : [undefined];
 
+  let count = 0;
   for (const top of (anchorSlot === 'top' ? [anchorProduct!] : tops)) {
     for (const bottom of (anchorSlot === 'bottom' ? [anchorProduct!] : bottoms)) {
       for (const shoe of (anchorSlot === 'shoes' ? [anchorProduct!] : shoes)) {
@@ -232,6 +234,11 @@ function generateExhaustive(
                 if (passesHardConstraints(outfit, { targetSeason: filters.targetSeason })) {
                   combinations.push(outfit);
                 }
+
+                count++;
+                if (count % YIELD_INTERVAL === 0) {
+                  await yieldToMain();
+                }
               }
             }
           }
@@ -243,7 +250,7 @@ function generateExhaustive(
   return combinations;
 }
 
-function generateSampled(
+async function generateSampled(
   outers: Product[],
   mids: Product[],
   tops: Product[],
@@ -254,8 +261,9 @@ function generateSampled(
   filters: { targetSeason?: string },
   anchor?: AnchorItem,
   usageCounts: Record<string, number> = {}
-): OutfitCandidate[] {
-  const MAX_SAMPLES = 5000;
+): Promise<OutfitCandidate[]> {
+  const MAX_SAMPLES = 15000;
+  const YIELD_INTERVAL = 1000;
   const seen = new Set<string>();
   const combinations: OutfitCandidate[] = [];
   const anchorSlot = anchor?.slotType;
@@ -280,6 +288,9 @@ function generateSampled(
   };
 
   for (let i = 0; i < MAX_SAMPLES; i++) {
+    if (i > 0 && i % YIELD_INTERVAL === 0) {
+      await yieldToMain();
+    }
     const forceZeroProb = i < MAX_SAMPLES * 0.6 ? 0.7 : 0.3;
 
     const top = anchorSlot === 'top' ? anchorProduct! : pickForSlot(zeroUsageTops, tops, forceZeroProb);
@@ -488,7 +499,7 @@ export async function findBestOutfits(
   anchor?: AnchorItem,
   usageCounts: Record<string, number> = {}
 ): Promise<Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>> {
-  const combinations = generateOutfitCombinations(products, filters, anchor, usageCounts);
+  const combinations = await generateOutfitCombinations(products, filters, anchor, usageCounts);
 
   await yieldToMain();
 
