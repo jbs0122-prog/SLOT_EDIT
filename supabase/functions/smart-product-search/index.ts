@@ -74,12 +74,15 @@ function upgradeImageResolution(url: string): string {
 
 function extractSearchableTitle(title: string): string {
   return title
-    .replace(/\b(from|by|on|at|in|for|the|a|an)\b/gi, " ")
+    .replace(
+      /\b(from|by|on|at|in|for|the|a|an|with|and|or|of|to|is|it|this|that|these|those|www|com|net|org|shop|store|buy|sale|free|shipping|new|arrival|hot|best|seller)\b/gi,
+      " "
+    )
     .replace(/[^a-zA-Z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .split(" ")
-    .slice(0, 6)
+    .slice(0, 5)
     .join(" ");
 }
 
@@ -89,7 +92,9 @@ interface VisualSearchResult {
   nonAmazonTopTitles: string[];
 }
 
-async function searchViaVisual(imageUrl: string): Promise<VisualSearchResult> {
+async function searchViaVisual(
+  imageUrl: string
+): Promise<VisualSearchResult> {
   const params = new URLSearchParams({
     engine: "google_lens",
     url: imageUrl,
@@ -151,7 +156,7 @@ async function searchViaVisual(imageUrl: string): Promise<VisualSearchResult> {
         is_prime: false,
         source: "lens",
       });
-    } else if (item.title && nonAmazonTopTitles.length < 3) {
+    } else if (item.title && nonAmazonTopTitles.length < 5) {
       const cleaned = extractSearchableTitle(item.title);
       if (cleaned.split(" ").length >= 2) {
         nonAmazonTopTitles.push(cleaned);
@@ -203,6 +208,34 @@ async function searchViaKeyword(
   }));
 }
 
+async function fetchImageAsBase64(
+  imageUrl: string
+): Promise<{ base64: string; mimeType: string } | null> {
+  try {
+    const res = await fetch(imageUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+    });
+    if (!res.ok) return null;
+
+    const contentType =
+      res.headers.get("content-type") || "image/jpeg";
+    const buffer = await res.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    const mimeType = contentType.split(";")[0].trim();
+    return { base64, mimeType };
+  } catch {
+    return null;
+  }
+}
+
 async function generateCategoryKeywordsViaGemini(
   imageUrl: string,
   gender: string,
@@ -218,30 +251,46 @@ async function generateCategoryKeywordsViaGemini(
   const vibeLabel = vibe ? vibe.replace(/_/g, " ").toLowerCase() : "";
   const seasonLabel = season || "all season";
 
-  const prompt = `You are a fashion product search expert analyzing a fashion outfit image.
-
-Image URL: ${imageUrl}
+  const prompt = `You are a fashion product search expert. Analyze this outfit image very carefully.
 
 Context:
-- Gender: ${genderLabel}
+- Target gender: ${genderLabel}
 - Body type: ${bodyType || "regular"}
 - Style vibe: ${vibeLabel || "general"}
 - Season: ${seasonLabel}
 
-TASK: Identify ALL visible clothing/accessory items in the outfit image and generate Amazon search keywords for each one.
+TASK: Look at each clothing item in the image and generate PRECISE Amazon search keywords for each.
 
-Categories to look for: outer (jacket/coat/blazer), mid (sweater/cardigan/hoodie), top (shirt/tshirt/blouse), bottom (pants/jeans/skirt), shoes (sneakers/boots/loafers), bag (tote/backpack/crossbody), accessory (watch/belt/hat/scarf)
+RULES:
+1. Describe EXACTLY what you see - specific color (not just "dark" but "charcoal grey" or "navy blue"), specific material (cotton, denim, leather, wool), specific style (slim fit, relaxed, cropped, oversized)
+2. Include the gender prefix (${genderLabel}) in each keyword
+3. Generate 3 keywords per category - each from a different angle (style-focused, material-focused, brand-style-focused)
+4. Keywords should be 4-7 words, like real Amazon searches
 
-For each visible item, generate 2 specific Amazon search keywords (4-6 words each) that describe the exact item's style, color, and material.
+Categories: outer, mid, top, bottom, shoes, bag, accessory
 
-Return ONLY a JSON array. Example for an outfit with jacket + jeans + sneakers:
+Example output for a man wearing a grey wool overcoat, white oxford shirt, black slim chinos, and brown leather chelsea boots:
 [
-  {"category": "outer", "keywords": ["men black leather biker jacket", "men slim leather moto jacket"]},
-  {"category": "bottom", "keywords": ["men slim dark wash denim jeans", "men skinny black jeans"]},
-  {"category": "shoes", "keywords": ["men white leather low top sneakers", "men minimalist white sneakers"]}
+  {"category":"outer","keywords":["${genderLabel} grey wool overcoat classic","${genderLabel} charcoal long wool coat","${genderLabel} tailored grey topcoat winter"]},
+  {"category":"top","keywords":["${genderLabel} white oxford button shirt","${genderLabel} white cotton dress shirt slim","${genderLabel} white formal button down shirt"]},
+  {"category":"bottom","keywords":["${genderLabel} black slim fit chino pants","${genderLabel} black tapered cotton trousers","${genderLabel} slim black dress pants stretch"]},
+  {"category":"shoes","keywords":["${genderLabel} brown leather chelsea boots","${genderLabel} tan suede chelsea ankle boots","${genderLabel} brown pull on leather boots"]}
 ]
 
-Only include categories that are clearly visible in the image. Return only the JSON array, nothing else.`;
+Only include categories clearly visible. Return ONLY the JSON array.`;
+
+  const imageData = await fetchImageAsBase64(imageUrl);
+
+  const parts: any[] = [];
+  if (imageData) {
+    parts.push({
+      inline_data: {
+        mime_type: imageData.mimeType,
+        data: imageData.base64,
+      },
+    });
+  }
+  parts.push({ text: prompt });
 
   const geminiRes = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -249,10 +298,10 @@ Only include categories that are clearly visible in the image. Return only the J
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts }],
         generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 1024,
+          temperature: 0.2,
+          maxOutputTokens: 2048,
           responseMimeType: "application/json",
         },
       }),
@@ -315,7 +364,8 @@ Deno.serve(async (req: Request) => {
       }
 
       try {
-        const { amazonResults, allMatches } = await searchViaVisual(image_url);
+        const { amazonResults, allMatches } =
+          await searchViaVisual(image_url);
 
         return new Response(
           JSON.stringify({
@@ -325,7 +375,9 @@ Deno.serve(async (req: Request) => {
             amazon_match_count: amazonResults.length,
             visual_matches_preview: allMatches.slice(0, 10),
           }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
         );
       } catch (err) {
         return new Response(
@@ -337,7 +389,9 @@ Deno.serve(async (req: Request) => {
             visual_matches_preview: [],
             error: (err as Error).message,
           }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
         );
       }
     }
@@ -396,7 +450,9 @@ Deno.serve(async (req: Request) => {
     if (action === "smart_search") {
       if (!image_url) {
         return new Response(
-          JSON.stringify({ error: "image_url is required for smart search" }),
+          JSON.stringify({
+            error: "image_url is required for smart search",
+          }),
           {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -404,31 +460,48 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Step 1: Visual (Google Lens) search
+      // Step 1: Visual (Google Lens) + AI category analysis in parallel
       let lensAmazonResults: AmazonResult[] = [];
       let visualError: string | null = null;
       let allVisualMatches: VisualMatch[] = [];
       let nonAmazonTitles: string[] = [];
 
-      try {
-        const visualData = await searchViaVisual(image_url);
-        lensAmazonResults = visualData.amazonResults;
-        allVisualMatches = visualData.allMatches;
-        nonAmazonTitles = visualData.nonAmazonTopTitles;
-      } catch (err) {
-        visualError = (err as Error).message;
+      let usedCategoryKeywords: CategoryKeywords[] = [];
+      let keywordError: string | null = null;
+
+      const [visualResult, geminiResult] = await Promise.allSettled([
+        searchViaVisual(image_url),
+        generateCategoryKeywordsViaGemini(
+          image_url,
+          gender || "UNISEX",
+          body_type || "regular",
+          vibe || "",
+          season || ""
+        ),
+      ]);
+
+      if (visualResult.status === "fulfilled") {
+        lensAmazonResults = visualResult.value.amazonResults;
+        allVisualMatches = visualResult.value.allMatches;
+        nonAmazonTitles = visualResult.value.nonAmazonTopTitles;
+      } else {
+        visualError = visualResult.reason?.message || "Visual search failed";
       }
 
-      // Step 2: If Lens found matches but no Amazon results, use top visual titles as Amazon search keywords
+      if (geminiResult.status === "fulfilled") {
+        usedCategoryKeywords = geminiResult.value;
+      } else {
+        keywordError =
+          geminiResult.reason?.message || "Gemini analysis failed";
+      }
+
+      // Step 2: If Lens found matches but no Amazon results, use top visual titles
       let visualTitleResults: AmazonResult[] = [];
       let visualTitleKeywords: string[] = [];
 
-      if (
-        lensAmazonResults.length === 0 &&
-        nonAmazonTitles.length > 0
-      ) {
-        visualTitleKeywords = nonAmazonTitles;
-        const titleSearchPromises = nonAmazonTitles.slice(0, 2).map(
+      if (lensAmazonResults.length === 0 && nonAmazonTitles.length > 0) {
+        visualTitleKeywords = nonAmazonTitles.slice(0, 3);
+        const titleSearchPromises = visualTitleKeywords.map(
           async (title) => {
             try {
               const results = await searchViaKeyword(
@@ -437,7 +510,7 @@ Deno.serve(async (req: Request) => {
                 undefined,
                 "visual_title"
               );
-              return results.slice(0, 5);
+              return results.slice(0, 4);
             } catch {
               return [];
             }
@@ -447,42 +520,33 @@ Deno.serve(async (req: Request) => {
         visualTitleResults = titleResults.flat();
       }
 
-      // Step 3: AI category keyword search — always run for multi-category coverage
+      // Step 3: AI category keyword search — search all keywords (not just first)
       let categoryKeywordResults: AmazonResult[] = [];
-      let usedCategoryKeywords: CategoryKeywords[] = [];
-      let keywordError: string | null = null;
 
-      try {
-        const catKeywords = await generateCategoryKeywordsViaGemini(
-          image_url,
-          gender || "UNISEX",
-          body_type || "regular",
-          vibe || "",
-          season || ""
-        );
-        usedCategoryKeywords = catKeywords;
-
-        const searchPromises = catKeywords.slice(0, 5).map(async (ck) => {
-          if (!ck.keywords[0]) return [];
-          try {
-            const kwResults = await searchViaKeyword(
-              ck.keywords[0],
-              1,
-              ck.category
-            );
-            return kwResults.slice(0, 4);
-          } catch {
-            return [];
-          }
-        });
+      if (usedCategoryKeywords.length > 0) {
+        const searchPromises = usedCategoryKeywords
+          .slice(0, 5)
+          .flatMap((ck) =>
+            ck.keywords.slice(0, 2).map(async (kw) => {
+              if (!kw) return [];
+              try {
+                const kwResults = await searchViaKeyword(
+                  kw,
+                  1,
+                  ck.category
+                );
+                return kwResults.slice(0, 3);
+              } catch {
+                return [];
+              }
+            })
+          );
 
         const allKwResults = await Promise.all(searchPromises);
         categoryKeywordResults = allKwResults.flat();
-      } catch (err) {
-        keywordError = (err as Error).message;
       }
 
-      // Merge & deduplicate: lens amazon > visual title amazon > AI keyword amazon
+      // Merge & deduplicate
       const seenAsins = new Set<string>();
       const merged: AmazonResult[] = [];
 

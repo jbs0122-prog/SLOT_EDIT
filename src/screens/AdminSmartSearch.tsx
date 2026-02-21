@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Camera, Search, Sparkles, Check, Star, ExternalLink,
   Loader2, AlertCircle, Tag, Eye, Zap, ChevronDown,
@@ -110,32 +110,71 @@ const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
 
 type SearchPhase = 'idle' | 'visual_searching' | 'generating_keywords' | 'keyword_searching' | 'done';
 
-export default function AdminSmartSearch() {
-  const [imageUrl, setImageUrl] = useState('');
-  const [imagePreviewError, setImagePreviewError] = useState(false);
-  const [gender, setGender] = useState('');
-  const [bodyType, setBodyType] = useState('');
-  const [vibe, setVibe] = useState('');
-  const [season, setSeason] = useState('');
+const SESSION_KEY = 'smart_search_state';
 
-  const [phase, setPhase] = useState<SearchPhase>('idle');
-  const [results, setResults] = useState<SmartResult[]>([]);
-  const [searchLog, setSearchLog] = useState<{ msg: string; type: 'info' | 'success' | 'error' | 'warn' }[]>([]);
+interface SessionState {
+  imageUrl: string;
+  gender: string;
+  bodyType: string;
+  vibe: string;
+  season: string;
+  phase: SearchPhase;
+  results: SmartResult[];
+  searchLog: { msg: string; type: 'info' | 'success' | 'error' | 'warn' }[];
+  lensAmazonCount: number;
+  visualTitleCount: number;
+  keywordCount: number;
+  allVisualMatches: number;
+  categoryKeywords: CategoryKeyword[];
+  visualMatchesPreview: VisualMatchPreview[];
+  searchError: string;
+  savedAsins: string[];
+}
+
+function loadSession(): SessionState | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(state: SessionState) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(state));
+  } catch { /* quota exceeded */ }
+}
+
+export default function AdminSmartSearch() {
+  const cached = useRef(loadSession());
+
+  const [imageUrl, setImageUrl] = useState(cached.current?.imageUrl || '');
+  const [imagePreviewError, setImagePreviewError] = useState(false);
+  const [gender, setGender] = useState(cached.current?.gender || '');
+  const [bodyType, setBodyType] = useState(cached.current?.bodyType || '');
+  const [vibe, setVibe] = useState(cached.current?.vibe || '');
+  const [season, setSeason] = useState(cached.current?.season || '');
+
+  const [phase, setPhase] = useState<SearchPhase>(cached.current?.phase === 'done' ? 'done' : 'idle');
+  const [results, setResults] = useState<SmartResult[]>(cached.current?.results || []);
+  const [searchLog, setSearchLog] = useState<{ msg: string; type: 'info' | 'success' | 'error' | 'warn' }[]>(cached.current?.searchLog || []);
   const [showLog, setShowLog] = useState(true);
 
-  const [lensAmazonCount, setLensAmazonCount] = useState(0);
-  const [visualTitleCount, setVisualTitleCount] = useState(0);
-  const [keywordCount, setKeywordCount] = useState(0);
-  const [allVisualMatches, setAllVisualMatches] = useState(0);
-  const [categoryKeywords, setCategoryKeywords] = useState<CategoryKeyword[]>([]);
-  const [visualMatchesPreview, setVisualMatchesPreview] = useState<VisualMatchPreview[]>([]);
+  const [lensAmazonCount, setLensAmazonCount] = useState(cached.current?.lensAmazonCount || 0);
+  const [visualTitleCount, setVisualTitleCount] = useState(cached.current?.visualTitleCount || 0);
+  const [keywordCount, setKeywordCount] = useState(cached.current?.keywordCount || 0);
+  const [allVisualMatches, setAllVisualMatches] = useState(cached.current?.allVisualMatches || 0);
+  const [categoryKeywords, setCategoryKeywords] = useState<CategoryKeyword[]>(cached.current?.categoryKeywords || []);
+  const [visualMatchesPreview, setVisualMatchesPreview] = useState<VisualMatchPreview[]>(cached.current?.visualMatchesPreview || []);
   const [showVisualPreview, setShowVisualPreview] = useState(false);
-  const [searchError, setSearchError] = useState('');
+  const [searchError, setSearchError] = useState(cached.current?.searchError || '');
 
   const [activeCategory, setActiveCategory] = useState('all');
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
+  const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set(cached.current?.savedAsins || []));
   const [savingAll, setSavingAll] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
 
@@ -145,6 +184,31 @@ export default function AdminSmartSearch() {
   const [showFilters, setShowFilters] = useState(true);
 
   const abortRef = useRef(false);
+
+  useEffect(() => {
+    if (phase === 'done' || (phase === 'idle' && results.length > 0)) {
+      saveSession({
+        imageUrl,
+        gender,
+        bodyType,
+        vibe,
+        season,
+        phase: results.length > 0 ? 'done' : 'idle',
+        results: results.map(({ analyzing, ...rest }) => rest),
+        searchLog,
+        lensAmazonCount,
+        visualTitleCount,
+        keywordCount,
+        allVisualMatches,
+        categoryKeywords,
+        visualMatchesPreview,
+        searchError,
+        savedAsins: Array.from(savedAsins),
+      });
+    }
+  }, [phase, results, savedAsins, searchLog, imageUrl, gender, bodyType, vibe, season,
+      lensAmazonCount, visualTitleCount, keywordCount, allVisualMatches, categoryKeywords,
+      visualMatchesPreview, searchError]);
 
   const addLog = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') => {
     setSearchLog(prev => [...prev, { msg: `[${new Date().toLocaleTimeString()}] ${msg}`, type }]);
