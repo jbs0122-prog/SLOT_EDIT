@@ -1,18 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Camera, Search, Sparkles, Check, Star, ExternalLink,
+  Camera, Search, Check, Star, ExternalLink,
   Loader2, AlertCircle, Tag, Eye, Zap, ChevronDown,
-  ChevronUp, ImageIcon, ArrowRight, X, Square, RefreshCw
+  ChevronUp, ImageIcon, ArrowRight, X, Square, RefreshCw,
+  Scissors, Link2
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-interface CategoryKeyword {
-  category: string;
-  keywords: string[];
-}
 
 interface SmartResult {
   asin: string;
@@ -25,8 +21,9 @@ interface SmartResult {
   reviews_count: number | null;
   url: string;
   is_prime: boolean;
-  source: 'lens' | 'keyword';
+  source: 'lens' | 'lens_crop' | 'lens_chain' | 'keyword';
   category?: string;
+  crop_zone?: string;
   analyzed?: AnalyzedData;
   analyzing?: boolean;
   analyzeError?: string;
@@ -95,10 +92,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
   lens: { label: 'LENS', cls: 'bg-teal-500/90 text-white' },
+  lens_crop: { label: 'CROP', cls: 'bg-cyan-500/90 text-white' },
+  lens_chain: { label: 'CHAIN', cls: 'bg-blue-500/90 text-white' },
   keyword: { label: 'KW', cls: 'bg-amber-500/90 text-white' },
 };
 
-type SearchPhase = 'idle' | 'visual_searching' | 'generating_keywords' | 'keyword_searching' | 'done';
+type SearchPhase = 'idle' | 'lens_searching' | 'crop_searching' | 'chain_searching' | 'done';
 
 const SESSION_KEY = 'smart_search_state';
 
@@ -111,9 +110,10 @@ interface SessionState {
   phase: SearchPhase;
   results: SmartResult[];
   searchLog: { msg: string; type: 'info' | 'success' | 'error' | 'warn' }[];
-  lensAmazonCount: number;
-  keywordCount: number;
-  categoryKeywords: CategoryKeyword[];
+  lensDirectCount: number;
+  lensCropCount: number;
+  lensChainCount: number;
+  detectedZones: string[];
   searchError: string;
   savedAsins: string[];
   lastSearchFilters: { gender: string; bodyType: string; vibe: string; season: string };
@@ -150,9 +150,10 @@ export default function AdminSmartSearch() {
   const [searchLog, setSearchLog] = useState<{ msg: string; type: 'info' | 'success' | 'error' | 'warn' }[]>(cached.current?.searchLog || []);
   const [showLog, setShowLog] = useState(true);
 
-  const [lensAmazonCount, setLensAmazonCount] = useState(cached.current?.lensAmazonCount || 0);
-  const [keywordCount, setKeywordCount] = useState(cached.current?.keywordCount || 0);
-  const [categoryKeywords, setCategoryKeywords] = useState<CategoryKeyword[]>(cached.current?.categoryKeywords || []);
+  const [lensDirectCount, setLensDirectCount] = useState(cached.current?.lensDirectCount || 0);
+  const [lensCropCount, setLensCropCount] = useState(cached.current?.lensCropCount || 0);
+  const [lensChainCount, setLensChainCount] = useState(cached.current?.lensChainCount || 0);
+  const [detectedZones, setDetectedZones] = useState<string[]>(cached.current?.detectedZones || []);
   const [searchError, setSearchError] = useState(cached.current?.searchError || '');
 
   const [activeCategory, setActiveCategory] = useState('all');
@@ -191,16 +192,17 @@ export default function AdminSmartSearch() {
         phase: results.length > 0 ? 'done' : 'idle',
         results: results.map(({ analyzing, ...rest }) => rest),
         searchLog,
-        lensAmazonCount,
-        keywordCount,
-        categoryKeywords,
+        lensDirectCount,
+        lensCropCount,
+        lensChainCount,
+        detectedZones,
         searchError,
         savedAsins: Array.from(savedAsins),
         lastSearchFilters,
       });
     }
   }, [phase, results, savedAsins, searchLog, imageUrl, gender, bodyType, vibe, season,
-      lensAmazonCount, keywordCount, categoryKeywords, searchError, lastSearchFilters]);
+      lensDirectCount, lensCropCount, lensChainCount, detectedZones, searchError, lastSearchFilters]);
 
   const addLog = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') => {
     setSearchLog(prev => [...prev, { msg: `[${new Date().toLocaleTimeString()}] ${msg}`, type }]);
@@ -210,21 +212,22 @@ export default function AdminSmartSearch() {
     if (!imageUrl.trim()) return;
 
     abortRef.current = false;
-    setPhase('visual_searching');
+    setPhase('lens_searching');
     setResults([]);
     setSearchLog([]);
     setSearchError('');
     setSelected(new Set());
-    setLensAmazonCount(0);
-    setKeywordCount(0);
-    setCategoryKeywords([]);
+    setLensDirectCount(0);
+    setLensCropCount(0);
+    setLensChainCount(0);
+    setDetectedZones([]);
     setActiveCategory('all');
     setShowLog(true);
 
     const currentFilters = { gender, bodyType, vibe, season };
     setLastSearchFilters(currentFilters);
 
-    addLog('Smart Search 시작 (Google Lens + AI 키워드 병렬 실행)...', 'info');
+    addLog('Smart Search 시작 (Lens 원본 → 크롭 분할 → 체인)...', 'info');
 
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/smart-product-search`, {
@@ -248,30 +251,36 @@ export default function AdminSmartSearch() {
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
       if (data.visual_error) {
-        addLog(`Visual Search 실패: ${data.visual_error}`, 'error');
+        addLog(`Lens 원본 실패: ${data.visual_error}`, 'error');
         addLog('Pinterest/SNS 이미지는 Google Lens 접근이 차단될 수 있습니다. CDN 직접 이미지 URL을 사용하세요.', 'warn');
       } else {
-        addLog(`Lens Amazon 매칭: ${data.lens_amazon_count}개`, data.lens_amazon_count > 0 ? 'success' : 'warn');
+        addLog(`Lens 원본: ${data.lens_direct_count}개`, data.lens_direct_count > 0 ? 'success' : 'warn');
       }
 
-      setPhase('generating_keywords');
+      setPhase('crop_searching');
 
-      if (data.keyword_error) {
-        addLog(`AI 키워드 생성 실패: ${data.keyword_error}`, 'error');
-      } else if (data.category_keywords?.length > 0) {
-        const cats = data.category_keywords.map((ck: CategoryKeyword) => ck.category).join(', ');
-        addLog(`AI 카테고리 감지: ${cats} (${data.category_keywords.length}개)`, 'success');
-        addLog(`AI 키워드 검색으로 ${data.keyword_count}개 상품 추가`, 'success');
+      if (data.crop_error) {
+        addLog(`크롭 분할 오류: ${data.crop_error}`, 'warn');
+      } else if ((data.detected_zones || []).length > 0) {
+        addLog(`Gemini 존 감지: ${data.detected_zones.join(', ')}`, 'info');
+        addLog(`크롭 분할 검색: +${data.lens_crop_count}개`, data.lens_crop_count > 0 ? 'success' : 'warn');
       }
 
-      setLensAmazonCount(data.lens_amazon_count || 0);
-      setKeywordCount(data.keyword_count || 0);
-      setCategoryKeywords(data.category_keywords || []);
+      setPhase('chain_searching');
+      addLog(`체인 검색: +${data.lens_chain_count}개`, data.lens_chain_count > 0 ? 'success' : 'warn');
+
+      setLensDirectCount(data.lens_direct_count || 0);
+      setLensCropCount(data.lens_crop_count || 0);
+      setLensChainCount(data.lens_chain_count || 0);
+      setDetectedZones(data.detected_zones || []);
 
       const mergedResults: SmartResult[] = (data.results || []).map((r: SmartResult) => ({ ...r }));
       setResults(mergedResults);
 
-      addLog(`완료! 총 ${mergedResults.length}개 Amazon 상품 (Lens: ${data.lens_amazon_count}, KW: ${data.keyword_count})`, 'success');
+      addLog(
+        `완료! 총 ${mergedResults.length}개 (Lens: ${data.lens_direct_count}, 크롭: ${data.lens_crop_count}, 체인: ${data.lens_chain_count})`,
+        'success'
+      );
       setPhase('done');
     } catch (err) {
       setSearchError((err as Error).message);
@@ -308,7 +317,6 @@ export default function AdminSmartSearch() {
       const deduped = newResults.filter(r => r.asin && !existingAsins.has(r.asin));
 
       setResults(prev => [...prev, ...deduped]);
-      setKeywordCount(prev => prev + deduped.length);
       addLog(`"${manualKeyword}" -> ${deduped.length}개 추가 (중복 ${newResults.length - deduped.length}개 제외)`, 'success');
       setManualKeyword('');
     } catch (err) {
@@ -597,11 +605,15 @@ export default function AdminSmartSearch() {
                 <>
                   <div className="flex items-center gap-1.5 bg-teal-500/10 text-teal-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-teal-500/15">
                     <Eye className="w-3 h-3" />
-                    Lens: {lensAmazonCount}
+                    Lens: {lensDirectCount}
                   </div>
-                  <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-amber-500/15">
-                    <Sparkles className="w-3 h-3" />
-                    AI KW: +{keywordCount}
+                  <div className="flex items-center gap-1.5 bg-cyan-500/10 text-cyan-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-cyan-500/15">
+                    <Scissors className="w-3 h-3" />
+                    Crop: +{lensCropCount}
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-blue-500/10 text-blue-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-blue-500/15">
+                    <Link2 className="w-3 h-3" />
+                    Chain: +{lensChainCount}
                   </div>
                   <div className="flex items-center gap-1.5 bg-white/5 text-white/40 px-2.5 py-1 rounded-full text-[11px] border border-white/8">
                     Total: {results.length}
@@ -610,16 +622,13 @@ export default function AdminSmartSearch() {
               )}
             </div>
 
-            {categoryKeywords.length > 0 && (
+            {detectedZones.length > 0 && (
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">AI 카테고리:</span>
-                {categoryKeywords.map((ck, i) => (
-                  <div key={i} className="flex items-center gap-1">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[ck.category] || 'bg-white/8 text-white/40'}`}>
-                      {ck.category}
-                    </span>
-                    <span className="text-[10px] text-white/20 hidden sm:inline">{ck.keywords[0]?.slice(0, 25)}</span>
-                  </div>
+                <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">크롭 존:</span>
+                {detectedZones.map((zone, i) => (
+                  <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[zone] || 'bg-white/8 text-white/40'}`}>
+                    {zone}
+                  </span>
                 ))}
               </div>
             )}
@@ -747,13 +756,14 @@ export default function AdminSmartSearch() {
               </div>
               <p className="text-white/40 text-base font-medium mb-2">Smart Product Search</p>
               <p className="text-white/20 text-sm max-w-md mx-auto leading-relaxed">
-                패션 이미지 URL을 입력하면 Google Lens로 Amazon 상품을 직접 찾고,
-                AI가 이미지 속 모든 아이템을 분석해 키워드 검색으로 보완합니다.
+                패션 이미지 URL을 입력하면 Google Lens 원본 검색, AI 크롭 분할 검색, 체인 검색 3단계로 관련 Amazon 상품을 최대한 발굴합니다.
               </p>
               <div className="flex items-center justify-center gap-3 mt-8">
-                <StepBadge label="Google Lens" sub="Amazon 매칭" icon={<Eye className="w-4 h-4" />} />
+                <StepBadge label="Lens 원본" sub="전신 매칭" icon={<Eye className="w-4 h-4" />} />
                 <ArrowRight className="w-4 h-4 text-white/10" />
-                <StepBadge label="AI 카테고리" sub="Gemini KW" icon={<Sparkles className="w-4 h-4" />} />
+                <StepBadge label="크롭 분할" sub="아이템별 집중" icon={<Scissors className="w-4 h-4" />} />
+                <ArrowRight className="w-4 h-4 text-white/10" />
+                <StepBadge label="체인 검색" sub="유사상품 확장" icon={<Link2 className="w-4 h-4" />} />
                 <ArrowRight className="w-4 h-4 text-white/10" />
                 <StepBadge label="DB 등록" sub="analyze & save" icon={<Tag className="w-4 h-4" />} />
               </div>
@@ -769,9 +779,9 @@ export default function AdminSmartSearch() {
                 <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-teal-500 animate-ping opacity-75" />
               </div>
               <p className="text-white/50 text-sm font-medium">
-                {phase === 'visual_searching' && 'Google Lens + AI 이미지 분석 중...'}
-                {phase === 'generating_keywords' && 'AI 카테고리별 키워드 분석 중...'}
-                {phase === 'keyword_searching' && 'Amazon 키워드 검색 중...'}
+                {phase === 'lens_searching' && 'Google Lens 원본 검색 중...'}
+                {phase === 'crop_searching' && 'Gemini 크롭 분할 검색 중...'}
+                {phase === 'chain_searching' && '유사 이미지 체인 검색 중...'}
               </p>
             </div>
           )}
@@ -802,8 +812,15 @@ export default function AdminSmartSearch() {
                       'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
                     }`}
                   >
-                    <div className={`absolute top-2 right-2 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`}>
-                      {badge.label}
+                    <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-0.5">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                      {product.crop_zone && (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded ${CATEGORY_COLORS[product.crop_zone] || 'bg-white/10 text-white/40'}`}>
+                          {product.crop_zone}
+                        </span>
+                      )}
                     </div>
 
                     <div className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
@@ -911,9 +928,9 @@ export default function AdminSmartSearch() {
 function StatusBadge({ phase }: { phase: SearchPhase }) {
   const config: Record<SearchPhase, { label: string; color: string; spin: boolean }> = {
     idle: { label: '', color: '', spin: false },
-    visual_searching: { label: 'Smart Search...', color: 'bg-teal-500/15 text-teal-400 border-teal-500/20', spin: true },
-    generating_keywords: { label: 'AI 분석 중...', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20', spin: true },
-    keyword_searching: { label: '키워드 검색 중...', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20', spin: true },
+    lens_searching: { label: 'Lens 원본 검색...', color: 'bg-teal-500/15 text-teal-400 border-teal-500/20', spin: true },
+    crop_searching: { label: '크롭 분할 검색...', color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20', spin: true },
+    chain_searching: { label: '체인 검색...', color: 'bg-blue-500/15 text-blue-400 border-blue-500/20', spin: true },
     done: { label: 'Search Complete', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', spin: false },
   };
   const c = config[phase];
