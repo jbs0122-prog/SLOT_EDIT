@@ -900,7 +900,7 @@ export default function AdminSmartSearch() {
                     <a
                       href={product.url}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel="noopener"
                       onClick={e => e.stopPropagation()}
                       className="absolute bottom-2 right-2 z-10 w-6 h-6 bg-black/40 hover:bg-black/70 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
                     >
