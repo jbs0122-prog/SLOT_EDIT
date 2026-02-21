@@ -63,60 +63,14 @@ function upgradeImageResolution(url: string): string {
   return url.replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.");
 }
 
-async function searchViaVisual(imageUrl: string): Promise<AmazonResult[]> {
-  const params = new URLSearchParams({
-    engine: "google_lens",
-    url: imageUrl,
-    type: "products",
-    hl: "en",
-    country: "us",
-    api_key: SERPAPI_KEY,
-  });
-
-  const res = await fetch(
-    `https://serpapi.com/search.json?${params.toString()}`
-  );
-  const data = await res.json();
-
-  if (!res.ok || data.error) {
-    const errMsg =
-      typeof data.error === "string"
-        ? data.error
-        : JSON.stringify(data.error || data);
-    throw new Error(errMsg);
-  }
-
-  const visualMatches: LensProduct[] = data.visual_matches || [];
-  const amazonResults: AmazonResult[] = [];
-
-  for (const item of visualMatches) {
-    if (!item.link) continue;
-
-    const isAmazon =
-      item.link.includes("amazon.com") ||
-      item.source?.toLowerCase().includes("amazon");
-
-    if (!isAmazon) continue;
-
-    const asin = extractAsin(item.link);
-    if (!asin) continue;
-
-    amazonResults.push({
-      asin,
-      title: item.title || "",
-      brand: "",
-      price: item.price?.extracted_value ?? null,
-      currency: item.price?.currency || "USD",
-      image: upgradeImageResolution(item.image || item.thumbnail || ""),
-      rating: item.rating ?? null,
-      reviews_count: item.reviews ?? null,
-      url: item.link,
-      is_prime: false,
-      source: "lens",
-    });
-  }
-
-  return amazonResults;
+function cleanTitleForSearch(title: string): string {
+  return title
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .slice(0, 8)
+    .join(" ");
 }
 
 async function searchViaKeyword(
@@ -157,6 +111,113 @@ async function searchViaKeyword(
     source: "keyword" as const,
     category,
   }));
+}
+
+async function searchViaVisual(imageUrl: string): Promise<{
+  directAmazon: AmazonResult[];
+  nonAmazonTitles: string[];
+  failedAsinTitles: string[];
+}> {
+  const params = new URLSearchParams({
+    engine: "google_lens",
+    url: imageUrl,
+    type: "products",
+    hl: "en",
+    country: "us",
+    api_key: SERPAPI_KEY,
+  });
+
+  const res = await fetch(
+    `https://serpapi.com/search.json?${params.toString()}`
+  );
+  const data = await res.json();
+
+  if (!res.ok || data.error) {
+    const errMsg =
+      typeof data.error === "string"
+        ? data.error
+        : JSON.stringify(data.error || data);
+    throw new Error(errMsg);
+  }
+
+  const visualMatches: LensProduct[] = data.visual_matches || [];
+  const directAmazon: AmazonResult[] = [];
+  const nonAmazonTitles: string[] = [];
+  const failedAsinTitles: string[] = [];
+
+  for (const item of visualMatches) {
+    if (!item.link && !item.title) continue;
+
+    const isAmazon =
+      (item.link && item.link.includes("amazon.com")) ||
+      item.source?.toLowerCase().includes("amazon");
+
+    if (isAmazon && item.link) {
+      const asin = extractAsin(item.link);
+      if (asin) {
+        directAmazon.push({
+          asin,
+          title: item.title || "",
+          brand: "",
+          price: item.price?.extracted_value ?? null,
+          currency: item.price?.currency || "USD",
+          image: upgradeImageResolution(item.image || item.thumbnail || ""),
+          rating: item.rating ?? null,
+          reviews_count: item.reviews ?? null,
+          url: item.link,
+          is_prime: false,
+          source: "lens",
+        });
+      } else if (item.title) {
+        failedAsinTitles.push(item.title);
+      }
+    } else if (!isAmazon && item.title) {
+      nonAmazonTitles.push(item.title);
+    }
+  }
+
+  return { directAmazon, nonAmazonTitles, failedAsinTitles };
+}
+
+async function recoverLensResultsViaAmazonSearch(
+  nonAmazonTitles: string[],
+  failedAsinTitles: string[],
+  seenAsins: Set<string>
+): Promise<AmazonResult[]> {
+  const MAX_NON_AMAZON = 5;
+  const MAX_FAILED_ASIN = 3;
+
+  const titlesToSearch = [
+    ...nonAmazonTitles.slice(0, MAX_NON_AMAZON),
+    ...failedAsinTitles.slice(0, MAX_FAILED_ASIN),
+  ];
+
+  if (titlesToSearch.length === 0) return [];
+
+  const searchPromises = titlesToSearch.map(async (title) => {
+    const cleaned = cleanTitleForSearch(title);
+    if (!cleaned) return [];
+    try {
+      const results = await searchViaKeyword(cleaned, 1);
+      return results.slice(0, 3).map((r) => ({ ...r, source: "lens" as const }));
+    } catch {
+      return [];
+    }
+  });
+
+  const allResults = await Promise.all(searchPromises);
+  const recovered: AmazonResult[] = [];
+
+  for (const batch of allResults) {
+    for (const r of batch) {
+      if (r.asin && !seenAsins.has(r.asin)) {
+        seenAsins.add(r.asin);
+        recovered.push(r);
+      }
+    }
+  }
+
+  return recovered;
 }
 
 async function fetchImageAsBase64(
@@ -342,8 +403,10 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      let lensAmazonResults: AmazonResult[] = [];
+      let lensDirectResults: AmazonResult[] = [];
       let visualError: string | null = null;
+      let nonAmazonTitles: string[] = [];
+      let failedAsinTitles: string[] = [];
 
       let usedCategoryKeywords: CategoryKeywords[] = [];
       let keywordError: string | null = null;
@@ -360,7 +423,9 @@ Deno.serve(async (req: Request) => {
       ]);
 
       if (visualResult.status === "fulfilled") {
-        lensAmazonResults = visualResult.value;
+        lensDirectResults = visualResult.value.directAmazon;
+        nonAmazonTitles = visualResult.value.nonAmazonTitles;
+        failedAsinTitles = visualResult.value.failedAsinTitles;
       } else {
         visualError =
           visualResult.reason?.message || "Visual search failed";
@@ -372,6 +437,27 @@ Deno.serve(async (req: Request) => {
         keywordError =
           geminiResult.reason?.message || "Gemini analysis failed";
       }
+
+      const seenAsins = new Set<string>();
+      const merged: AmazonResult[] = [];
+
+      for (const r of lensDirectResults) {
+        if (r.asin && !seenAsins.has(r.asin)) {
+          seenAsins.add(r.asin);
+          merged.push(r);
+        }
+      }
+
+      const lensRecovered = await recoverLensResultsViaAmazonSearch(
+        nonAmazonTitles,
+        failedAsinTitles,
+        seenAsins
+      );
+      for (const r of lensRecovered) {
+        merged.push(r);
+      }
+
+      const lensAmazonCount = lensDirectResults.length + lensRecovered.length;
 
       let categoryKeywordResults: AmazonResult[] = [];
 
@@ -394,15 +480,6 @@ Deno.serve(async (req: Request) => {
         categoryKeywordResults = allKwResults.flat();
       }
 
-      const seenAsins = new Set<string>();
-      const merged: AmazonResult[] = [];
-
-      for (const r of lensAmazonResults) {
-        if (r.asin && !seenAsins.has(r.asin)) {
-          seenAsins.add(r.asin);
-          merged.push(r);
-        }
-      }
       for (const r of categoryKeywordResults) {
         if (r.asin && !seenAsins.has(r.asin)) {
           seenAsins.add(r.asin);
@@ -414,7 +491,11 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           method: "smart",
           results: merged,
-          lens_amazon_count: lensAmazonResults.length,
+          lens_amazon_count: lensAmazonCount,
+          lens_direct_count: lensDirectResults.length,
+          lens_recovered_count: lensRecovered.length,
+          lens_non_amazon_titles: nonAmazonTitles.length,
+          lens_failed_asin_titles: failedAsinTitles.length,
           keyword_count: categoryKeywordResults.length,
           total: merged.length,
           visual_error: visualError,
