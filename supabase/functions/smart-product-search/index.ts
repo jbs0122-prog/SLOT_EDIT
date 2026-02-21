@@ -75,6 +75,10 @@ function upgradeImageResolution(url: string): string {
     .replace(/\._[A-Z0-9,_]+_\./g, "._AC_SL1500_.");
 }
 
+function isAnyAmazonDomain(link: string): boolean {
+  return /amazon\.(com|co\.uk|co\.jp|de|fr|it|es|ca|com\.au|com\.br|com\.mx|ae|in|nl|pl|se|sg|tr)/.test(link);
+}
+
 function parseAmazonResultsFromLens(
   visualMatches: LensProduct[],
   sourceType: AmazonResult["source"],
@@ -84,21 +88,24 @@ function parseAmazonResultsFromLens(
   for (const item of visualMatches) {
     if (!item.link && !item.title) continue;
     const isAmazon =
-      (item.link && item.link.includes("amazon.com")) ||
+      (item.link && isAnyAmazonDomain(item.link)) ||
       item.source?.toLowerCase().includes("amazon");
     if (isAmazon && item.link) {
       const asin = extractAsin(item.link);
       if (asin) {
+        const canonicalUrl = `https://www.amazon.com/dp/${asin}`;
+        const rawImage = item.image || item.thumbnail || "";
+        const upgradedImage = upgradeImageResolution(rawImage);
         results.push({
           asin,
           title: item.title || "",
           brand: "",
           price: item.price?.extracted_value ?? null,
           currency: item.price?.currency || "USD",
-          image: upgradeImageResolution(item.image || item.thumbnail || ""),
+          image: upgradedImage,
           rating: item.rating ?? null,
           reviews_count: item.reviews ?? null,
-          url: item.link,
+          url: canonicalUrl,
           is_prime: false,
           source: sourceType,
           crop_zone: cropZone,
@@ -606,16 +613,19 @@ Deno.serve(async (req: Request) => {
         log.push(`크롭 분할: 좌표 추출 실패 (${cropError || "unknown"})`);
       }
 
-      // Step 4: 체인 검색 - Lens 직접 히트 상품 이미지로 재검색 (상위 3개)
+      // Step 4: 체인 검색 - Amazon 고해상도 제품 이미지로 재검색 (상위 3개)
       let chainCount = 0;
       const chainTargets = merged
-        .filter((r) => r.source === "lens" && r.image)
+        .filter((r) => r.source === "lens" && r.asin)
         .slice(0, 3);
 
       if (chainTargets.length > 0) {
-        const chainSearches = chainTargets.map((r) =>
-          searchChainLens(r.image, seenAsins)
-        );
+        const chainSearches = chainTargets.map((r) => {
+          const chainImageUrl = r.image && r.image.includes("media-amazon.com")
+            ? r.image
+            : `https://ws-na.amazon-adsystem.com/widgets/q?_encoding=UTF8&ASIN=${r.asin}&Format=_SL500_&ID=AsinImage&MarketPlace=US&ServiceVersion=20070822&WS=1&tag=xx`;
+          return searchChainLens(chainImageUrl, seenAsins);
+        });
         const chainResults = await Promise.all(chainSearches);
         for (const batch of chainResults) {
           for (const r of batch) {
