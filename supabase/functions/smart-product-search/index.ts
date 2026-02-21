@@ -48,6 +48,24 @@ interface CropBox {
   height: number;
 }
 
+const CROP_ZONE_TO_CATEGORY: Record<string, string> = {
+  outer: "outer",
+  mid: "mid",
+  top: "top",
+  bottom: "bottom",
+  shoes: "shoes",
+  bag: "bag",
+  accessory: "accessory",
+  necktie: "accessory",
+  hat: "accessory",
+  belt: "accessory",
+};
+
+function cropZoneToCategory(zone?: string): string | undefined {
+  if (!zone) return undefined;
+  return CROP_ZONE_TO_CATEGORY[zone.toLowerCase()] ?? undefined;
+}
+
 function extractAsin(url: string): string | null {
   const patterns = [
     /\/dp\/([A-Z0-9]{10})/i,
@@ -158,6 +176,7 @@ function parseAmazonResultsFromLens(
       is_prime: false,
       source: sourceType,
       crop_zone: cropZone,
+      category: cropZoneToCategory(cropZone),
     });
   }
 
@@ -277,20 +296,34 @@ Return ONLY a JSON object with:
 - "img_height": estimated pixel height of image (e.g. 1200)
 - "boxes": array of {zone, x, y, width, height} where x,y is top-left corner
 
-Zone names: "top" (shirt/blouse/top), "bottom" (pants/skirt), "outer" (jacket/coat), "shoes", "bag", "accessory"
+Zone names and their meanings:
+- "outer": jacket, coat, blazer, cardigan worn as outermost layer
+- "mid": hoodie, sweater, sweatshirt worn under outer but over top
+- "top": shirt, t-shirt, blouse, tank top, inner top layer
+- "bottom": pants, jeans, skirt, shorts
+- "shoes": footwear
+- "bag": bag, backpack, purse
+- "accessory": hat, belt, scarf, glasses, jewelry
 
-Example:
+IMPORTANT RULES:
+- If an outer layer (jacket/coat) is present, STILL include "top" or "mid" if the inner garment is visible even partially
+- If a hoodie/sweater is worn under a jacket, use "mid" for the hoodie and "outer" for the jacket
+- Use "top" for the innermost visible shirt/blouse layer
+- Include up to 6 items. Prioritize: outer > mid > top > bottom > shoes > bag > accessory
+
+Example for layered outfit:
 {
   "img_width": 800,
   "img_height": 1200,
   "boxes": [
     {"zone":"outer","x":0.1,"y":0.05,"width":0.8,"height":0.45},
+    {"zone":"top","x":0.2,"y":0.1,"width":0.6,"height":0.35},
     {"zone":"bottom","x":0.2,"y":0.5,"width":0.6,"height":0.35},
     {"zone":"shoes","x":0.25,"y":0.85,"width":0.5,"height":0.12}
   ]
 }
 
-Only include zones clearly visible. Limit to 4 most prominent items.`;
+Only include zones clearly visible.`;
 
   try {
     const geminiRes = await fetch(
@@ -502,9 +535,9 @@ Deno.serve(async (req: Request) => {
       const cropErrors: string[] = [];
 
       if (cropBoxes.length > 0) {
-        // Step 3: 크롭 분할 Lens 검색 (최대 4개 존)
+        // Step 3: 크롭 분할 Lens 검색 (최대 6개 존)
         const cropResults = await Promise.all(
-          cropBoxes.slice(0, 4).map((box) => searchCroppedLens(image_url, box))
+          cropBoxes.slice(0, 6).map((box) => searchCroppedLens(image_url, box))
         );
 
         for (let i = 0; i < cropResults.length; i++) {
