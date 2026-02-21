@@ -50,14 +50,14 @@ interface CropBox {
 
 function extractAsin(url: string): string | null {
   const patterns = [
-    /\/dp\/([A-Z0-9]{10})/,
-    /\/gp\/product\/([A-Z0-9]{10})/,
-    /\/ASIN\/([A-Z0-9]{10})/,
-    /[?&]asin=([A-Z0-9]{10})/,
+    /\/dp\/([A-Z0-9]{10})/i,
+    /\/gp\/product\/([A-Z0-9]{10})/i,
+    /\/ASIN\/([A-Z0-9]{10})/i,
+    /[?&]asin=([A-Z0-9]{10})/i,
   ];
   for (const p of patterns) {
     const m = url.match(p);
-    if (m) return m[1];
+    if (m) return m[1].toUpperCase();
   }
   return null;
 }
@@ -76,6 +76,7 @@ function upgradeImageResolution(url: string): string {
 }
 
 function resolveUsAmazonLink(link: string): string | null {
+  if (!link) return null;
   try {
     const url = new URL(link);
     const host = url.hostname.toLowerCase();
@@ -86,7 +87,7 @@ function resolveUsAmazonLink(link: string): string | null {
 
     if (host === "www.google.com" || host === "google.com") {
       const q = url.searchParams.get("q") || url.searchParams.get("url");
-      if (q) return resolveUsAmazonLink(q);
+      if (q) return resolveUsAmazonLink(decodeURIComponent(q));
     }
 
     return null;
@@ -99,14 +100,22 @@ function parseAmazonResultsFromLens(
   visualMatches: LensProduct[],
   sourceType: AmazonResult["source"],
   cropZone?: string
-): AmazonResult[] {
+): { results: AmazonResult[]; stats: { total: number; amazon: number; withAsin: number } } {
   const results: AmazonResult[] = [];
+  let amazonCount = 0;
+  let withAsinCount = 0;
+
   for (const item of visualMatches) {
     if (!item.link) continue;
+
     const resolvedLink = resolveUsAmazonLink(item.link);
     if (!resolvedLink) continue;
+    amazonCount++;
+
     const asin = extractAsin(resolvedLink);
     if (!asin) continue;
+    withAsinCount++;
+
     const canonicalUrl = `https://www.amazon.com/dp/${asin}`;
     const rawImage = item.image || item.thumbnail || "";
     const upgradedImage = upgradeImageResolution(rawImage);
@@ -125,14 +134,18 @@ function parseAmazonResultsFromLens(
       crop_zone: cropZone,
     });
   }
-  return results;
+
+  return {
+    results,
+    stats: { total: visualMatches.length, amazon: amazonCount, withAsin: withAsinCount },
+  };
 }
 
 async function searchViaLens(
   imageUrl: string,
   sourceType: AmazonResult["source"] = "lens",
   cropZone?: string
-): Promise<{ results: AmazonResult[]; error: string | null }> {
+): Promise<{ results: AmazonResult[]; error: string | null; stats?: any }> {
   try {
     const params = new URLSearchParams({
       engine: "google_lens",
@@ -143,27 +156,30 @@ async function searchViaLens(
       api_key: SERPAPI_KEY,
     });
 
-    const res = await fetch(
-      `https://serpapi.com/search.json?${params.toString()}`
-    );
+    const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
     const data = await res.json();
 
     if (!res.ok || data.error) {
-      const errMsg =
-        typeof data.error === "string"
-          ? data.error
-          : JSON.stringify(data.error || data);
+      const errMsg = typeof data.error === "string" ? data.error : JSON.stringify(data.error || data);
       return { results: [], error: errMsg };
     }
 
     const visualMatches: LensProduct[] = data.visual_matches || [];
-    console.log(`[Lens raw] total=${visualMatches.length} links=${JSON.stringify(visualMatches.slice(0, 10).map(m => ({ link: m.link, source: m.source, title: (m.title || "").slice(0, 40) })))}`);
-    const results = parseAmazonResultsFromLens(
-      visualMatches,
-      sourceType,
-      cropZone
-    );
-    return { results, error: null };
+
+    const sample = visualMatches.slice(0, 10).map(m => ({
+      link: m.link,
+      source: m.source,
+      title: (m.title || "").slice(0, 40),
+    }));
+    console.log(`[Lens raw] total=${visualMatches.length} links=${JSON.stringify(sample)}`);
+
+    const amazonLinks = visualMatches.filter(m => m.link && m.link.includes("amazon.com"));
+    console.log(`[Lens filter] total=${visualMatches.length} amazon_links=${amazonLinks.length}`);
+
+    const { results, stats } = parseAmazonResultsFromLens(visualMatches, sourceType, cropZone);
+    console.log(`[Lens parsed] total=${stats.total} amazon=${stats.amazon} withAsin=${stats.withAsin} final=${results.length}`);
+
+    return { results, error: null, stats };
   } catch (e) {
     return { results: [], error: (e as Error).message };
   }
@@ -174,10 +190,7 @@ async function fetchImageAsBase64(
 ): Promise<{ base64: string; mimeType: string } | null> {
   try {
     const res = await fetch(imageUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
     });
     if (!res.ok) return null;
 
@@ -196,55 +209,6 @@ async function fetchImageAsBase64(
   }
 }
 
-async function cropImageToBase64(
-  imageBase64: string,
-  mimeType: string,
-  box: CropBox,
-  imgWidth: number,
-  imgHeight: number
-): Promise<string | null> {
-  try {
-    const x = Math.round(box.x * imgWidth);
-    const y = Math.round(box.y * imgHeight);
-    const w = Math.round(box.width * imgWidth);
-    const h = Math.round(box.height * imgHeight);
-
-    if (w <= 0 || h <= 0) return null;
-
-    const binaryStr = atob(imageBase64);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
-
-    const isJpeg =
-      mimeType === "image/jpeg" || mimeType === "image/jpg";
-    const isPng = mimeType === "image/png";
-
-    if (!isJpeg && !isPng) return null;
-
-    if (isJpeg) {
-      return await cropJpegSimple(bytes, x, y, w, h, imgWidth, imgHeight);
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function cropJpegSimple(
-  _srcBytes: Uint8Array,
-  _x: number,
-  _y: number,
-  _w: number,
-  _h: number,
-  _imgWidth: number,
-  _imgHeight: number
-): Promise<string | null> {
-  return null;
-}
-
 async function getCropBoxesViaGemini(
   imageUrl: string,
   gender: string,
@@ -261,30 +225,15 @@ async function getCropBoxesViaGemini(
 }> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
   if (!GEMINI_API_KEY) {
-    return {
-      cropBoxes: [],
-      imgWidth: 0,
-      imgHeight: 0,
-      imageBase64: "",
-      mimeType: "",
-      error: "GEMINI_API_KEY not configured",
-    };
+    return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: "", mimeType: "", error: "GEMINI_API_KEY not configured" };
   }
 
   const imageData = await fetchImageAsBase64(imageUrl);
   if (!imageData) {
-    return {
-      cropBoxes: [],
-      imgWidth: 0,
-      imgHeight: 0,
-      imageBase64: "",
-      mimeType: "",
-      error: "Failed to fetch image",
-    };
+    return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: "", mimeType: "", error: "Failed to fetch image" };
   }
 
-  const genderLabel =
-    gender === "MALE" ? "men" : gender === "FEMALE" ? "women" : "unisex";
+  const genderLabel = gender === "MALE" ? "men" : gender === "FEMALE" ? "women" : "unisex";
 
   const prompt = `You are analyzing a fashion outfit image to identify bounding boxes for each distinct clothing/accessory item.
 
@@ -324,54 +273,23 @@ Only include zones clearly visible. Limit to 4 most prominent items.`;
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: imageData.mimeType,
-                    data: imageData.base64,
-                  },
-                },
-                { text: prompt },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1024,
-            responseMimeType: "application/json",
-          },
+          contents: [{ parts: [{ inline_data: { mime_type: imageData.mimeType, data: imageData.base64 } }, { text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024, responseMimeType: "application/json" },
         }),
       }
     );
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
-      return {
-        cropBoxes: [],
-        imgWidth: 0,
-        imgHeight: 0,
-        imageBase64: imageData.base64,
-        mimeType: imageData.mimeType,
-        error: `Gemini error: ${errText.slice(0, 200)}`,
-      };
+      return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: imageData.base64, mimeType: imageData.mimeType, error: `Gemini error: ${errText.slice(0, 200)}` };
     }
 
     const geminiData = await geminiRes.json();
-    const rawText =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
 
     const objMatch = rawText.match(/\{[\s\S]*\}/);
     if (!objMatch) {
-      return {
-        cropBoxes: [],
-        imgWidth: 0,
-        imgHeight: 0,
-        imageBase64: imageData.base64,
-        mimeType: imageData.mimeType,
-        error: "No JSON found in Gemini response",
-      };
+      return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: imageData.base64, mimeType: imageData.mimeType, error: "No JSON found in Gemini response" };
     }
 
     const parsed = JSON.parse(objMatch[0]);
@@ -394,21 +312,11 @@ Only include zones clearly visible. Limit to 4 most prominent items.`;
       error: null,
     };
   } catch (e) {
-    return {
-      cropBoxes: [],
-      imgWidth: 0,
-      imgHeight: 0,
-      imageBase64: imageData.base64,
-      mimeType: imageData.mimeType,
-      error: (e as Error).message,
-    };
+    return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: imageData.base64, mimeType: imageData.mimeType, error: (e as Error).message };
   }
 }
 
-async function buildCropImageUrl(
-  imageUrl: string,
-  box: CropBox
-): Promise<string | null> {
+async function buildCropSearchUrl(imageUrl: string, box: CropBox): Promise<string> {
   const x1 = Math.round(box.x * 1000);
   const y1 = Math.round(box.y * 1000);
   const x2 = Math.round((box.x + box.width) * 1000);
@@ -436,26 +344,22 @@ async function searchCroppedLens(
   box: CropBox
 ): Promise<{ results: AmazonResult[]; error: string | null }> {
   try {
-    const serpUrl = await buildCropImageUrl(imageUrl, box);
-    if (!serpUrl) return { results: [], error: "Failed to build crop URL" };
-
+    const serpUrl = await buildCropSearchUrl(imageUrl, box);
     const res = await fetch(serpUrl);
     const data = await res.json();
 
     if (!res.ok || data.error) {
-      const errMsg =
-        typeof data.error === "string"
-          ? data.error
-          : JSON.stringify(data.error || data);
+      const errMsg = typeof data.error === "string" ? data.error : JSON.stringify(data.error || data);
       return { results: [], error: errMsg };
     }
 
     const visualMatches: LensProduct[] = data.visual_matches || [];
-    const results = parseAmazonResultsFromLens(
-      visualMatches,
-      "lens_crop",
-      box.zone
-    );
+    const amazonLinks = visualMatches.filter(m => m.link && m.link.includes("amazon.com"));
+    console.log(`[Crop ${box.zone}] total=${visualMatches.length} amazon_links=${amazonLinks.length}`);
+
+    const { results, stats } = parseAmazonResultsFromLens(visualMatches, "lens_crop", box.zone);
+    console.log(`[Crop ${box.zone} parsed] amazon=${stats.amazon} withAsin=${stats.withAsin} final=${results.length}`);
+
     return { results, error: null };
   } catch (e) {
     return { results: [], error: (e as Error).message };
@@ -466,10 +370,7 @@ async function searchChainLens(
   chainImageUrl: string,
   seenAsins: Set<string>
 ): Promise<AmazonResult[]> {
-  const { results, error } = await searchViaLens(
-    chainImageUrl,
-    "lens_chain"
-  );
+  const { results, error } = await searchViaLens(chainImageUrl, "lens_chain");
   if (error || results.length === 0) return [];
 
   const newResults: AmazonResult[] = [];
@@ -489,26 +390,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const {
-      action,
-      image_url,
-      keyword,
-      gender,
-      body_type,
-      vibe,
-      season,
-      page,
-      category,
-    } = body;
+    const { action, image_url, keyword, gender, body_type, vibe, season, page, category } = body;
 
     if (action === "keyword_search") {
       if (!keyword) {
         return new Response(
           JSON.stringify({ error: "keyword is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -516,37 +404,32 @@ Deno.serve(async (req: Request) => {
         engine: "amazon",
         k: keyword,
         i: "fashion",
+        tld: "com",
         api_key: SERPAPI_KEY,
       });
       if (page > 1) params.set("page", String(page));
 
-      const res = await fetch(
-        `https://serpapi.com/search.json?${params.toString()}`
-      );
+      const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
       const data = await res.json();
 
       if (!res.ok || data.error) {
         throw new Error(data.error || `Amazon Search API HTTP ${res.status}`);
       }
 
-      const results: AmazonResult[] = (data.organic_results || []).map(
-        (item: any) => ({
-          asin: item.asin || "",
-          title: item.title || "",
-          brand: item.brand || "",
-          price: item.extracted_price ?? item.price?.value ?? null,
-          currency: item.price?.currency ?? "USD",
-          image: upgradeImageResolution(item.thumbnail || item.image || ""),
-          rating: item.rating ?? null,
-          reviews_count: item.reviews ?? item.reviews_count ?? null,
-          url:
-            item.link ||
-            (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
-          is_prime: item.is_prime ?? item.prime ?? false,
-          source: "keyword" as const,
-          category,
-        })
-      );
+      const results: AmazonResult[] = (data.organic_results || []).map((item: any) => ({
+        asin: item.asin || "",
+        title: item.title || "",
+        brand: item.brand || "",
+        price: item.extracted_price ?? item.price?.value ?? null,
+        currency: item.price?.currency ?? "USD",
+        image: upgradeImageResolution(item.thumbnail || item.image || ""),
+        rating: item.rating ?? null,
+        reviews_count: item.reviews ?? item.reviews_count ?? null,
+        url: item.link || (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
+        is_prime: item.is_prime ?? item.prime ?? false,
+        source: "keyword" as const,
+        category,
+      }));
 
       return new Response(
         JSON.stringify({ method: "keyword", results, total: results.length, keyword, page: page || 1 }),
@@ -558,10 +441,7 @@ Deno.serve(async (req: Request) => {
       if (!image_url) {
         return new Response(
           JSON.stringify({ error: "image_url is required for smart search" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -570,10 +450,7 @@ Deno.serve(async (req: Request) => {
       const log: string[] = [];
 
       // Step 1: Lens 원본 검색
-      const { results: lensResults, error: visualError } = await searchViaLens(
-        image_url,
-        "lens"
-      );
+      const { results: lensResults, error: visualError } = await searchViaLens(image_url, "lens");
 
       let lensDirectCount = 0;
       for (const r of lensResults) {
@@ -595,17 +472,14 @@ Deno.serve(async (req: Request) => {
       );
 
       const detectedZones: string[] = cropBoxes.map((b) => b.zone);
-
       let cropCount = 0;
-      let cropErrors: string[] = [];
+      const cropErrors: string[] = [];
 
       if (cropBoxes.length > 0) {
         // Step 3: 크롭 분할 Lens 검색 (최대 4개 존)
-        const cropSearches = cropBoxes.slice(0, 4).map((box) =>
-          searchCroppedLens(image_url, box)
+        const cropResults = await Promise.all(
+          cropBoxes.slice(0, 4).map((box) => searchCroppedLens(image_url, box))
         );
-
-        const cropResults = await Promise.all(cropSearches);
 
         for (let i = 0; i < cropResults.length; i++) {
           const { results: cr, error: ce } = cropResults[i];
@@ -626,20 +500,21 @@ Deno.serve(async (req: Request) => {
         log.push(`크롭 분할: 좌표 추출 실패 (${cropError || "unknown"})`);
       }
 
-      // Step 4: 체인 검색 - Amazon 고해상도 제품 이미지로 재검색 (상위 3개)
+      // Step 4: 체인 검색 - lens + lens_crop 중 media-amazon.com 이미지 있는 상위 5개로 재검색
       let chainCount = 0;
       const chainTargets = merged
-        .filter((r) => r.source === "lens" && r.asin)
-        .slice(0, 3);
+        .filter((r) =>
+          (r.source === "lens" || r.source === "lens_crop") &&
+          r.asin &&
+          r.image &&
+          r.image.includes("media-amazon.com")
+        )
+        .slice(0, 5);
 
       if (chainTargets.length > 0) {
-        const chainSearches = chainTargets.map((r) => {
-          const chainImageUrl = r.image && r.image.includes("media-amazon.com")
-            ? r.image
-            : `https://ws-na.amazon-adsystem.com/widgets/q?_encoding=UTF8&ASIN=${r.asin}&Format=_SL500_&ID=AsinImage&MarketPlace=US&ServiceVersion=20070822&WS=1&tag=xx`;
-          return searchChainLens(chainImageUrl, seenAsins);
-        });
-        const chainResults = await Promise.all(chainSearches);
+        const chainResults = await Promise.all(
+          chainTargets.map((r) => searchChainLens(r.image, seenAsins))
+        );
         for (const batch of chainResults) {
           for (const r of batch) {
             merged.push(r);
@@ -648,7 +523,7 @@ Deno.serve(async (req: Request) => {
         }
         log.push(`체인 검색(${chainTargets.length}개 대상): +${chainCount}개`);
       } else {
-        log.push(`체인 검색: Lens 히트 없어 스킵`);
+        log.push(`체인 검색: 적합한 이미지 없어 스킵`);
       }
 
       return new Response(
@@ -673,10 +548,7 @@ Deno.serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({ error: "Invalid action. Use: keyword_search or smart_search" }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), {
