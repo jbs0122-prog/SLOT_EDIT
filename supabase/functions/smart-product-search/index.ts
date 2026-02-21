@@ -75,8 +75,14 @@ function upgradeImageResolution(url: string): string {
     .replace(/\._[A-Z0-9,_]+_\./g, "._AC_SL1500_.");
 }
 
-function isAnyAmazonDomain(link: string): boolean {
-  return /amazon\.(com|co\.uk|co\.jp|de|fr|it|es|ca|com\.au|com\.br|com\.mx|ae|in|nl|pl|se|sg|tr)/.test(link);
+function isUsAmazonLink(link: string): boolean {
+  try {
+    const url = new URL(link);
+    const host = url.hostname.toLowerCase();
+    return host === "www.amazon.com" || host === "amazon.com";
+  } catch {
+    return false;
+  }
 }
 
 function parseAmazonResultsFromLens(
@@ -86,32 +92,27 @@ function parseAmazonResultsFromLens(
 ): AmazonResult[] {
   const results: AmazonResult[] = [];
   for (const item of visualMatches) {
-    if (!item.link && !item.title) continue;
-    const isAmazon =
-      (item.link && isAnyAmazonDomain(item.link)) ||
-      item.source?.toLowerCase().includes("amazon");
-    if (isAmazon && item.link) {
-      const asin = extractAsin(item.link);
-      if (asin) {
-        const canonicalUrl = `https://www.amazon.com/dp/${asin}`;
-        const rawImage = item.image || item.thumbnail || "";
-        const upgradedImage = upgradeImageResolution(rawImage);
-        results.push({
-          asin,
-          title: item.title || "",
-          brand: "",
-          price: item.price?.extracted_value ?? null,
-          currency: item.price?.currency || "USD",
-          image: upgradedImage,
-          rating: item.rating ?? null,
-          reviews_count: item.reviews ?? null,
-          url: canonicalUrl,
-          is_prime: false,
-          source: sourceType,
-          crop_zone: cropZone,
-        });
-      }
-    }
+    if (!item.link) continue;
+    if (!isUsAmazonLink(item.link)) continue;
+    const asin = extractAsin(item.link);
+    if (!asin) continue;
+    const canonicalUrl = `https://www.amazon.com/dp/${asin}`;
+    const rawImage = item.image || item.thumbnail || "";
+    const upgradedImage = upgradeImageResolution(rawImage);
+    results.push({
+      asin,
+      title: item.title || "",
+      brand: "",
+      price: item.price?.extracted_value ?? null,
+      currency: item.price?.currency || "USD",
+      image: upgradedImage,
+      rating: item.rating ?? null,
+      reviews_count: item.reviews ?? null,
+      url: canonicalUrl,
+      is_prime: false,
+      source: sourceType,
+      crop_zone: cropZone,
+    });
   }
   return results;
 }
