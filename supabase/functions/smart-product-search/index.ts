@@ -62,8 +62,22 @@ function extractAsin(url: string): string | null {
   return null;
 }
 
+function isAmazonImageUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      host.includes("media-amazon.com") ||
+      host.includes("images-amazon.com") ||
+      host.includes("ssl-images-amazon.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function upgradeImageResolution(url: string): string {
   if (!url) return url;
+  if (!isAmazonImageUrl(url)) return url;
   return url
     .replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.")
     .replace(/_AC_SR\d+,\d+_\./g, "_AC_SL1500_.")
@@ -86,8 +100,20 @@ function resolveUsAmazonLink(link: string): string | null {
     }
 
     if (host === "www.google.com" || host === "google.com") {
-      const q = url.searchParams.get("q") || url.searchParams.get("url");
+      const q = url.searchParams.get("q") ||
+        url.searchParams.get("url") ||
+        url.searchParams.get("adurl");
       if (q) return resolveUsAmazonLink(decodeURIComponent(q));
+
+      const pathname = url.pathname;
+      if (pathname.startsWith("/shopping/product/")) {
+        const destUrl = url.searchParams.get("prds");
+        if (destUrl) return resolveUsAmazonLink(decodeURIComponent(destUrl));
+      }
+
+      const fullUrl = link;
+      const amazonMatch = fullUrl.match(/https?:\/\/(?:www\.)?amazon\.com[^\s&"']*/);
+      if (amazonMatch) return resolveUsAmazonLink(decodeURIComponent(amazonMatch[0]));
     }
 
     return null;
@@ -500,14 +526,14 @@ Deno.serve(async (req: Request) => {
         log.push(`크롭 분할: 좌표 추출 실패 (${cropError || "unknown"})`);
       }
 
-      // Step 4: 체인 검색 - lens + lens_crop 중 media-amazon.com 이미지 있는 상위 5개로 재검색
+      // Step 4: 체인 검색 - lens + lens_crop 중 Amazon CDN 이미지 있는 상위 5개로 재검색
       let chainCount = 0;
       const chainTargets = merged
         .filter((r) =>
           (r.source === "lens" || r.source === "lens_crop") &&
           r.asin &&
           r.image &&
-          r.image.includes("media-amazon.com")
+          isAmazonImageUrl(r.image)
         )
         .slice(0, 5);
 
