@@ -146,6 +146,7 @@ async function searchViaLens(
     }
 
     const visualMatches: LensProduct[] = data.visual_matches || [];
+    console.log(`[Lens raw] total=${visualMatches.length} links=${JSON.stringify(visualMatches.slice(0, 10).map(m => ({ link: m.link, source: m.source, title: (m.title || "").slice(0, 40) })))}`);
     const results = parseAmazonResultsFromLens(
       visualMatches,
       sourceType,
