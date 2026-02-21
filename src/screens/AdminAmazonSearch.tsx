@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ShoppingBag, Search, Sparkles, Check, Star, ExternalLink,
   ChevronLeft, ChevronRight, Loader2, AlertCircle, Tag,
@@ -8,6 +8,8 @@ import { supabase } from '../utils/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const SESSION_KEY = 'adminAmazonSearch_state';
 
 interface AmazonProduct {
   asin: string;
@@ -97,34 +99,49 @@ const CATEGORY_COLORS: Record<string, string> = {
   accessory: 'bg-white/10 text-white/50',
 };
 
+function loadSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export default function AdminAmazonSearch() {
-  const [step, setStep] = useState<Step>('filter');
+  const saved = loadSession();
 
-  const [gender, setGender] = useState('');
-  const [bodyType, setBodyType] = useState('');
-  const [vibe, setVibe] = useState('');
-  const [season, setSeason] = useState('');
+  const [step, setStep] = useState<Step>(saved?.step || 'filter');
 
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [keywordCategories, setKeywordCategories] = useState<Record<string, string[]>>({});
-  const [activeKeywordCategory, setActiveKeywordCategory] = useState<string>('all');
-  const [keywordsSource, setKeywordsSource] = useState<'gemini' | 'fallback' | ''>('');
+  const [gender, setGender] = useState(saved?.gender || '');
+  const [bodyType, setBodyType] = useState(saved?.bodyType || '');
+  const [vibe, setVibe] = useState(saved?.vibe || '');
+  const [season, setSeason] = useState(saved?.season || '');
+
+  const [keywords, setKeywords] = useState<string[]>(saved?.keywords || []);
+  const [keywordCategories, setKeywordCategories] = useState<Record<string, string[]>>(saved?.keywordCategories || {});
+  const [activeKeywordCategory, setActiveKeywordCategory] = useState<string>(saved?.activeKeywordCategory || 'all');
+  const [keywordsSource, setKeywordsSource] = useState<'gemini' | 'fallback' | ''>(saved?.keywordsSource || '');
   const [generatingKeywords, setGeneratingKeywords] = useState(false);
   const [keywordsError, setKeywordsError] = useState('');
 
-  const [activeKeyword, setActiveKeyword] = useState('');
-  const [products, setProducts] = useState<AnalyzedProduct[]>([]);
+  const [activeKeyword, setActiveKeyword] = useState(saved?.activeKeyword || '');
+  const [products, setProducts] = useState<AnalyzedProduct[]>(saved?.products || []);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [page, setPage] = useState(saved?.page || 1);
+  const [total, setTotal] = useState(saved?.total || 0);
+  const [categoryFilter, setCategoryFilter] = useState(saved?.categoryFilter || 'all');
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
+  const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set(saved?.savedAsins || []));
   const [savingAll, setSavingAll] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0, keyword: '' });
-  const [sortBy, setSortBy] = useState<'default' | 'rating' | 'reviews'>('default');
+  const [sortBy, setSortBy] = useState<'default' | 'rating' | 'reviews'>(saved?.sortBy || 'default');
+
+  const [filtersChanged, setFiltersChanged] = useState(false);
+  const savedFiltersRef = useRef({ gender: saved?.gender || '', bodyType: saved?.bodyType || '', vibe: saved?.vibe || '', season: saved?.season || '' });
 
   // Auto mode
   const [autoMode, setAutoMode] = useState(false);
@@ -132,6 +149,41 @@ export default function AdminAmazonSearch() {
   const [autoLog, setAutoLog] = useState<string[]>([]);
   const [autoSavedCount, setAutoSavedCount] = useState(0);
   const autoAbortRef = useRef(false);
+
+  useEffect(() => {
+    const hasKeywords = keywords.length > 0;
+    const changed = hasKeywords && (
+      gender !== savedFiltersRef.current.gender ||
+      bodyType !== savedFiltersRef.current.bodyType ||
+      vibe !== savedFiltersRef.current.vibe ||
+      season !== savedFiltersRef.current.season
+    );
+    setFiltersChanged(changed);
+  }, [gender, bodyType, vibe, season, keywords]);
+
+  useEffect(() => {
+    if (generatingKeywords || autoRunning) return;
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+        step,
+        gender,
+        bodyType,
+        vibe,
+        season,
+        keywords,
+        keywordCategories,
+        activeKeywordCategory,
+        keywordsSource,
+        activeKeyword,
+        products: products.map(p => ({ ...p, analyzing: false, analyzeError: undefined })),
+        page,
+        total,
+        categoryFilter,
+        savedAsins: [...savedAsins],
+        sortBy,
+      }));
+    } catch { /* ignore */ }
+  }, [step, gender, bodyType, vibe, season, keywords, keywordCategories, activeKeywordCategory, keywordsSource, activeKeyword, products, page, total, categoryFilter, savedAsins, sortBy, generatingKeywords, autoRunning]);
 
   const canGenerate = gender && vibe;
 
@@ -147,6 +199,8 @@ export default function AdminAmazonSearch() {
     setSelected(new Set());
     setActiveKeyword('');
     setCategoryFilter('all');
+    setFiltersChanged(false);
+    savedFiltersRef.current = { gender, bodyType, vibe, season };
     setStep('results');
 
     try {
@@ -506,17 +560,29 @@ export default function AdminAmazonSearch() {
 
         {/* Bottom Buttons */}
         <div className="p-5 border-t border-white/8 space-y-2.5">
+          {filtersChanged && !generatingKeywords && (
+            <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
+              <RefreshCw className="w-3 h-3 text-amber-400 shrink-0" />
+              <p className="text-amber-400 text-[11px] leading-tight">조건이 변경되었습니다. 키워드를 재생성하세요.</p>
+            </div>
+          )}
           <button
             onClick={generateKeywords}
             disabled={!canGenerate || generatingKeywords || autoRunning}
-            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm"
+            className={`w-full flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm ${
+              filtersChanged
+                ? 'bg-amber-400 hover:bg-amber-300 ring-2 ring-amber-400/40 ring-offset-1 ring-offset-[#141414]'
+                : 'bg-amber-500 hover:bg-amber-400'
+            }`}
           >
             {generatingKeywords ? (
               <Loader2 className="w-4 h-4 animate-spin" />
+            ) : filtersChanged ? (
+              <RefreshCw className="w-4 h-4" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-            {generatingKeywords ? 'AI 키워드 생성 중...' : 'AI 키워드 생성'}
+            {generatingKeywords ? 'AI 키워드 생성 중...' : filtersChanged ? 'AI 키워드 재생성' : 'AI 키워드 생성'}
           </button>
 
           {autoMode && keywords.length > 0 && (
