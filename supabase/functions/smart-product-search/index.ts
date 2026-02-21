@@ -24,15 +24,6 @@ interface LensProduct {
   image?: string;
 }
 
-interface VisualMatch {
-  title: string;
-  source: string;
-  link: string;
-  price: string | null;
-  image: string;
-  is_amazon: boolean;
-}
-
 interface AmazonResult {
   asin: string;
   title: string;
@@ -44,7 +35,7 @@ interface AmazonResult {
   reviews_count: number | null;
   url: string;
   is_prime: boolean;
-  source: "lens" | "keyword" | "visual_title";
+  source: "lens" | "keyword";
   category?: string;
 }
 
@@ -72,29 +63,7 @@ function upgradeImageResolution(url: string): string {
   return url.replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.");
 }
 
-function extractSearchableTitle(title: string): string {
-  return title
-    .replace(
-      /\b(from|by|on|at|in|for|the|a|an|with|and|or|of|to|is|it|this|that|these|those|www|com|net|org|shop|store|buy|sale|free|shipping|new|arrival|hot|best|seller)\b/gi,
-      " "
-    )
-    .replace(/[^a-zA-Z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .slice(0, 5)
-    .join(" ");
-}
-
-interface VisualSearchResult {
-  amazonResults: AmazonResult[];
-  allMatches: VisualMatch[];
-  nonAmazonTopTitles: string[];
-}
-
-async function searchViaVisual(
-  imageUrl: string
-): Promise<VisualSearchResult> {
+async function searchViaVisual(imageUrl: string): Promise<AmazonResult[]> {
   const params = new URLSearchParams({
     engine: "google_lens",
     url: imageUrl,
@@ -118,10 +87,7 @@ async function searchViaVisual(
   }
 
   const visualMatches: LensProduct[] = data.visual_matches || [];
-
   const amazonResults: AmazonResult[] = [];
-  const allMatches: VisualMatch[] = [];
-  const nonAmazonTopTitles: string[] = [];
 
   for (const item of visualMatches) {
     if (!item.link) continue;
@@ -130,48 +96,33 @@ async function searchViaVisual(
       item.link.includes("amazon.com") ||
       item.source?.toLowerCase().includes("amazon");
 
-    allMatches.push({
+    if (!isAmazon) continue;
+
+    const asin = extractAsin(item.link);
+    if (!asin) continue;
+
+    amazonResults.push({
+      asin,
       title: item.title || "",
-      source: item.source || "",
-      link: item.link,
-      price: item.price?.value ?? null,
-      image: item.image || item.thumbnail || "",
-      is_amazon: isAmazon,
+      brand: "",
+      price: item.price?.extracted_value ?? null,
+      currency: item.price?.currency || "USD",
+      image: upgradeImageResolution(item.image || item.thumbnail || ""),
+      rating: item.rating ?? null,
+      reviews_count: item.reviews ?? null,
+      url: item.link,
+      is_prime: false,
+      source: "lens",
     });
-
-    if (isAmazon) {
-      const asin = extractAsin(item.link);
-      if (!asin) continue;
-
-      amazonResults.push({
-        asin,
-        title: item.title || "",
-        brand: "",
-        price: item.price?.extracted_value ?? null,
-        currency: item.price?.currency || "USD",
-        image: upgradeImageResolution(item.image || item.thumbnail || ""),
-        rating: item.rating ?? null,
-        reviews_count: item.reviews ?? null,
-        url: item.link,
-        is_prime: false,
-        source: "lens",
-      });
-    } else if (item.title && nonAmazonTopTitles.length < 5) {
-      const cleaned = extractSearchableTitle(item.title);
-      if (cleaned.split(" ").length >= 2) {
-        nonAmazonTopTitles.push(cleaned);
-      }
-    }
   }
 
-  return { amazonResults, allMatches, nonAmazonTopTitles };
+  return amazonResults;
 }
 
 async function searchViaKeyword(
   query: string,
   page = 1,
-  category?: string,
-  sourceTag: "keyword" | "visual_title" = "keyword"
+  category?: string
 ): Promise<AmazonResult[]> {
   const params = new URLSearchParams({
     engine: "amazon",
@@ -203,7 +154,7 @@ async function searchViaKeyword(
       item.link ||
       (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
     is_prime: item.is_prime ?? item.prime ?? false,
-    source: sourceTag,
+    source: "keyword" as const,
     category,
   }));
 }
@@ -220,8 +171,7 @@ async function fetchImageAsBase64(
     });
     if (!res.ok) return null;
 
-    const contentType =
-      res.headers.get("content-type") || "image/jpeg";
+    const contentType = res.headers.get("content-type") || "image/jpeg";
     const buffer = await res.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     let binary = "";
@@ -251,7 +201,7 @@ async function generateCategoryKeywordsViaGemini(
   const vibeLabel = vibe ? vibe.replace(/_/g, " ").toLowerCase() : "";
   const seasonLabel = season || "all season";
 
-  const prompt = `You are a fashion product search expert. Analyze this outfit image very carefully.
+  const prompt = `You are a fashion product search expert for Amazon. Analyze this outfit image with extreme precision.
 
 Context:
 - Target gender: ${genderLabel}
@@ -259,25 +209,28 @@ Context:
 - Style vibe: ${vibeLabel || "general"}
 - Season: ${seasonLabel}
 
-TASK: Look at each clothing item in the image and generate PRECISE Amazon search keywords for each.
+TASK: Identify EACH individual clothing/accessory item visible in the image and generate Amazon-optimized search keywords.
 
-RULES:
-1. Describe EXACTLY what you see - specific color (not just "dark" but "charcoal grey" or "navy blue"), specific material (cotton, denim, leather, wool), specific style (slim fit, relaxed, cropped, oversized)
-2. Include the gender prefix (${genderLabel}) in each keyword
-3. Generate 3 keywords per category - each from a different angle (style-focused, material-focused, brand-style-focused)
-4. Keywords should be 4-7 words, like real Amazon searches
+CRITICAL RULES FOR ACCURACY:
+1. COLOR: Be extremely specific. Instead of "dark", say "charcoal", "navy", "black", "dark olive". Instead of "light", say "cream", "ivory", "beige", "sky blue". Identify the EXACT color you see.
+2. MATERIAL: Identify visible material - leather, denim, cotton, wool, knit, suede, canvas, nylon, polyester, silk, linen, corduroy, tweed, fleece.
+3. STYLE: Be precise about fit and style - slim fit, relaxed fit, oversized, cropped, straight leg, tapered, bootcut, regular fit, loose fit.
+4. TYPE: Use specific garment names - not just "jacket" but "bomber jacket", "denim jacket", "blazer", "parka", "windbreaker". Not just "shoes" but "chelsea boots", "oxford shoes", "sneakers", "loafers".
+5. DETAILS: Note distinctive features - zip-up, button-down, crew neck, v-neck, turtleneck, hooded, collared, pleated, distressed, cuffed.
+6. Every keyword MUST start with "${genderLabel}" for gender context.
+7. Generate 3 keywords per item, each approaching from a different search angle.
 
 Categories: outer, mid, top, bottom, shoes, bag, accessory
 
-Example output for a man wearing a grey wool overcoat, white oxford shirt, black slim chinos, and brown leather chelsea boots:
+Return ONLY a JSON array. Example:
 [
-  {"category":"outer","keywords":["${genderLabel} grey wool overcoat classic","${genderLabel} charcoal long wool coat","${genderLabel} tailored grey topcoat winter"]},
-  {"category":"top","keywords":["${genderLabel} white oxford button shirt","${genderLabel} white cotton dress shirt slim","${genderLabel} white formal button down shirt"]},
-  {"category":"bottom","keywords":["${genderLabel} black slim fit chino pants","${genderLabel} black tapered cotton trousers","${genderLabel} slim black dress pants stretch"]},
-  {"category":"shoes","keywords":["${genderLabel} brown leather chelsea boots","${genderLabel} tan suede chelsea ankle boots","${genderLabel} brown pull on leather boots"]}
+  {"category":"outer","keywords":["${genderLabel} charcoal wool double breasted overcoat","${genderLabel} dark grey long wool coat slim fit","${genderLabel} charcoal formal overcoat winter"]},
+  {"category":"top","keywords":["${genderLabel} white slim fit oxford button down shirt","${genderLabel} white cotton poplin dress shirt","${genderLabel} white classic fit button up shirt"]},
+  {"category":"bottom","keywords":["${genderLabel} black slim tapered chino pants","${genderLabel} black stretch cotton slim trousers","${genderLabel} black flat front dress pants slim"]},
+  {"category":"shoes","keywords":["${genderLabel} cognac brown leather chelsea boots","${genderLabel} brown pull on ankle boots leather","${genderLabel} tan leather elastic side boots"]}
 ]
 
-Only include categories clearly visible. Return ONLY the JSON array.`;
+Only include categories clearly visible in the image.`;
 
   const imageData = await fetchImageAsBase64(imageUrl);
 
@@ -300,7 +253,7 @@ Only include categories clearly visible. Return ONLY the JSON array.`;
       body: JSON.stringify({
         contents: [{ parts }],
         generationConfig: {
-          temperature: 0.2,
+          temperature: 0.15,
           maxOutputTokens: 2048,
           responseMimeType: "application/json",
         },
@@ -352,50 +305,6 @@ Deno.serve(async (req: Request) => {
       category,
     } = body;
 
-    if (action === "visual_search") {
-      if (!image_url) {
-        return new Response(
-          JSON.stringify({ error: "image_url is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      try {
-        const { amazonResults, allMatches } =
-          await searchViaVisual(image_url);
-
-        return new Response(
-          JSON.stringify({
-            method: "visual",
-            amazon_results: amazonResults,
-            all_visual_matches: allMatches.length,
-            amazon_match_count: amazonResults.length,
-            visual_matches_preview: allMatches.slice(0, 10),
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({
-            method: "visual",
-            amazon_results: [],
-            all_visual_matches: 0,
-            amazon_match_count: 0,
-            visual_matches_preview: [],
-            error: (err as Error).message,
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    }
-
     if (action === "keyword_search") {
       if (!keyword) {
         return new Response(
@@ -420,33 +329,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (action === "generate_category_keywords") {
-      if (!image_url) {
-        return new Response(
-          JSON.stringify({ error: "image_url is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const categoryKeywords = await generateCategoryKeywordsViaGemini(
-        image_url,
-        gender || "UNISEX",
-        body_type || "regular",
-        vibe || "",
-        season || ""
-      );
-
-      return new Response(
-        JSON.stringify({ category_keywords: categoryKeywords }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
     if (action === "smart_search") {
       if (!image_url) {
         return new Response(
@@ -460,11 +342,8 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Step 1: Visual (Google Lens) + AI category analysis in parallel
       let lensAmazonResults: AmazonResult[] = [];
       let visualError: string | null = null;
-      let allVisualMatches: VisualMatch[] = [];
-      let nonAmazonTitles: string[] = [];
 
       let usedCategoryKeywords: CategoryKeywords[] = [];
       let keywordError: string | null = null;
@@ -481,11 +360,10 @@ Deno.serve(async (req: Request) => {
       ]);
 
       if (visualResult.status === "fulfilled") {
-        lensAmazonResults = visualResult.value.amazonResults;
-        allVisualMatches = visualResult.value.allMatches;
-        nonAmazonTitles = visualResult.value.nonAmazonTopTitles;
+        lensAmazonResults = visualResult.value;
       } else {
-        visualError = visualResult.reason?.message || "Visual search failed";
+        visualError =
+          visualResult.reason?.message || "Visual search failed";
       }
 
       if (geminiResult.status === "fulfilled") {
@@ -495,47 +373,17 @@ Deno.serve(async (req: Request) => {
           geminiResult.reason?.message || "Gemini analysis failed";
       }
 
-      // Step 2: If Lens found matches but no Amazon results, use top visual titles
-      let visualTitleResults: AmazonResult[] = [];
-      let visualTitleKeywords: string[] = [];
-
-      if (lensAmazonResults.length === 0 && nonAmazonTitles.length > 0) {
-        visualTitleKeywords = nonAmazonTitles.slice(0, 3);
-        const titleSearchPromises = visualTitleKeywords.map(
-          async (title) => {
-            try {
-              const results = await searchViaKeyword(
-                title,
-                1,
-                undefined,
-                "visual_title"
-              );
-              return results.slice(0, 4);
-            } catch {
-              return [];
-            }
-          }
-        );
-        const titleResults = await Promise.all(titleSearchPromises);
-        visualTitleResults = titleResults.flat();
-      }
-
-      // Step 3: AI category keyword search — search all keywords (not just first)
       let categoryKeywordResults: AmazonResult[] = [];
 
       if (usedCategoryKeywords.length > 0) {
         const searchPromises = usedCategoryKeywords
-          .slice(0, 5)
+          .slice(0, 6)
           .flatMap((ck) =>
             ck.keywords.slice(0, 2).map(async (kw) => {
               if (!kw) return [];
               try {
-                const kwResults = await searchViaKeyword(
-                  kw,
-                  1,
-                  ck.category
-                );
-                return kwResults.slice(0, 3);
+                const kwResults = await searchViaKeyword(kw, 1, ck.category);
+                return kwResults.slice(0, 4);
               } catch {
                 return [];
               }
@@ -546,17 +394,10 @@ Deno.serve(async (req: Request) => {
         categoryKeywordResults = allKwResults.flat();
       }
 
-      // Merge & deduplicate
       const seenAsins = new Set<string>();
       const merged: AmazonResult[] = [];
 
       for (const r of lensAmazonResults) {
-        if (r.asin && !seenAsins.has(r.asin)) {
-          seenAsins.add(r.asin);
-          merged.push(r);
-        }
-      }
-      for (const r of visualTitleResults) {
         if (r.asin && !seenAsins.has(r.asin)) {
           seenAsins.add(r.asin);
           merged.push(r);
@@ -574,16 +415,11 @@ Deno.serve(async (req: Request) => {
           method: "smart",
           results: merged,
           lens_amazon_count: lensAmazonResults.length,
-          visual_title_count: visualTitleResults.length,
           keyword_count: categoryKeywordResults.length,
           total: merged.length,
-          all_visual_matches: allVisualMatches.length,
-          visual_matches_preview: allVisualMatches.slice(0, 8),
           visual_error: visualError,
           keyword_error: keywordError,
           category_keywords: usedCategoryKeywords,
-          visual_title_keywords: visualTitleKeywords,
-          fallback_used: lensAmazonResults.length < 3,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -591,8 +427,7 @@ Deno.serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({
-        error:
-          "Invalid action. Use: visual_search, keyword_search, generate_category_keywords, or smart_search",
+        error: "Invalid action. Use: keyword_search or smart_search",
       }),
       {
         status: 400,
