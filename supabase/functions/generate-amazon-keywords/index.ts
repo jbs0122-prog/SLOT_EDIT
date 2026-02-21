@@ -105,45 +105,46 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const totalCount = CATEGORY_DEFS.reduce((s, c) => s + c.subCategories.length, 0);
+    const vibeAdjStr = vibeAdjs.join(", ");
+    const seasonFabrics = seasonMod.fabric.join(", ") || "any";
+    const seasonKws = seasonMod.keywords.join(", ") || seasonLabel;
 
-    const exampleJson = CATEGORY_DEFS.map(cat =>
-      `  "${cat.key}": { ${cat.subCategories.map(s => `"${s}": "keyword"`).join(", ")} }`
-    ).join(",\n");
+    const prompt = `You are a creative fashion stylist who shops on Amazon daily. Generate Amazon search keywords that a real person would type.
 
-    const vibeAdjStr = vibeAdjs.slice(0, 4).join(" / ");
-    const seasonFabricStr = seasonMod.fabric.slice(0, 3).join(" / ") || seasonLabel;
-
-    const topFit1 = bodyFit.topFit.split(",")[0].trim();
-    const bottomFit1 = bodyFit.bottomFit.split(",")[0].trim();
-    const outerFit1 = bodyFit.outerFit.split(",")[0].trim();
-    const vibe1 = vibeAdjs[0];
-    const vibe2 = vibeAdjs[1] || vibeAdjs[0];
-    const fabric1 = seasonMod.fabric[0] || seasonLabel;
-    const fabric2 = seasonMod.fabric[1] || fabric1;
-
-    const prompt = `You are an Amazon fashion search keyword expert. Generate highly targeted Amazon search queries.
-
-INPUT:
+STYLING PROFILE:
 - Gender: ${genderLabel}
-- Body type: ${body_type || "regular"} (fit rule: ${bodyFit.rationale})
-- Style vibe: "${vibeLabel}" (descriptors: ${vibeAdjStr})
-- Season: "${seasonLabel}" (fabrics: ${seasonFabricStr})
+- Body type: ${body_type || "regular"} — ${bodyFit.rationale}
+  Recommended fits: tops(${bodyFit.topFit}), bottoms(${bodyFit.bottomFit}), outerwear(${bodyFit.outerFit})
+- Style vibe: "${vibeLabel}" — mood words: ${vibeAdjStr}
+- Season: ${seasonLabel} — fabrics: ${seasonFabrics} — seasonal cues: ${seasonKws}
 
-KEYWORD FORMULA — every keyword must follow: [gender] [fit] [fabric] [vibe] [item]
-Examples:
-- top/tshirt: "${genderLabel} ${topFit1} ${fabric1} ${vibe1} tshirt"
-- outer/coat: "${genderLabel} ${outerFit1} ${fabric1} ${vibe1} coat"
-- bottom/denim: "${genderLabel} ${bottomFit1} ${vibe1} denim jeans"
-- shoes/sneaker: "${genderLabel} ${vibe1} sneaker"
-- bag/tote: "${genderLabel} ${vibe1} tote bag"
+INSTRUCTIONS:
+Generate one Amazon search keyword per sub-category. Each keyword should:
+1. Always start with "${genderLabel}" or "${genderLabel}'s"
+2. Reflect the style vibe ("${vibeLabel}") through descriptive words, trend terms, aesthetic references, or specific style names — NOT by repeating the same adjective in every keyword
+3. Consider the season (${seasonLabel}) — use season-appropriate fabrics, weights, or styling cues naturally where relevant
+4. For tops/bottoms/outerwear, incorporate a fit word that suits the ${body_type || "regular"} body type — but vary which fit word you pick from the recommended list
+5. Be 3-6 words long
+6. Sound like something a real shopper would search — natural, specific, and varied
 
-RULES:
-- 4 to 6 words per keyword
-- Must include fit word (${topFit1} / ${bottomFit1} / ${outerFit1}) and at least one of: ${vibeAdjStr}
-- No generic keywords — every keyword must have style identity
+DIVERSITY RULES (critical):
+- Do NOT use the same adjective or descriptor more than twice across all keywords
+- Mix up keyword structures: some can lead with fabric, some with style, some with fit, some with color mood
+- Use specific fashion vocabulary: texture names, garment details, style subcultures, color tones
+- Think about what makes each sub-category item unique within the "${vibeLabel}" aesthetic
+- Avoid formulaic patterns — each keyword should feel like a different person searching
 
-OUTPUT: Return a single valid JSON object with exactly this structure (one string per sub-category key):
+GOOD examples for "elevated cool" + winter + slim:
+- "men oversized wool mock neck sweater"
+- "men dark structured puffer jacket"
+- "men slim tapered black cargo pants"
+- "men minimalist leather chelsea boot"
+- "men monochrome knit beanie"
+
+BAD examples (too repetitive / formulaic):
+- "men oversized wool edgy tshirt" / "men oversized wool edgy polo" / "men oversized wool edgy tank"
+
+OUTPUT: Return ONLY a valid JSON object with this exact structure:
 ${JSON.stringify(
   Object.fromEntries(CATEGORY_DEFS.map(cat => [
     cat.key,
@@ -152,7 +153,7 @@ ${JSON.stringify(
   null, 2
 )}
 
-Fill every empty string value with a keyword. Return only the JSON, nothing else.`;
+Fill every empty string with a keyword. Return only JSON, nothing else.`;
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -161,7 +162,7 @@ Fill every empty string value with a keyword. Return only the JSON, nothing else
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.6, maxOutputTokens: 2000, responseMimeType: "application/json" },
+          generationConfig: { temperature: 1.0, maxOutputTokens: 2000, responseMimeType: "application/json" },
         }),
       }
     );
