@@ -57,7 +57,12 @@ Deno.serve(async (req: Request) => {
 
     const upgradeImageResolution = (url: string): string => {
       if (!url) return url;
-      return url.replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.");
+      return url
+        .replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.")
+        .replace(/_AC_SR\d+,\d+_\./g, "_AC_SL1500_.")
+        .replace(/_AC_SY\d+_\./g, "_AC_SL1500_.")
+        .replace(/_AC_SX\d+_\./g, "_AC_SL1500_.")
+        .replace(/_AC_UL\d+_\./g, "_AC_SL1500_.");
     };
 
     const results = (serpData.organic_results || []).map((item: any) => ({

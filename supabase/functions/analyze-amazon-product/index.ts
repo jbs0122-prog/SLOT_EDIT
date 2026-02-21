@@ -7,34 +7,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const SERPAPI_KEY =
-  "b0fefa497aabd408066e3eea994a5f30b80daf942e491415c255c95b98a43584";
-
-async function fetchProductDetailImage(asin: string): Promise<string | null> {
-  if (!asin) return null;
-  try {
-    const params = new URLSearchParams({
-      engine: "amazon_product",
-      asin,
-      api_key: SERPAPI_KEY,
-    });
-    const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-
-    const mainImage = data.product_results?.main_image?.link;
-    if (mainImage) return mainImage;
-
-    const images: { link?: string; large?: string }[] = data.product_results?.images || [];
-    if (images.length > 0) {
-      return images[0].large || images[0].link || null;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
+const upgradeImageResolution = (url: string): string => {
+  if (!url) return url;
+  return url
+    .replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.")
+    .replace(/_AC_SR\d+,\d+_\./g, "_AC_SL1500_.")
+    .replace(/_AC_SY\d+_\./g, "_AC_SL1500_.")
+    .replace(/_AC_SX\d+_\./g, "_AC_SL1500_.")
+    .replace(/_AC_UL\d+_\./g, "_AC_SL1500_.");
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -106,20 +87,17 @@ Rules:
 - body_type array MUST include "${body_type || "regular"}"
 - Return ONLY the JSON object, no markdown, no explanation`;
 
-    const [geminiRes, detailImage] = await Promise.all([
-      fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
-          }),
-        }
-      ),
-      fetchProductDetailImage(product.asin),
-    ]);
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
+        }),
+      }
+    );
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
@@ -250,7 +228,7 @@ Rules:
       formality: typeof analyzed.formality === "number" ? Math.min(5, Math.max(1, analyzed.formality)) : 3,
       warmth: typeof analyzed.warmth === "number" ? Math.min(5, Math.max(1, analyzed.warmth)) : 3,
       stock_status: "in_stock",
-      image_url: detailImage || product.image || "",
+      image_url: upgradeImageResolution(product.image || ""),
       product_link: product.url || "",
       price: product.price != null ? Math.round(product.price) : null,
     };
