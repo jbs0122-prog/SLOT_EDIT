@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import {
   Camera, Search, Sparkles, Check, Star, ExternalLink,
   Loader2, AlertCircle, Tag, Eye, Zap, ChevronDown,
-  ChevronUp, ImageIcon, ArrowRight, X, Square
+  ChevronUp, ImageIcon, ArrowRight, X, Square, Globe
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
@@ -12,6 +12,15 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 interface CategoryKeyword {
   category: string;
   keywords: string[];
+}
+
+interface VisualMatchPreview {
+  title: string;
+  source: string;
+  link: string;
+  price: string | null;
+  image: string;
+  is_amazon: boolean;
 }
 
 interface SmartResult {
@@ -25,7 +34,7 @@ interface SmartResult {
   reviews_count: number | null;
   url: string;
   is_prime: boolean;
-  source: 'lens' | 'keyword';
+  source: 'lens' | 'keyword' | 'visual_title';
   category?: string;
   analyzed?: AnalyzedData;
   analyzing?: boolean;
@@ -93,6 +102,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   accessory: 'bg-white/10 text-white/50',
 };
 
+const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
+  lens: { label: 'LENS', cls: 'bg-teal-500/90 text-white' },
+  visual_title: { label: 'VT', cls: 'bg-cyan-500/90 text-white' },
+  keyword: { label: 'KW', cls: 'bg-amber-500/90 text-white' },
+};
+
 type SearchPhase = 'idle' | 'visual_searching' | 'generating_keywords' | 'keyword_searching' | 'done';
 
 export default function AdminSmartSearch() {
@@ -108,10 +123,13 @@ export default function AdminSmartSearch() {
   const [searchLog, setSearchLog] = useState<{ msg: string; type: 'info' | 'success' | 'error' | 'warn' }[]>([]);
   const [showLog, setShowLog] = useState(true);
 
-  const [visualCount, setVisualCount] = useState(0);
+  const [lensAmazonCount, setLensAmazonCount] = useState(0);
+  const [visualTitleCount, setVisualTitleCount] = useState(0);
   const [keywordCount, setKeywordCount] = useState(0);
   const [allVisualMatches, setAllVisualMatches] = useState(0);
   const [categoryKeywords, setCategoryKeywords] = useState<CategoryKeyword[]>([]);
+  const [visualMatchesPreview, setVisualMatchesPreview] = useState<VisualMatchPreview[]>([]);
+  const [showVisualPreview, setShowVisualPreview] = useState(false);
   const [searchError, setSearchError] = useState('');
 
   const [activeCategory, setActiveCategory] = useState('all');
@@ -141,10 +159,13 @@ export default function AdminSmartSearch() {
     setSearchLog([]);
     setSearchError('');
     setSelected(new Set());
-    setVisualCount(0);
+    setLensAmazonCount(0);
+    setVisualTitleCount(0);
     setKeywordCount(0);
     setAllVisualMatches(0);
     setCategoryKeywords([]);
+    setVisualMatchesPreview([]);
+    setShowVisualPreview(false);
     setActiveCategory('all');
     setShowLog(true);
 
@@ -171,37 +192,42 @@ export default function AdminSmartSearch() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-      // Visual search result log
       if (data.visual_error) {
         addLog(`Visual Search 실패: ${data.visual_error}`, 'error');
-        addLog('원인: Pinterest/SNS 이미지는 Google Lens 접근이 차단될 수 있습니다. CDN 직접 이미지 URL을 사용하세요.', 'warn');
+        addLog('Pinterest/SNS 이미지는 Google Lens 접근이 차단될 수 있습니다. CDN 직접 이미지 URL을 사용하세요.', 'warn');
       } else {
-        addLog(
-          `Visual Search 완료 — 시각적 매칭 ${data.all_visual_matches}개, Amazon 상품 ${data.visual_count}개`,
-          data.visual_count > 0 ? 'success' : 'warn'
-        );
+        const amazonNote = data.lens_amazon_count > 0
+          ? `Amazon ${data.lens_amazon_count}개 직접 매칭`
+          : `Amazon 매칭 0개 (${data.all_visual_matches}개 타 쇼핑몰)`;
+        addLog(`Visual Search 완료 -- 시각적 매칭 ${data.all_visual_matches}개, ${amazonNote}`, data.lens_amazon_count > 0 ? 'success' : 'warn');
+      }
+
+      if (data.visual_title_count > 0) {
+        const vtKws = (data.visual_title_keywords || []).join(', ');
+        addLog(`Visual Title -> Amazon 변환: "${vtKws}" -> ${data.visual_title_count}개 상품`, 'success');
       }
 
       setPhase('generating_keywords');
-      addLog('Gemini AI가 이미지에서 카테고리별 키워드 분석 중...', 'info');
 
       if (data.keyword_error) {
-        addLog(`키워드 생성 실패: ${data.keyword_error}`, 'error');
+        addLog(`AI 키워드 생성 실패: ${data.keyword_error}`, 'error');
       } else if (data.category_keywords?.length > 0) {
         const cats = data.category_keywords.map((ck: CategoryKeyword) => ck.category).join(', ');
-        addLog(`카테고리 감지: ${cats} (${data.category_keywords.length}개)`, 'success');
-        addLog(`키워드 검색으로 ${data.keyword_count}개 상품 추가`, 'success');
+        addLog(`AI 카테고리 감지: ${cats} (${data.category_keywords.length}개)`, 'success');
+        addLog(`AI 키워드 검색으로 ${data.keyword_count}개 상품 추가`, 'success');
       }
 
-      setVisualCount(data.visual_count || 0);
+      setLensAmazonCount(data.lens_amazon_count || 0);
+      setVisualTitleCount(data.visual_title_count || 0);
       setKeywordCount(data.keyword_count || 0);
       setAllVisualMatches(data.all_visual_matches || 0);
       setCategoryKeywords(data.category_keywords || []);
+      setVisualMatchesPreview(data.visual_matches_preview || []);
 
       const mergedResults: SmartResult[] = (data.results || []).map((r: SmartResult) => ({ ...r }));
       setResults(mergedResults);
 
-      addLog(`완료! 총 ${mergedResults.length}개 Amazon 상품`, 'success');
+      addLog(`완료! 총 ${mergedResults.length}개 Amazon 상품 (Lens: ${data.lens_amazon_count}, VT: ${data.visual_title_count}, KW: ${data.keyword_count})`, 'success');
       setPhase('done');
     } catch (err) {
       setSearchError((err as Error).message);
@@ -239,7 +265,7 @@ export default function AdminSmartSearch() {
 
       setResults(prev => [...prev, ...deduped]);
       setKeywordCount(prev => prev + deduped.length);
-      addLog(`"${manualKeyword}" → ${deduped.length}개 추가 (중복 ${newResults.length - deduped.length}개 제외)`, 'success');
+      addLog(`"${manualKeyword}" -> ${deduped.length}개 추가 (중복 ${newResults.length - deduped.length}개 제외)`, 'success');
       setManualKeyword('');
     } catch (err) {
       addLog(`키워드 검색 오류: ${(err as Error).message}`, 'error');
@@ -312,7 +338,6 @@ export default function AdminSmartSearch() {
     setSavingAll(false);
   };
 
-  // Category filter tabs
   const categoryCounts = results.reduce((acc, r) => {
     const cat = r.analyzed?.category || r.category;
     if (cat) acc[cat] = (acc[cat] || 0) + 1;
@@ -332,6 +357,8 @@ export default function AdminSmartSearch() {
     'all', 'outer', 'mid', 'top', 'bottom', 'shoes', 'bag', 'accessory'
   ].filter(cat => cat === 'all' || categoryCounts[cat] > 0);
 
+  const totalAmazon = lensAmazonCount + visualTitleCount + keywordCount;
+
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white flex">
       {/* Left Panel */}
@@ -343,13 +370,12 @@ export default function AdminSmartSearch() {
             </div>
             <div>
               <h2 className="font-semibold text-sm">Smart Search</h2>
-              <p className="text-white/30 text-[10px]">Visual + AI Keyword (방법 2+3)</p>
+              <p className="text-white/30 text-[10px]">Visual + AI Keyword</p>
             </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Image URL Input */}
           <div>
             <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2">
               Product Image URL <span className="text-teal-400">*</span>
@@ -372,7 +398,6 @@ export default function AdminSmartSearch() {
               )}
             </div>
 
-            {/* Image Preview */}
             {imageUrl && !imagePreviewError && (
               <div className="mt-2 rounded-lg overflow-hidden border border-white/10 bg-white relative">
                 <img
@@ -396,7 +421,6 @@ export default function AdminSmartSearch() {
             </p>
           </div>
 
-          {/* Filters Toggle */}
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center justify-between w-full"
@@ -486,18 +510,13 @@ export default function AdminSmartSearch() {
           )}
         </div>
 
-        {/* CTA */}
         <div className="p-5 border-t border-white/8">
           <button
             onClick={runSmartSearch}
             disabled={!imageUrl.trim() || isSearching}
             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all text-sm shadow-lg shadow-teal-500/20"
           >
-            {isSearching ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Zap className="w-4 h-4" />
-            )}
+            {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             {isSearching ? 'Smart Search 진행 중...' : 'Smart Search 실행'}
           </button>
           {!imageUrl.trim() && (
@@ -512,31 +531,36 @@ export default function AdminSmartSearch() {
         {/* Status Bar */}
         {phase !== 'idle' && (
           <div className="border-b border-white/8 px-6 py-3 space-y-2">
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge phase={phase} />
 
               {phase === 'done' && (
                 <>
-                  <div className="flex items-center gap-1.5 bg-teal-500/10 text-teal-400 px-3 py-1 rounded-full text-xs font-medium border border-teal-500/15">
-                    <Eye className="w-3.5 h-3.5" />
-                    Visual: {visualCount}
-                    {allVisualMatches > 0 && <span className="text-teal-400/50 text-[10px]">/{allVisualMatches}건</span>}
+                  <div className="flex items-center gap-1.5 bg-teal-500/10 text-teal-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-teal-500/15">
+                    <Eye className="w-3 h-3" />
+                    Lens: {lensAmazonCount}
+                    <span className="text-teal-400/40">/{allVisualMatches}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-3 py-1 rounded-full text-xs font-medium border border-amber-500/15">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    AI 키워드: +{keywordCount}
+                  {visualTitleCount > 0 && (
+                    <div className="flex items-center gap-1.5 bg-cyan-500/10 text-cyan-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-cyan-500/15">
+                      <Globe className="w-3 h-3" />
+                      VT: +{visualTitleCount}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-amber-500/15">
+                    <Sparkles className="w-3 h-3" />
+                    AI KW: +{keywordCount}
                   </div>
-                  <div className="flex items-center gap-1.5 bg-white/5 text-white/40 px-3 py-1 rounded-full text-xs border border-white/8">
+                  <div className="flex items-center gap-1.5 bg-white/5 text-white/40 px-2.5 py-1 rounded-full text-[11px] border border-white/8">
                     Total: {results.length}
                   </div>
                 </>
               )}
             </div>
 
-            {/* Category Keywords Summary */}
             {categoryKeywords.length > 0 && (
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">감지된 카테고리:</span>
+                <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">AI 카테고리:</span>
                 {categoryKeywords.map((ck, i) => (
                   <div key={i} className="flex items-center gap-1">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[ck.category] || 'bg-white/8 text-white/40'}`}>
@@ -572,6 +596,53 @@ export default function AdminSmartSearch() {
                     {entry.msg}
                   </p>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Visual Matches Preview (non-Amazon references) */}
+        {visualMatchesPreview.length > 0 && phase === 'done' && (
+          <div className="border-b border-white/8">
+            <button
+              onClick={() => setShowVisualPreview(!showVisualPreview)}
+              className="w-full flex items-center justify-between px-6 py-2 text-[10px] text-white/25 uppercase tracking-wider hover:text-white/40 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Eye className="w-3 h-3" />
+                Visual Search 원본 결과 ({visualMatchesPreview.length}개 - 참고용)
+              </span>
+              {showVisualPreview ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+            {showVisualPreview && (
+              <div className="px-6 pb-3">
+                <div className="flex gap-2.5 overflow-x-auto pb-2">
+                  {visualMatchesPreview.map((vm, i) => (
+                    <a
+                      key={i}
+                      href={vm.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 w-28 group"
+                    >
+                      <div className="w-28 h-28 rounded-lg overflow-hidden bg-white border border-white/10 group-hover:border-white/30 transition-all relative">
+                        {vm.image ? (
+                          <img src={vm.image} alt={vm.title} className="w-full h-full object-contain p-1" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-5 h-5 text-gray-300" /></div>
+                        )}
+                        <div className={`absolute top-1 right-1 text-[8px] font-bold px-1 py-0.5 rounded ${vm.is_amazon ? 'bg-teal-500 text-white' : 'bg-white/80 text-gray-600'}`}>
+                          {vm.is_amazon ? 'AMZ' : vm.source?.slice(0, 8)}
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-white/30 mt-1 line-clamp-2 leading-tight group-hover:text-white/50 transition-colors">{vm.title}</p>
+                      {vm.price && <p className="text-[10px] text-white/20 mt-0.5">{vm.price}</p>}
+                    </a>
+                  ))}
+                </div>
+                <p className="text-[9px] text-white/15 mt-1">
+                  Google Lens가 찾은 시각 매칭 결과입니다. Amazon 외 사이트의 상품도 포함되어 있습니다.
+                </p>
               </div>
             )}
           </div>
@@ -670,16 +741,19 @@ export default function AdminSmartSearch() {
                 <Camera className="w-10 h-10 text-teal-500/30" />
               </div>
               <p className="text-white/40 text-base font-medium mb-2">Smart Product Search</p>
-              <p className="text-white/20 text-sm max-w-sm mx-auto leading-relaxed">
-                패션 이미지 URL을 입력하면 Visual Search로 시각적 유사 상품을 찾고,
-                AI가 이미지 속 모든 카테고리를 감지해 키워드로 자동 보완합니다.
+              <p className="text-white/20 text-sm max-w-md mx-auto leading-relaxed">
+                패션 이미지 URL을 입력하면 Google Lens로 시각적 유사 상품을 찾고,
+                Amazon 매칭이 없으면 타 쇼핑몰 제목으로 Amazon을 자동 검색합니다.
+                추가로 AI가 이미지 속 모든 카테고리를 분석해 키워드로 보완합니다.
               </p>
-              <div className="flex items-center justify-center gap-4 mt-8">
-                <StepBadge num={1} label="Visual Search" sub="Google Lens" icon={<Eye className="w-4 h-4" />} />
+              <div className="flex items-center justify-center gap-3 mt-8">
+                <StepBadge label="Google Lens" sub="Visual Search" icon={<Eye className="w-4 h-4" />} />
                 <ArrowRight className="w-4 h-4 text-white/10" />
-                <StepBadge num={2} label="AI 카테고리 분석" sub="Gemini" icon={<Sparkles className="w-4 h-4" />} />
+                <StepBadge label="Visual Title" sub="Amazon 변환" icon={<Globe className="w-4 h-4" />} />
                 <ArrowRight className="w-4 h-4 text-white/10" />
-                <StepBadge num={3} label="DB 등록" sub="analyze & save" icon={<Tag className="w-4 h-4" />} />
+                <StepBadge label="AI 카테고리" sub="Gemini KW" icon={<Sparkles className="w-4 h-4" />} />
+                <ArrowRight className="w-4 h-4 text-white/10" />
+                <StepBadge label="DB 등록" sub="analyze & save" icon={<Tag className="w-4 h-4" />} />
               </div>
             </div>
           )}
@@ -694,7 +768,7 @@ export default function AdminSmartSearch() {
               </div>
               <p className="text-white/50 text-sm font-medium">
                 {phase === 'visual_searching' && 'Visual Search (SerpAPI Google Lens) 이미지 분석 중...'}
-                {phase === 'generating_keywords' && 'Gemini AI가 카테고리별 키워드 분석 중...'}
+                {phase === 'generating_keywords' && 'AI 카테고리별 키워드 분석 중...'}
                 {phase === 'keyword_searching' && 'Amazon 키워드 검색 중...'}
               </p>
             </div>
@@ -714,6 +788,7 @@ export default function AdminSmartSearch() {
                 const isSelected = selected.has(product.asin);
                 const isAnalyzing = product.analyzing;
                 const displayCategory = product.analyzed?.category || product.category;
+                const badge = SOURCE_BADGE[product.source] || SOURCE_BADGE.keyword;
 
                 return (
                   <div
@@ -725,14 +800,10 @@ export default function AdminSmartSearch() {
                       'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
                     }`}
                   >
-                    {/* Source badge */}
-                    <div className={`absolute top-2 right-2 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                      product.source === 'lens' ? 'bg-teal-500/90 text-white' : 'bg-amber-500/90 text-white'
-                    }`}>
-                      {product.source === 'lens' ? 'VISUAL' : 'KW'}
+                    <div className={`absolute top-2 right-2 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`}>
+                      {badge.label}
                     </div>
 
-                    {/* Checkbox */}
                     <div className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
                       isSaved ? 'bg-emerald-500 border-emerald-500' :
                       isSelected ? 'bg-teal-500 border-teal-500' :
@@ -838,8 +909,8 @@ export default function AdminSmartSearch() {
 function StatusBadge({ phase }: { phase: SearchPhase }) {
   const config: Record<SearchPhase, { label: string; color: string; spin: boolean }> = {
     idle: { label: '', color: '', spin: false },
-    visual_searching: { label: 'Visual Search 진행 중...', color: 'bg-teal-500/15 text-teal-400 border-teal-500/20', spin: true },
-    generating_keywords: { label: 'AI 카테고리 분석 중...', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20', spin: true },
+    visual_searching: { label: 'Visual Search...', color: 'bg-teal-500/15 text-teal-400 border-teal-500/20', spin: true },
+    generating_keywords: { label: 'AI 분석 중...', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20', spin: true },
     keyword_searching: { label: '키워드 검색 중...', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20', spin: true },
     done: { label: 'Search Complete', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', spin: false },
   };
@@ -853,7 +924,7 @@ function StatusBadge({ phase }: { phase: SearchPhase }) {
   );
 }
 
-function StepBadge({ num, label, sub, icon }: { num: number; label: string; sub: string; icon: React.ReactNode }) {
+function StepBadge({ label, sub, icon }: { label: string; sub: string; icon: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-1.5">
       <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center text-white/20">

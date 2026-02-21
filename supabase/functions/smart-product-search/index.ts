@@ -24,6 +24,15 @@ interface LensProduct {
   image?: string;
 }
 
+interface VisualMatch {
+  title: string;
+  source: string;
+  link: string;
+  price: string | null;
+  image: string;
+  is_amazon: boolean;
+}
+
 interface AmazonResult {
   asin: string;
   title: string;
@@ -35,7 +44,7 @@ interface AmazonResult {
   reviews_count: number | null;
   url: string;
   is_prime: boolean;
-  source: "lens" | "keyword";
+  source: "lens" | "keyword" | "visual_title";
   category?: string;
 }
 
@@ -63,9 +72,24 @@ function upgradeImageResolution(url: string): string {
   return url.replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.");
 }
 
-async function searchViaVisual(
-  imageUrl: string
-): Promise<{ results: AmazonResult[]; allResults: LensProduct[]; rawError?: string }> {
+function extractSearchableTitle(title: string): string {
+  return title
+    .replace(/\b(from|by|on|at|in|for|the|a|an)\b/gi, " ")
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .slice(0, 6)
+    .join(" ");
+}
+
+interface VisualSearchResult {
+  amazonResults: AmazonResult[];
+  allMatches: VisualMatch[];
+  nonAmazonTopTitles: string[];
+}
+
+async function searchViaVisual(imageUrl: string): Promise<VisualSearchResult> {
   const params = new URLSearchParams({
     engine: "google_lens",
     url: imageUrl,
@@ -81,48 +105,68 @@ async function searchViaVisual(
   const data = await res.json();
 
   if (!res.ok || data.error) {
-    const errMsg = typeof data.error === "string"
-      ? data.error
-      : JSON.stringify(data.error || data);
+    const errMsg =
+      typeof data.error === "string"
+        ? data.error
+        : JSON.stringify(data.error || data);
     throw new Error(errMsg);
   }
 
   const visualMatches: LensProduct[] = data.visual_matches || [];
 
   const amazonResults: AmazonResult[] = [];
+  const allMatches: VisualMatch[] = [];
+  const nonAmazonTopTitles: string[] = [];
+
   for (const item of visualMatches) {
     if (!item.link) continue;
 
     const isAmazon =
       item.link.includes("amazon.com") ||
       item.source?.toLowerCase().includes("amazon");
-    if (!isAmazon) continue;
 
-    const asin = extractAsin(item.link);
-    if (!asin) continue;
-
-    amazonResults.push({
-      asin,
+    allMatches.push({
       title: item.title || "",
-      brand: "",
-      price: item.price?.extracted_value ?? null,
-      currency: item.price?.currency || "USD",
-      image: upgradeImageResolution(item.image || item.thumbnail || ""),
-      rating: item.rating ?? null,
-      reviews_count: item.reviews ?? null,
-      url: item.link,
-      is_prime: false,
-      source: "lens",
+      source: item.source || "",
+      link: item.link,
+      price: item.price?.value ?? null,
+      image: item.image || item.thumbnail || "",
+      is_amazon: isAmazon,
     });
+
+    if (isAmazon) {
+      const asin = extractAsin(item.link);
+      if (!asin) continue;
+
+      amazonResults.push({
+        asin,
+        title: item.title || "",
+        brand: "",
+        price: item.price?.extracted_value ?? null,
+        currency: item.price?.currency || "USD",
+        image: upgradeImageResolution(item.image || item.thumbnail || ""),
+        rating: item.rating ?? null,
+        reviews_count: item.reviews ?? null,
+        url: item.link,
+        is_prime: false,
+        source: "lens",
+      });
+    } else if (item.title && nonAmazonTopTitles.length < 3) {
+      const cleaned = extractSearchableTitle(item.title);
+      if (cleaned.split(" ").length >= 2) {
+        nonAmazonTopTitles.push(cleaned);
+      }
+    }
   }
 
-  return { results: amazonResults, allResults: visualMatches };
+  return { amazonResults, allMatches, nonAmazonTopTitles };
 }
 
 async function searchViaKeyword(
   query: string,
   page = 1,
-  category?: string
+  category?: string,
+  sourceTag: "keyword" | "visual_title" = "keyword"
 ): Promise<AmazonResult[]> {
   const params = new URLSearchParams({
     engine: "amazon",
@@ -154,7 +198,7 @@ async function searchViaKeyword(
       item.link ||
       (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
     is_prime: item.is_prime ?? item.prime ?? false,
-    source: "keyword" as const,
+    source: sourceTag,
     category,
   }));
 }
@@ -221,7 +265,8 @@ Only include categories that are clearly visible in the image. Return only the J
   }
 
   const geminiData = await geminiRes.json();
-  const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+  const rawText =
+    geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
   const arrMatch = rawText.match(/\[[\s\S]*\]/);
   if (!arrMatch) return [];
 
@@ -270,15 +315,15 @@ Deno.serve(async (req: Request) => {
       }
 
       try {
-        const { results: visualResults, allResults } =
-          await searchViaVisual(image_url);
+        const { amazonResults, allMatches } = await searchViaVisual(image_url);
 
         return new Response(
           JSON.stringify({
             method: "visual",
-            amazon_results: visualResults,
-            all_visual_matches: allResults.length,
-            amazon_match_count: visualResults.length,
+            amazon_results: amazonResults,
+            all_visual_matches: allMatches.length,
+            amazon_match_count: amazonResults.length,
+            visual_matches_preview: allMatches.slice(0, 10),
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -289,6 +334,7 @@ Deno.serve(async (req: Request) => {
             amazon_results: [],
             all_visual_matches: 0,
             amazon_match_count: 0,
+            visual_matches_preview: [],
             error: (err as Error).message,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -339,9 +385,12 @@ Deno.serve(async (req: Request) => {
         season || ""
       );
 
-      return new Response(JSON.stringify({ category_keywords: categoryKeywords }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ category_keywords: categoryKeywords }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     if (action === "smart_search") {
@@ -356,19 +405,49 @@ Deno.serve(async (req: Request) => {
       }
 
       // Step 1: Visual (Google Lens) search
-      let visualResults: AmazonResult[] = [];
+      let lensAmazonResults: AmazonResult[] = [];
       let visualError: string | null = null;
-      let allVisualMatches = 0;
+      let allVisualMatches: VisualMatch[] = [];
+      let nonAmazonTitles: string[] = [];
 
       try {
         const visualData = await searchViaVisual(image_url);
-        visualResults = visualData.results;
-        allVisualMatches = visualData.allResults.length;
+        lensAmazonResults = visualData.amazonResults;
+        allVisualMatches = visualData.allMatches;
+        nonAmazonTitles = visualData.nonAmazonTopTitles;
       } catch (err) {
         visualError = (err as Error).message;
       }
 
-      // Step 2: AI category keyword fallback — always run for multi-category coverage
+      // Step 2: If Lens found matches but no Amazon results, use top visual titles as Amazon search keywords
+      let visualTitleResults: AmazonResult[] = [];
+      let visualTitleKeywords: string[] = [];
+
+      if (
+        lensAmazonResults.length === 0 &&
+        nonAmazonTitles.length > 0
+      ) {
+        visualTitleKeywords = nonAmazonTitles;
+        const titleSearchPromises = nonAmazonTitles.slice(0, 2).map(
+          async (title) => {
+            try {
+              const results = await searchViaKeyword(
+                title,
+                1,
+                undefined,
+                "visual_title"
+              );
+              return results.slice(0, 5);
+            } catch {
+              return [];
+            }
+          }
+        );
+        const titleResults = await Promise.all(titleSearchPromises);
+        visualTitleResults = titleResults.flat();
+      }
+
+      // Step 3: AI category keyword search — always run for multi-category coverage
       let categoryKeywordResults: AmazonResult[] = [];
       let usedCategoryKeywords: CategoryKeywords[] = [];
       let keywordError: string | null = null;
@@ -383,11 +462,14 @@ Deno.serve(async (req: Request) => {
         );
         usedCategoryKeywords = catKeywords;
 
-        // Search 1 keyword per category (top keyword), up to 5 categories
         const searchPromises = catKeywords.slice(0, 5).map(async (ck) => {
           if (!ck.keywords[0]) return [];
           try {
-            const kwResults = await searchViaKeyword(ck.keywords[0], 1, ck.category);
+            const kwResults = await searchViaKeyword(
+              ck.keywords[0],
+              1,
+              ck.category
+            );
             return kwResults.slice(0, 4);
           } catch {
             return [];
@@ -400,11 +482,17 @@ Deno.serve(async (req: Request) => {
         keywordError = (err as Error).message;
       }
 
-      // Merge & deduplicate
+      // Merge & deduplicate: lens amazon > visual title amazon > AI keyword amazon
       const seenAsins = new Set<string>();
       const merged: AmazonResult[] = [];
 
-      for (const r of visualResults) {
+      for (const r of lensAmazonResults) {
+        if (r.asin && !seenAsins.has(r.asin)) {
+          seenAsins.add(r.asin);
+          merged.push(r);
+        }
+      }
+      for (const r of visualTitleResults) {
         if (r.asin && !seenAsins.has(r.asin)) {
           seenAsins.add(r.asin);
           merged.push(r);
@@ -421,14 +509,17 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           method: "smart",
           results: merged,
-          visual_count: visualResults.length,
+          lens_amazon_count: lensAmazonResults.length,
+          visual_title_count: visualTitleResults.length,
           keyword_count: categoryKeywordResults.length,
           total: merged.length,
-          all_visual_matches: allVisualMatches,
+          all_visual_matches: allVisualMatches.length,
+          visual_matches_preview: allVisualMatches.slice(0, 8),
           visual_error: visualError,
           keyword_error: keywordError,
           category_keywords: usedCategoryKeywords,
-          fallback_used: visualResults.length < 3,
+          visual_title_keywords: visualTitleKeywords,
+          fallback_used: lensAmazonResults.length < 3,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
