@@ -10,20 +10,6 @@ const corsHeaders = {
 const SERPAPI_KEY =
   "b0fefa497aabd408066e3eea994a5f30b80daf942e491415c255c95b98a43584";
 
-interface LensProduct {
-  position: number;
-  title: string;
-  link: string;
-  source: string;
-  source_icon?: string;
-  price?: { value: string; extracted_value: number; currency: string };
-  rating?: number;
-  reviews?: number;
-  in_stock?: boolean;
-  thumbnail: string;
-  image?: string;
-}
-
 interface AmazonResult {
   asin: string;
   title: string;
@@ -35,35 +21,16 @@ interface AmazonResult {
   reviews_count: number | null;
   url: string;
   is_prime: boolean;
-  source: "lens" | "lens_crop" | "lens_chain" | "keyword";
+  source: "gemini_keyword" | "lens" | "lens_crop" | "lens_chain" | "keyword";
   category?: string;
   crop_zone?: string;
+  keyword_used?: string;
 }
 
-interface CropBox {
+interface CategoryKeyword {
   zone: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-const CROP_ZONE_TO_CATEGORY: Record<string, string> = {
-  outer: "outer",
-  mid: "mid",
-  top: "top",
-  bottom: "bottom",
-  shoes: "shoes",
-  bag: "bag",
-  accessory: "accessory",
-  necktie: "accessory",
-  hat: "accessory",
-  belt: "accessory",
-};
-
-function cropZoneToCategory(zone?: string): string | undefined {
-  if (!zone) return undefined;
-  return CROP_ZONE_TO_CATEGORY[zone.toLowerCase()] ?? undefined;
+  keywords: string[];
+  description: string;
 }
 
 function extractAsin(url: string): string | null {
@@ -107,135 +74,17 @@ function upgradeImageResolution(url: string): string {
     .replace(/\._[A-Z0-9,_]+_\./g, "._AC_SL1500_.");
 }
 
-function resolveUsAmazonLink(link: string): string | null {
-  if (!link) return null;
-  try {
-    const url = new URL(link);
-    const host = url.hostname.toLowerCase();
-
-    if (host === "www.amazon.com" || host === "amazon.com") {
-      return link;
-    }
-
-    if (host === "www.google.com" || host === "google.com") {
-      const q = url.searchParams.get("q") ||
-        url.searchParams.get("url") ||
-        url.searchParams.get("adurl");
-      if (q) return resolveUsAmazonLink(decodeURIComponent(q));
-
-      const pathname = url.pathname;
-      if (pathname.startsWith("/shopping/product/")) {
-        const destUrl = url.searchParams.get("prds");
-        if (destUrl) return resolveUsAmazonLink(decodeURIComponent(destUrl));
-      }
-
-      const fullUrl = link;
-      const amazonMatch = fullUrl.match(/https?:\/\/(?:www\.)?amazon\.com[^\s&"']*/);
-      if (amazonMatch) return resolveUsAmazonLink(decodeURIComponent(amazonMatch[0]));
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function parseAmazonResultsFromLens(
-  visualMatches: LensProduct[],
-  sourceType: AmazonResult["source"],
-  cropZone?: string
-): { results: AmazonResult[]; stats: { total: number; amazon: number; withAsin: number } } {
-  const results: AmazonResult[] = [];
-  let amazonCount = 0;
-  let withAsinCount = 0;
-
-  for (const item of visualMatches) {
-    if (!item.link) continue;
-
-    const resolvedLink = resolveUsAmazonLink(item.link);
-    if (!resolvedLink) continue;
-    amazonCount++;
-
-    const asin = extractAsin(resolvedLink);
-    if (!asin) continue;
-    withAsinCount++;
-
-    const canonicalUrl = `https://www.amazon.com/dp/${asin}`;
-    const rawImage = item.image || item.thumbnail || "";
-    const upgradedImage = upgradeImageResolution(rawImage);
-    results.push({
-      asin,
-      title: item.title || "",
-      brand: "",
-      price: item.price?.extracted_value ?? null,
-      currency: item.price?.currency || "USD",
-      image: upgradedImage,
-      rating: item.rating ?? null,
-      reviews_count: item.reviews ?? null,
-      url: canonicalUrl,
-      is_prime: false,
-      source: sourceType,
-      crop_zone: cropZone,
-      category: cropZoneToCategory(cropZone),
-    });
-  }
-
-  return {
-    results,
-    stats: { total: visualMatches.length, amazon: amazonCount, withAsin: withAsinCount },
-  };
-}
-
-async function searchViaLens(
-  imageUrl: string,
-  sourceType: AmazonResult["source"] = "lens",
-  cropZone?: string
-): Promise<{ results: AmazonResult[]; error: string | null; stats?: any }> {
-  try {
-    const params = new URLSearchParams({
-      engine: "google_lens",
-      url: imageUrl,
-      type: "products",
-      hl: "en",
-      country: "us",
-      api_key: SERPAPI_KEY,
-    });
-
-    const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-      const errMsg = typeof data.error === "string" ? data.error : JSON.stringify(data.error || data);
-      return { results: [], error: errMsg };
-    }
-
-    const visualMatches: LensProduct[] = data.visual_matches || [];
-
-    const sample = visualMatches.slice(0, 10).map(m => ({
-      link: m.link,
-      source: m.source,
-      title: (m.title || "").slice(0, 40),
-    }));
-    console.log(`[Lens raw] total=${visualMatches.length} links=${JSON.stringify(sample)}`);
-
-    const amazonLinks = visualMatches.filter(m => m.link && m.link.includes("amazon.com"));
-    console.log(`[Lens filter] total=${visualMatches.length} amazon_links=${amazonLinks.length}`);
-
-    const { results, stats } = parseAmazonResultsFromLens(visualMatches, sourceType, cropZone);
-    console.log(`[Lens parsed] total=${stats.total} amazon=${stats.amazon} withAsin=${stats.withAsin} final=${results.length}`);
-
-    return { results, error: null, stats };
-  } catch (e) {
-    return { results: [], error: (e as Error).message };
-  }
-}
-
 async function fetchImageAsBase64(
   imageUrl: string
 ): Promise<{ base64: string; mimeType: string } | null> {
   try {
     const res = await fetch(imageUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": "https://www.pinterest.com/",
+      },
     });
     if (!res.ok) return null;
 
@@ -254,33 +103,22 @@ async function fetchImageAsBase64(
   }
 }
 
-async function getCropBoxesViaGemini(
-  imageUrl: string,
+async function analyzeImageWithGemini(
+  imageData: { base64: string; mimeType: string },
   gender: string,
   bodyType: string,
   vibe: string,
   season: string
-): Promise<{
-  cropBoxes: CropBox[];
-  imgWidth: number;
-  imgHeight: number;
-  imageBase64: string;
-  mimeType: string;
-  error: string | null;
-}> {
+): Promise<{ categories: CategoryKeyword[]; error: string | null }> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
   if (!GEMINI_API_KEY) {
-    return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: "", mimeType: "", error: "GEMINI_API_KEY not configured" };
+    return { categories: [], error: "GEMINI_API_KEY not configured" };
   }
 
-  const imageData = await fetchImageAsBase64(imageUrl);
-  if (!imageData) {
-    return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: "", mimeType: "", error: "Failed to fetch image" };
-  }
+  const genderLabel =
+    gender === "MALE" ? "men" : gender === "FEMALE" ? "women" : "unisex";
 
-  const genderLabel = gender === "MALE" ? "men" : gender === "FEMALE" ? "women" : "unisex";
-
-  const prompt = `You are analyzing a fashion outfit image to identify bounding boxes for each distinct clothing/accessory item.
+  const prompt = `You are a fashion expert analyzing a reference outfit image to find similar products on Amazon USA.
 
 Context:
 - Target gender: ${genderLabel}
@@ -288,42 +126,38 @@ Context:
 - Style vibe: ${vibe ? vibe.replace(/_/g, " ").toLowerCase() : "general"}
 - Season: ${season || "all season"}
 
-TASK: Return bounding boxes for each VISIBLE clothing item in the image.
-Use normalized coordinates (0.0 to 1.0) relative to image dimensions.
+TASK: Identify EVERY clothing and accessory item visible in this image. For each item, generate highly specific Amazon USA search keywords that will find the most similar products.
 
-Return ONLY a JSON object with:
-- "img_width": estimated pixel width of image (e.g. 800)
-- "img_height": estimated pixel height of image (e.g. 1200)
-- "boxes": array of {zone, x, y, width, height} where x,y is top-left corner
+Return a JSON array of objects with this structure:
+[
+  {
+    "zone": "outer|mid|top|bottom|shoes|bag|accessory",
+    "description": "brief description of the specific item (e.g., 'navy slim fit blazer with notch lapel')",
+    "keywords": ["keyword1", "keyword2", "keyword3"]
+  }
+]
 
-Zone names and their meanings:
-- "outer": jacket, coat, blazer, cardigan worn as outermost layer
-- "mid": hoodie, sweater, sweatshirt worn under outer but over top
-- "top": shirt, t-shirt, blouse, tank top, inner top layer
-- "bottom": pants, jeans, skirt, shorts
-- "shoes": footwear
-- "bag": bag, backpack, purse
-- "accessory": hat, belt, scarf, glasses, jewelry
+Zone definitions:
+- "outer": jacket, coat, blazer, cardigan (outermost layer)
+- "mid": hoodie, sweater, sweatshirt (middle layer)
+- "top": shirt, t-shirt, blouse, tank top (inner top)
+- "bottom": pants, jeans, trousers, skirt, shorts
+- "shoes": all footwear
+- "bag": bag, backpack, tote, purse
+- "accessory": hat, belt, scarf, glasses, watch, jewelry
 
-IMPORTANT RULES:
-- If an outer layer (jacket/coat) is present, STILL include "top" or "mid" if the inner garment is visible even partially
-- If a hoodie/sweater is worn under a jacket, use "mid" for the hoodie and "outer" for the jacket
-- Use "top" for the innermost visible shirt/blouse layer
-- Include up to 6 items. Prioritize: outer > mid > top > bottom > shoes > bag > accessory
+KEYWORD RULES:
+- Each keyword must be a complete Amazon search query (3-7 words)
+- Include: item type + specific style features + color + material (if visible)
+- For ${genderLabel}: always include gender in keywords (e.g., "mens", "womens")
+- Make keywords specific enough to find visually similar products
+- Generate 3 different keyword variations per item (broad → specific)
+- Example for navy slim blazer: ["mens navy slim fit blazer", "mens navy suit jacket office", "mens navy blazer single breasted"]
 
-Example for layered outfit:
-{
-  "img_width": 800,
-  "img_height": 1200,
-  "boxes": [
-    {"zone":"outer","x":0.1,"y":0.05,"width":0.8,"height":0.45},
-    {"zone":"top","x":0.2,"y":0.1,"width":0.6,"height":0.35},
-    {"zone":"bottom","x":0.2,"y":0.5,"width":0.6,"height":0.35},
-    {"zone":"shoes","x":0.25,"y":0.85,"width":0.5,"height":0.12}
-  ]
-}
-
-Only include zones clearly visible.`;
+IMPORTANT:
+- Include ALL visible items, even partially visible ones
+- If layered (jacket over shirt), list BOTH as separate items
+- Focus on Amazon USA product naming conventions`;
 
   try {
     const geminiRes = await fetch(
@@ -332,114 +166,186 @@ Only include zones clearly visible.`;
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ inline_data: { mime_type: imageData.mimeType, data: imageData.base64 } }, { text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024, responseMimeType: "application/json" },
+          contents: [
+            {
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: imageData.mimeType,
+                    data: imageData.base64,
+                  },
+                },
+                { text: prompt },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 2048,
+            responseMimeType: "application/json",
+          },
         }),
       }
     );
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
-      return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: imageData.base64, mimeType: imageData.mimeType, error: `Gemini error: ${errText.slice(0, 200)}` };
+      return {
+        categories: [],
+        error: `Gemini error: ${errText.slice(0, 200)}`,
+      };
     }
 
     const geminiData = await geminiRes.json();
-    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const rawText =
+      geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
 
-    const objMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!objMatch) {
-      return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: imageData.base64, mimeType: imageData.mimeType, error: "No JSON found in Gemini response" };
+    let parsed: any[] = [];
+    try {
+      const arrMatch = rawText.match(/\[[\s\S]*\]/);
+      if (arrMatch) {
+        parsed = JSON.parse(arrMatch[0]);
+      } else {
+        parsed = JSON.parse(rawText);
+      }
+    } catch {
+      return { categories: [], error: "Failed to parse Gemini JSON response" };
     }
 
-    const parsed = JSON.parse(objMatch[0]);
-    const cropBoxes: CropBox[] = (parsed.boxes || []).filter(
-      (b: any) =>
-        b &&
-        typeof b.zone === "string" &&
-        typeof b.x === "number" &&
-        typeof b.y === "number" &&
-        typeof b.width === "number" &&
-        typeof b.height === "number"
-    );
+    const categories: CategoryKeyword[] = parsed
+      .filter(
+        (item: any) =>
+          item &&
+          typeof item.zone === "string" &&
+          Array.isArray(item.keywords) &&
+          item.keywords.length > 0
+      )
+      .map((item: any) => ({
+        zone: item.zone.toLowerCase(),
+        keywords: item.keywords.filter(
+          (k: any) => typeof k === "string" && k.trim().length > 0
+        ),
+        description: item.description || item.zone,
+      }));
 
-    return {
-      cropBoxes,
-      imgWidth: parsed.img_width || 800,
-      imgHeight: parsed.img_height || 1200,
-      imageBase64: imageData.base64,
-      mimeType: imageData.mimeType,
-      error: null,
-    };
+    return { categories, error: null };
   } catch (e) {
-    return { cropBoxes: [], imgWidth: 0, imgHeight: 0, imageBase64: imageData.base64, mimeType: imageData.mimeType, error: (e as Error).message };
+    return { categories: [], error: (e as Error).message };
   }
 }
 
-async function buildCropSearchUrl(imageUrl: string, box: CropBox): Promise<string> {
-  const x1 = Math.round(box.x * 1000);
-  const y1 = Math.round(box.y * 1000);
-  const x2 = Math.round((box.x + box.width) * 1000);
-  const y2 = Math.round((box.y + box.height) * 1000);
+async function searchAmazonByKeyword(
+  keyword: string,
+  zone: string
+): Promise<AmazonResult[]> {
+  try {
+    const params = new URLSearchParams({
+      engine: "amazon",
+      k: keyword,
+      amazon_domain: "amazon.com",
+      tld: "com",
+      hl: "en",
+      api_key: SERPAPI_KEY,
+    });
 
-  const params = new URLSearchParams({
-    engine: "google_lens",
-    url: imageUrl,
-    type: "products",
-    hl: "en",
-    country: "us",
-    api_key: SERPAPI_KEY,
-    lns_surface: "1",
-    crop_x1: String(x1),
-    crop_y1: String(y1),
-    crop_x2: String(x2),
-    crop_y2: String(y2),
-  });
+    const res = await fetch(
+      `https://serpapi.com/search.json?${params.toString()}`
+    );
+    const data = await res.json();
 
-  return `https://serpapi.com/search.json?${params.toString()}`;
+    if (!res.ok || data.error) return [];
+
+    const organicResults = data.organic_results || data.results || [];
+
+    return organicResults.slice(0, 8).map((item: any) => {
+      const asin = item.asin || extractAsin(item.link || "") || "";
+      return {
+        asin,
+        title: item.title || "",
+        brand: item.brand || "",
+        price:
+          item.extracted_price ??
+          item.price?.value ??
+          item.price_string?.replace(/[^0-9.]/g, "") ??
+          null,
+        currency: item.price?.currency ?? "USD",
+        image: upgradeImageResolution(
+          item.thumbnail || item.image || item.primary_image || ""
+        ),
+        rating: item.rating ?? null,
+        reviews_count: item.reviews ?? item.reviews_count ?? null,
+        url:
+          item.link ||
+          (asin ? `https://www.amazon.com/dp/${asin}` : ""),
+        is_prime: item.is_prime ?? item.prime ?? false,
+        source: "gemini_keyword" as const,
+        category: zone,
+        crop_zone: zone,
+        keyword_used: keyword,
+      };
+    }).filter((r: AmazonResult) => r.asin);
+  } catch {
+    return [];
+  }
 }
 
-async function searchCroppedLens(
+async function searchViaLens(
   imageUrl: string,
-  box: CropBox
+  sourceType: AmazonResult["source"] = "lens",
+  cropZone?: string
 ): Promise<{ results: AmazonResult[]; error: string | null }> {
   try {
-    const serpUrl = await buildCropSearchUrl(imageUrl, box);
-    const res = await fetch(serpUrl);
+    const params = new URLSearchParams({
+      engine: "google_lens",
+      url: imageUrl,
+      type: "products",
+      hl: "en",
+      country: "us",
+      api_key: SERPAPI_KEY,
+    });
+
+    const res = await fetch(
+      `https://serpapi.com/search.json?${params.toString()}`
+    );
     const data = await res.json();
 
     if (!res.ok || data.error) {
-      const errMsg = typeof data.error === "string" ? data.error : JSON.stringify(data.error || data);
+      const errMsg =
+        typeof data.error === "string"
+          ? data.error
+          : JSON.stringify(data.error || data);
       return { results: [], error: errMsg };
     }
 
-    const visualMatches: LensProduct[] = data.visual_matches || [];
-    const amazonLinks = visualMatches.filter(m => m.link && m.link.includes("amazon.com"));
-    console.log(`[Crop ${box.zone}] total=${visualMatches.length} amazon_links=${amazonLinks.length}`);
+    const visualMatches = data.visual_matches || [];
+    const results: AmazonResult[] = [];
 
-    const { results, stats } = parseAmazonResultsFromLens(visualMatches, "lens_crop", box.zone);
-    console.log(`[Crop ${box.zone} parsed] amazon=${stats.amazon} withAsin=${stats.withAsin} final=${results.length}`);
+    for (const item of visualMatches) {
+      if (!item.link || !item.link.includes("amazon.com")) continue;
+      const asin = extractAsin(item.link);
+      if (!asin) continue;
+
+      results.push({
+        asin,
+        title: item.title || "",
+        brand: "",
+        price: item.price?.extracted_value ?? null,
+        currency: item.price?.currency || "USD",
+        image: upgradeImageResolution(item.image || item.thumbnail || ""),
+        rating: item.rating ?? null,
+        reviews_count: item.reviews ?? null,
+        url: `https://www.amazon.com/dp/${asin}`,
+        is_prime: false,
+        source: sourceType,
+        crop_zone: cropZone,
+        category: cropZone,
+      });
+    }
 
     return { results, error: null };
   } catch (e) {
     return { results: [], error: (e as Error).message };
   }
-}
-
-async function searchChainLens(
-  chainImageUrl: string,
-  seenAsins: Set<string>
-): Promise<AmazonResult[]> {
-  const { results, error } = await searchViaLens(chainImageUrl, "lens_chain");
-  if (error || results.length === 0) return [];
-
-  const newResults: AmazonResult[] = [];
-  for (const r of results) {
-    if (r.asin && !seenAsins.has(r.asin)) {
-      seenAsins.add(r.asin);
-      newResults.push(r);
-    }
-  }
-  return newResults;
 }
 
 Deno.serve(async (req: Request) => {
@@ -449,49 +355,76 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { action, image_url, keyword, gender, body_type, vibe, season, page, category } = body;
+    const {
+      action,
+      image_url,
+      keyword,
+      gender,
+      body_type,
+      vibe,
+      season,
+      page,
+      category,
+    } = body;
 
     if (action === "keyword_search") {
       if (!keyword) {
         return new Response(
           JSON.stringify({ error: "keyword is required" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
         );
       }
 
       const params = new URLSearchParams({
         engine: "amazon",
         k: keyword,
-        i: "fashion",
+        amazon_domain: "amazon.com",
         tld: "com",
+        hl: "en",
         api_key: SERPAPI_KEY,
       });
       if (page > 1) params.set("page", String(page));
 
-      const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
+      const res = await fetch(
+        `https://serpapi.com/search.json?${params.toString()}`
+      );
       const data = await res.json();
 
       if (!res.ok || data.error) {
         throw new Error(data.error || `Amazon Search API HTTP ${res.status}`);
       }
 
-      const results: AmazonResult[] = (data.organic_results || []).map((item: any) => ({
+      const results: AmazonResult[] = (
+        data.organic_results || data.results || []
+      ).map((item: any) => ({
         asin: item.asin || "",
         title: item.title || "",
         brand: item.brand || "",
-        price: item.extracted_price ?? item.price?.value ?? null,
+        price:
+          item.extracted_price ?? item.price?.value ?? null,
         currency: item.price?.currency ?? "USD",
         image: upgradeImageResolution(item.thumbnail || item.image || ""),
         rating: item.rating ?? null,
         reviews_count: item.reviews ?? item.reviews_count ?? null,
-        url: item.link || (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
+        url:
+          item.link ||
+          (item.asin ? `https://www.amazon.com/dp/${item.asin}` : ""),
         is_prime: item.is_prime ?? item.prime ?? false,
         source: "keyword" as const,
         category,
       }));
 
       return new Response(
-        JSON.stringify({ method: "keyword", results, total: results.length, keyword, page: page || 1 }),
+        JSON.stringify({
+          method: "keyword",
+          results,
+          total: results.length,
+          keyword,
+          page: page || 1,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -500,114 +433,164 @@ Deno.serve(async (req: Request) => {
       if (!image_url) {
         return new Response(
           JSON.stringify({ error: "image_url is required for smart search" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
         );
       }
 
       const seenAsins = new Set<string>();
       const merged: AmazonResult[] = [];
       const log: string[] = [];
+      const detectedZones: string[] = [];
 
-      // Step 1: Lens 원본 검색
-      const { results: lensResults, error: visualError } = await searchViaLens(image_url, "lens");
+      // Step 1: 이미지를 base64로 다운로드
+      log.push("이미지 다운로드 중...");
+      const imageData = await fetchImageAsBase64(image_url);
 
-      let lensDirectCount = 0;
-      for (const r of lensResults) {
-        if (r.asin && !seenAsins.has(r.asin)) {
-          seenAsins.add(r.asin);
-          merged.push(r);
-          lensDirectCount++;
-        }
+      if (!imageData) {
+        return new Response(
+          JSON.stringify({
+            error: "이미지를 다운로드할 수 없습니다. URL을 확인해주세요.",
+            method: "smart",
+            results: [],
+            total: 0,
+            search_log: log,
+            detected_zones: [],
+            gemini_categories: [],
+            lens_direct_count: 0,
+            lens_crop_count: 0,
+            lens_chain_count: 0,
+            keyword_count: 0,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
       }
-      log.push(`Lens 원본: ${lensDirectCount}개`);
 
-      // Step 2: Gemini로 크롭 좌표 추출
-      const { cropBoxes, error: cropError } = await getCropBoxesViaGemini(
-        image_url,
+      log.push(`이미지 다운로드 완료 (${imageData.mimeType})`);
+
+      // Step 2: Gemini로 이미지 분석 → 카테고리별 키워드 추출
+      log.push("Gemini AI로 아이템 분석 중...");
+      const { categories, error: geminiError } = await analyzeImageWithGemini(
+        imageData,
         gender || "UNISEX",
         body_type || "regular",
         vibe || "",
         season || ""
       );
 
-      const detectedZones: string[] = cropBoxes.map((b) => b.zone);
-      let cropCount = 0;
-      const cropErrors: string[] = [];
-
-      if (cropBoxes.length > 0) {
-        // Step 3: 크롭 분할 Lens 검색 (최대 6개 존)
-        const cropResults = await Promise.all(
-          cropBoxes.slice(0, 6).map((box) => searchCroppedLens(image_url, box))
-        );
-
-        for (let i = 0; i < cropResults.length; i++) {
-          const { results: cr, error: ce } = cropResults[i];
-          if (ce) {
-            cropErrors.push(`${cropBoxes[i].zone}: ${ce}`);
-            continue;
-          }
-          for (const r of cr) {
-            if (r.asin && !seenAsins.has(r.asin)) {
-              seenAsins.add(r.asin);
-              merged.push(r);
-              cropCount++;
-            }
-          }
-        }
-        log.push(`크롭 분할(${detectedZones.join("/")}): +${cropCount}개`);
+      if (geminiError) {
+        log.push(`Gemini 분석 오류: ${geminiError}`);
       } else {
-        log.push(`크롭 분할: 좌표 추출 실패 (${cropError || "unknown"})`);
+        log.push(
+          `Gemini 감지: ${categories.map((c) => `${c.zone}(${c.keywords.length}키워드)`).join(", ")}`
+        );
+        categories.forEach((c) => {
+          if (!detectedZones.includes(c.zone)) detectedZones.push(c.zone);
+        });
       }
 
-      // Step 4: 체인 검색 - lens + lens_crop 중 Amazon CDN 이미지 있는 상위 5개로 재검색
-      let chainCount = 0;
-      const chainTargets = merged
-        .filter((r) =>
-          (r.source === "lens" || r.source === "lens_crop") &&
-          r.asin &&
-          r.image &&
-          isAmazonImageUrl(r.image)
-        )
-        .slice(0, 5);
+      // Step 3: 각 카테고리의 첫 번째 키워드로 Amazon 검색 (중복 없이)
+      let keywordCount = 0;
+      const categorySearchResults: Record<string, AmazonResult[]> = {};
 
-      if (chainTargets.length > 0) {
-        const chainResults = await Promise.all(
-          chainTargets.map((r) => searchChainLens(r.image, seenAsins))
+      if (categories.length > 0) {
+        log.push(`Amazon USA 검색 시작 (${categories.length}개 카테고리)...`);
+
+        // 각 카테고리마다 최대 2개 키워드로 검색 (병렬)
+        const searchPromises: Promise<void>[] = [];
+
+        for (const cat of categories) {
+          // 첫 2개 키워드만 사용 (API 비용 절감)
+          const keywordsToSearch = cat.keywords.slice(0, 2);
+
+          for (const kw of keywordsToSearch) {
+            searchPromises.push(
+              (async () => {
+                const results = await searchAmazonByKeyword(kw, cat.zone);
+                if (!categorySearchResults[cat.zone]) {
+                  categorySearchResults[cat.zone] = [];
+                }
+                for (const r of results) {
+                  if (r.asin && !seenAsins.has(r.asin)) {
+                    seenAsins.add(r.asin);
+                    categorySearchResults[cat.zone].push(r);
+                    merged.push(r);
+                    keywordCount++;
+                  }
+                }
+              })()
+            );
+          }
+        }
+
+        await Promise.all(searchPromises);
+
+        // 카테고리별 결과 로그
+        for (const [zone, results] of Object.entries(categorySearchResults)) {
+          log.push(`${zone}: ${results.length}개 상품 발견`);
+        }
+      }
+
+      // Step 4: Lens 검색도 병렬 시도 (Amazon CDN URL이면 추가 검색)
+      let lensDirectCount = 0;
+      const isAmazonUrl =
+        image_url.includes("media-amazon.com") ||
+        image_url.includes("images-amazon.com");
+
+      if (isAmazonUrl) {
+        log.push("Amazon URL 감지 → Lens 추가 검색...");
+        const { results: lensResults } = await searchViaLens(
+          image_url,
+          "lens"
         );
-        for (const batch of chainResults) {
-          for (const r of batch) {
+        for (const r of lensResults) {
+          if (r.asin && !seenAsins.has(r.asin)) {
+            seenAsins.add(r.asin);
             merged.push(r);
-            chainCount++;
+            lensDirectCount++;
           }
         }
-        log.push(`체인 검색(${chainTargets.length}개 대상): +${chainCount}개`);
-      } else {
-        log.push(`체인 검색: 적합한 이미지 없어 스킵`);
+        if (lensDirectCount > 0) {
+          log.push(`Lens 원본: +${lensDirectCount}개`);
+        }
       }
+
+      log.push(
+        `완료! 총 ${merged.length}개 상품 (${detectedZones.length}개 카테고리)`
+      );
 
       return new Response(
         JSON.stringify({
           method: "smart",
           results: merged,
           lens_direct_count: lensDirectCount,
-          lens_crop_count: cropCount,
-          lens_chain_count: chainCount,
-          lens_amazon_count: lensDirectCount,
-          keyword_count: 0,
+          lens_crop_count: 0,
+          lens_chain_count: 0,
+          keyword_count: keywordCount,
           total: merged.length,
-          visual_error: visualError,
-          crop_error: cropError || (cropErrors.length > 0 ? cropErrors.join("; ") : null),
           detected_zones: detectedZones,
-          category_keywords: [],
+          gemini_categories: categories,
           search_log: log,
+          visual_error: null,
+          crop_error: geminiError,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     return new Response(
-      JSON.stringify({ error: "Invalid action. Use: keyword_search or smart_search" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: "Invalid action. Use: keyword_search or smart_search",
+      }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), {

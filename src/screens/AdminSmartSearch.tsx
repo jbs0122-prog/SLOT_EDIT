@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Camera, Search, Check, Star, ExternalLink,
-  Loader2, AlertCircle, Tag, Eye, Zap, ChevronDown,
+  Loader2, AlertCircle, Tag, Zap, ChevronDown,
   ChevronUp, ImageIcon, ArrowRight, X, Square, RefreshCw,
-  Scissors, Link2
+  Sparkles, ShoppingBag
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
@@ -21,12 +21,19 @@ interface SmartResult {
   reviews_count: number | null;
   url: string;
   is_prime: boolean;
-  source: 'lens' | 'lens_crop' | 'lens_chain' | 'keyword';
+  source: 'gemini_keyword' | 'lens' | 'lens_crop' | 'lens_chain' | 'keyword';
   category?: string;
   crop_zone?: string;
+  keyword_used?: string;
   analyzed?: AnalyzedData;
   analyzing?: boolean;
   analyzeError?: string;
+}
+
+interface GeminiCategory {
+  zone: string;
+  keywords: string[];
+  description: string;
 }
 
 interface AnalyzedData {
@@ -91,13 +98,14 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
-  lens: { label: 'LENS', cls: 'bg-teal-500/90 text-white' },
+  gemini_keyword: { label: 'AI', cls: 'bg-teal-500/90 text-white' },
+  lens: { label: 'LENS', cls: 'bg-cyan-500/90 text-white' },
   lens_crop: { label: 'CROP', cls: 'bg-cyan-500/90 text-white' },
   lens_chain: { label: 'CHAIN', cls: 'bg-blue-500/90 text-white' },
   keyword: { label: 'KW', cls: 'bg-amber-500/90 text-white' },
 };
 
-type SearchPhase = 'idle' | 'lens_searching' | 'crop_searching' | 'chain_searching' | 'done';
+type SearchPhase = 'idle' | 'downloading' | 'analyzing' | 'searching' | 'done';
 
 const SESSION_KEY = 'smart_search_state';
 
@@ -111,9 +119,9 @@ interface SessionState {
   results: SmartResult[];
   searchLog: { msg: string; type: 'info' | 'success' | 'error' | 'warn' }[];
   lensDirectCount: number;
-  lensCropCount: number;
-  lensChainCount: number;
+  keywordCount: number;
   detectedZones: string[];
+  geminiCategories: GeminiCategory[];
   searchError: string;
   savedAsins: string[];
   lastSearchFilters: { gender: string; bodyType: string; vibe: string; season: string };
@@ -151,9 +159,9 @@ export default function AdminSmartSearch() {
   const [showLog, setShowLog] = useState(true);
 
   const [lensDirectCount, setLensDirectCount] = useState(cached.current?.lensDirectCount || 0);
-  const [lensCropCount, setLensCropCount] = useState(cached.current?.lensCropCount || 0);
-  const [lensChainCount, setLensChainCount] = useState(cached.current?.lensChainCount || 0);
+  const [keywordCount, setKeywordCount] = useState(cached.current?.keywordCount || 0);
   const [detectedZones, setDetectedZones] = useState<string[]>(cached.current?.detectedZones || []);
+  const [geminiCategories, setGeminiCategories] = useState<GeminiCategory[]>(cached.current?.geminiCategories || []);
   const [searchError, setSearchError] = useState(cached.current?.searchError || '');
 
   const [activeCategory, setActiveCategory] = useState('all');
@@ -193,16 +201,16 @@ export default function AdminSmartSearch() {
         results: results.map(({ analyzing, ...rest }) => rest),
         searchLog,
         lensDirectCount,
-        lensCropCount,
-        lensChainCount,
+        keywordCount,
         detectedZones,
+        geminiCategories,
         searchError,
         savedAsins: Array.from(savedAsins),
         lastSearchFilters,
       });
     }
   }, [phase, results, savedAsins, searchLog, imageUrl, gender, bodyType, vibe, season,
-      lensDirectCount, lensCropCount, lensChainCount, detectedZones, searchError, lastSearchFilters]);
+      lensDirectCount, keywordCount, detectedZones, geminiCategories, searchError, lastSearchFilters]);
 
   const addLog = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') => {
     setSearchLog(prev => [...prev, { msg: `[${new Date().toLocaleTimeString()}] ${msg}`, type }]);
@@ -212,24 +220,26 @@ export default function AdminSmartSearch() {
     if (!imageUrl.trim()) return;
 
     abortRef.current = false;
-    setPhase('lens_searching');
+    setPhase('downloading');
     setResults([]);
     setSearchLog([]);
     setSearchError('');
     setSelected(new Set());
     setLensDirectCount(0);
-    setLensCropCount(0);
-    setLensChainCount(0);
+    setKeywordCount(0);
     setDetectedZones([]);
+    setGeminiCategories([]);
     setActiveCategory('all');
     setShowLog(true);
 
     const currentFilters = { gender, bodyType, vibe, season };
     setLastSearchFilters(currentFilters);
 
-    addLog('Smart Search 시작 (Lens 원본 → 크롭 분할 → 체인)...', 'info');
+    addLog('Smart Search 시작 (이미지 다운로드 → Gemini 분석 → Amazon 검색)...', 'info');
 
     try {
+      setPhase('analyzing');
+
       const res = await fetch(`${SUPABASE_URL}/functions/v1/smart-product-search`, {
         method: 'POST',
         headers: {
@@ -247,40 +257,36 @@ export default function AdminSmartSearch() {
         }),
       });
 
+      setPhase('searching');
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-      if (data.visual_error) {
-        addLog(`Lens 원본 실패: ${data.visual_error}`, 'error');
-        addLog('Pinterest/SNS 이미지는 Google Lens 접근이 차단될 수 있습니다. CDN 직접 이미지 URL을 사용하세요.', 'warn');
-      } else {
-        addLog(`Lens 원본: ${data.lens_direct_count}개`, data.lens_direct_count > 0 ? 'success' : 'warn');
+      if (data.error && !data.results) {
+        throw new Error(data.error);
       }
 
-      setPhase('crop_searching');
-
-      if (data.crop_error) {
-        addLog(`크롭 분할 오류: ${data.crop_error}`, 'warn');
-      } else if ((data.detected_zones || []).length > 0) {
-        addLog(`Gemini 존 감지: ${data.detected_zones.join(', ')}`, 'info');
-        addLog(`크롭 분할 검색: +${data.lens_crop_count}개`, data.lens_crop_count > 0 ? 'success' : 'warn');
+      // 서버 로그 표시
+      if (data.search_log) {
+        for (const logMsg of data.search_log) {
+          const isError = logMsg.includes('오류') || logMsg.includes('실패');
+          const isSuccess = logMsg.includes('완료') || logMsg.includes('발견');
+          addLog(logMsg, isError ? 'error' : isSuccess ? 'success' : 'info');
+        }
       }
-
-      setPhase('chain_searching');
-      addLog(`체인 검색: +${data.lens_chain_count}개`, data.lens_chain_count > 0 ? 'success' : 'warn');
 
       setLensDirectCount(data.lens_direct_count || 0);
-      setLensCropCount(data.lens_crop_count || 0);
-      setLensChainCount(data.lens_chain_count || 0);
+      setKeywordCount(data.keyword_count || 0);
       setDetectedZones(data.detected_zones || []);
+      setGeminiCategories(data.gemini_categories || []);
 
       const mergedResults: SmartResult[] = (data.results || []).map((r: SmartResult) => ({ ...r }));
       setResults(mergedResults);
 
-      addLog(
-        `완료! 총 ${mergedResults.length}개 (Lens: ${data.lens_direct_count}, 크롭: ${data.lens_crop_count}, 체인: ${data.lens_chain_count})`,
-        'success'
-      );
+      if (mergedResults.length === 0) {
+        addLog('검색 결과가 없습니다. 이미지 URL을 확인하거나 다른 이미지를 시도해보세요.', 'warn');
+      }
+
       setPhase('done');
     } catch (err) {
       setSearchError((err as Error).message);
@@ -401,6 +407,10 @@ export default function AdminSmartSearch() {
     : results.filter(r => (r.analyzed?.category || r.category) === activeCategory);
 
   const isSearching = phase !== 'idle' && phase !== 'done';
+  const searchPhaseLabel =
+    phase === 'downloading' ? '이미지 다운로드 중...' :
+    phase === 'analyzing' ? 'Gemini AI 분석 중...' :
+    phase === 'searching' ? 'Amazon USA 검색 중...' : '';
   const selectedCount = selected.size;
   const availableCount = filteredResults.filter(p => !savedAsins.has(p.asin)).length;
   const allSelected = availableCount > 0 && filteredResults.filter(p => !savedAsins.has(p.asin)).every(p => selected.has(p.asin));
@@ -603,18 +613,18 @@ export default function AdminSmartSearch() {
 
               {phase === 'done' && (
                 <>
-                  <div className="flex items-center gap-1.5 bg-teal-500/10 text-teal-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-teal-500/15">
-                    <Eye className="w-3 h-3" />
-                    Lens: {lensDirectCount}
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-cyan-500/10 text-cyan-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-cyan-500/15">
-                    <Scissors className="w-3 h-3" />
-                    Crop: +{lensCropCount}
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-blue-500/10 text-blue-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-blue-500/15">
-                    <Link2 className="w-3 h-3" />
-                    Chain: +{lensChainCount}
-                  </div>
+                  {keywordCount > 0 && (
+                    <div className="flex items-center gap-1.5 bg-teal-500/10 text-teal-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-teal-500/15">
+                      <Sparkles className="w-3 h-3" />
+                      AI: {keywordCount}
+                    </div>
+                  )}
+                  {lensDirectCount > 0 && (
+                    <div className="flex items-center gap-1.5 bg-cyan-500/10 text-cyan-400 px-2.5 py-1 rounded-full text-[11px] font-medium border border-cyan-500/15">
+                      <ShoppingBag className="w-3 h-3" />
+                      Lens: +{lensDirectCount}
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5 bg-white/5 text-white/40 px-2.5 py-1 rounded-full text-[11px] border border-white/8">
                     Total: {results.length}
                   </div>
@@ -622,13 +632,14 @@ export default function AdminSmartSearch() {
               )}
             </div>
 
-            {detectedZones.length > 0 && (
+            {geminiCategories.length > 0 && (
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">크롭 존:</span>
-                {detectedZones.map((zone, i) => (
-                  <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[zone] || 'bg-white/8 text-white/40'}`}>
-                    {zone}
-                  </span>
+                <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">감지 아이템:</span>
+                {geminiCategories.map((cat, i) => (
+                  <div key={i} className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[cat.zone] || 'bg-white/8 text-white/40'}`}>
+                    <span>{cat.zone}</span>
+                    <span className="opacity-60">({cat.keywords.length})</span>
+                  </div>
                 ))}
               </div>
             )}
@@ -756,33 +767,36 @@ export default function AdminSmartSearch() {
               </div>
               <p className="text-white/40 text-base font-medium mb-2">Smart Product Search</p>
               <p className="text-white/20 text-sm max-w-md mx-auto leading-relaxed">
-                패션 이미지 URL을 입력하면 Google Lens 원본 검색, AI 크롭 분할 검색, 체인 검색 3단계로 관련 Amazon 상품을 최대한 발굴합니다.
+                핀터레스트 등 어떤 패션 이미지 URL이든 입력하면, Gemini AI가 이미지를 직접 분석해 카테고리별 Amazon USA 상품을 자동으로 찾아드립니다.
               </p>
               <div className="flex items-center justify-center gap-3 mt-8">
-                <StepBadge label="Lens 원본" sub="전신 매칭" icon={<Eye className="w-4 h-4" />} />
+                <StepBadge label="이미지 다운로드" sub="Pinterest 포함" icon={<Camera className="w-4 h-4" />} />
                 <ArrowRight className="w-4 h-4 text-white/10" />
-                <StepBadge label="크롭 분할" sub="아이템별 집중" icon={<Scissors className="w-4 h-4" />} />
+                <StepBadge label="Gemini 분석" sub="아이템별 키워드" icon={<Sparkles className="w-4 h-4" />} />
                 <ArrowRight className="w-4 h-4 text-white/10" />
-                <StepBadge label="체인 검색" sub="유사상품 확장" icon={<Link2 className="w-4 h-4" />} />
+                <StepBadge label="Amazon 검색" sub="카테고리별 결과" icon={<ShoppingBag className="w-4 h-4" />} />
                 <ArrowRight className="w-4 h-4 text-white/10" />
-                <StepBadge label="DB 등록" sub="analyze & save" icon={<Tag className="w-4 h-4" />} />
+                <StepBadge label="DB 등록" sub="AI 분석 & 저장" icon={<Tag className="w-4 h-4" />} />
               </div>
             </div>
           )}
 
           {isSearching && (
             <div className="flex flex-col items-center justify-center py-24">
-              <div className="relative mb-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 flex items-center justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-teal-400" />
+              <div className="relative mb-6">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 flex items-center justify-center">
+                  <Loader2 className="w-9 h-9 animate-spin text-teal-400" />
                 </div>
                 <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-teal-500 animate-ping opacity-75" />
               </div>
-              <p className="text-white/50 text-sm font-medium">
-                {phase === 'lens_searching' && 'Google Lens 원본 검색 중...'}
-                {phase === 'crop_searching' && 'Gemini 크롭 분할 검색 중...'}
-                {phase === 'chain_searching' && '유사 이미지 체인 검색 중...'}
-              </p>
+              <p className="text-white/60 text-sm font-semibold mb-2">{searchPhaseLabel}</p>
+              <div className="flex items-center gap-6 mt-4">
+                <StepItem label="이미지 다운로드" active={phase === 'downloading'} done={phase !== 'downloading'} />
+                <div className="w-8 h-px bg-white/10" />
+                <StepItem label="Gemini AI 분석" active={phase === 'analyzing'} done={phase === 'searching' || phase === 'done'} />
+                <div className="w-8 h-px bg-white/10" />
+                <StepItem label="Amazon 검색" active={phase === 'searching'} done={phase === 'done'} />
+              </div>
             </div>
           )}
 
@@ -895,6 +909,11 @@ export default function AdminSmartSearch() {
                           </span>
                         )}
                       </div>
+                      {product.keyword_used && !product.analyzed && (
+                        <p className="mt-1 text-[9px] text-white/20 truncate" title={product.keyword_used}>
+                          {product.keyword_used}
+                        </p>
+                      )}
                     </div>
 
                     <a
@@ -916,7 +935,7 @@ export default function AdminSmartSearch() {
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Search className="w-12 h-12 text-white/10 mb-3" />
               <p className="text-white/30 text-sm">검색 결과가 없습니다</p>
-              <p className="text-white/15 text-xs mt-1">CDN 직접 이미지 URL을 사용하거나 위의 추가 검색을 이용해보세요</p>
+              <p className="text-white/15 text-xs mt-1">이미지 URL이 올바른지 확인하거나 위의 추가 검색을 이용해보세요</p>
             </div>
           )}
         </div>
@@ -928,9 +947,9 @@ export default function AdminSmartSearch() {
 function StatusBadge({ phase }: { phase: SearchPhase }) {
   const config: Record<SearchPhase, { label: string; color: string; spin: boolean }> = {
     idle: { label: '', color: '', spin: false },
-    lens_searching: { label: 'Lens 원본 검색...', color: 'bg-teal-500/15 text-teal-400 border-teal-500/20', spin: true },
-    crop_searching: { label: '크롭 분할 검색...', color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20', spin: true },
-    chain_searching: { label: '체인 검색...', color: 'bg-blue-500/15 text-blue-400 border-blue-500/20', spin: true },
+    downloading: { label: '이미지 다운로드 중...', color: 'bg-teal-500/15 text-teal-400 border-teal-500/20', spin: true },
+    analyzing: { label: 'Gemini AI 분석 중...', color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20', spin: true },
+    searching: { label: 'Amazon 검색 중...', color: 'bg-blue-500/15 text-blue-400 border-blue-500/20', spin: true },
     done: { label: 'Search Complete', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', spin: false },
   };
   const c = config[phase];
@@ -939,6 +958,25 @@ function StatusBadge({ phase }: { phase: SearchPhase }) {
     <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${c.color}`}>
       {c.spin ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
       {c.label}
+    </div>
+  );
+}
+
+function StepItem({ label, active, done }: { label: string; active: boolean; done: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+        done ? 'bg-emerald-500/20 border border-emerald-500/30' :
+        active ? 'bg-teal-500/20 border border-teal-500/30' :
+        'bg-white/5 border border-white/10'
+      }`}>
+        {done ? <Check className="w-3.5 h-3.5 text-emerald-400" /> :
+         active ? <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" /> :
+         <div className="w-1.5 h-1.5 rounded-full bg-white/20" />}
+      </div>
+      <span className={`text-[9px] font-medium ${
+        done ? 'text-emerald-400/70' : active ? 'text-teal-400/70' : 'text-white/20'
+      }`}>{label}</span>
     </div>
   );
 }
