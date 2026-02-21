@@ -556,61 +556,61 @@ export default function AdminAmazonSearch() {
               </p>
             )}
           </div>
-        </div>
 
-        {/* Bottom Buttons */}
-        <div className="p-5 border-t border-white/8 space-y-2.5">
-          {filtersChanged && !generatingKeywords ? (
-            <button
-              onClick={generateKeywords}
-              disabled={!canGenerate || autoRunning}
-              className="w-full flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm ring-2 ring-amber-400/40 ring-offset-1 ring-offset-[#141414]"
-            >
-              <RefreshCw className="w-4 h-4" />
-              AI 키워드 재생성
-            </button>
-          ) : (
-            <button
-              onClick={generateKeywords}
-              disabled={!canGenerate || generatingKeywords || autoRunning}
-              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm"
-            >
-              {generatingKeywords ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4" />
-              )}
-              {generatingKeywords ? 'AI 키워드 생성 중...' : 'AI 키워드 생성'}
-            </button>
-          )}
+          {/* Action Buttons */}
+          <div className="pt-1 space-y-2.5">
+            {filtersChanged && !generatingKeywords ? (
+              <button
+                onClick={generateKeywords}
+                disabled={!canGenerate || autoRunning}
+                className="w-full flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm ring-2 ring-amber-400/40 ring-offset-1 ring-offset-[#141414]"
+              >
+                <RefreshCw className="w-4 h-4" />
+                AI 키워드 재생성
+              </button>
+            ) : (
+              <button
+                onClick={generateKeywords}
+                disabled={!canGenerate || generatingKeywords || autoRunning}
+                className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm"
+              >
+                {generatingKeywords ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                {generatingKeywords ? 'AI 키워드 생성 중...' : 'AI 키워드 생성'}
+              </button>
+            )}
 
-          {autoMode && keywords.length > 0 && (
-            <button
-              onClick={autoRunning ? stopAutoMode : runAutoMode}
-              disabled={generatingKeywords}
-              className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-all text-sm ${
-                autoRunning
-                  ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
-                  : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'
-              }`}
-            >
-              {autoRunning ? (
-                <>
-                  <Pause className="w-4 h-4" />
-                  자동화 중단
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4" />
-                  자동 전체 등록
-                </>
-              )}
-            </button>
-          )}
+            {autoMode && keywords.length > 0 && (
+              <button
+                onClick={autoRunning ? stopAutoMode : runAutoMode}
+                disabled={generatingKeywords}
+                className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-all text-sm ${
+                  autoRunning
+                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
+                    : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'
+                }`}
+              >
+                {autoRunning ? (
+                  <>
+                    <Pause className="w-4 h-4" />
+                    자동화 중단
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    자동 전체 등록
+                  </>
+                )}
+              </button>
+            )}
 
-          {!canGenerate && (
-            <p className="text-white/25 text-xs text-center">Gender와 Vibe를 선택하세요</p>
-          )}
+            {!canGenerate && (
+              <p className="text-white/25 text-xs text-center">Gender와 Vibe를 선택하세요</p>
+            )}
+          </div>
         </div>
       </div>
 

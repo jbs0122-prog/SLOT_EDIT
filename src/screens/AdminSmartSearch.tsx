@@ -556,31 +556,32 @@ export default function AdminSmartSearch() {
               </div>
             </div>
           )}
-        </div>
 
-        <div className="p-5 border-t border-white/8 space-y-2">
-          {filtersChanged && (
+          <div className="pt-4 space-y-2">
+            {filtersChanged && (
+              <button
+                onClick={runSmartSearch}
+                disabled={isSearching}
+                className="w-full flex items-center justify-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 font-medium py-2.5 rounded-xl transition-all text-xs"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                필터 변경됨 -- 재검색 ({changedFilterLabels.join(', ')})
+              </button>
+            )}
             <button
               onClick={runSmartSearch}
-              disabled={isSearching}
-              className="w-full flex items-center justify-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 font-medium py-2.5 rounded-xl transition-all text-xs"
+              disabled={!imageUrl.trim() || isSearching}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all text-sm shadow-lg shadow-teal-500/20"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              필터 변경됨 -- 재검색 ({changedFilterLabels.join(', ')})
+              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {isSearching ? 'Smart Search 진행 중...' : 'Smart Search 실행'}
             </button>
-          )}
-          <button
-            onClick={runSmartSearch}
-            disabled={!imageUrl.trim() || isSearching}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all text-sm shadow-lg shadow-teal-500/20"
-          >
-            {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            {isSearching ? 'Smart Search 진행 중...' : 'Smart Search 실행'}
-          </button>
-          {!imageUrl.trim() && (
-            <p className="text-white/20 text-xs text-center">이미지 URL을 입력하세요</p>
-          )}
+            {!imageUrl.trim() && (
+              <p className="text-white/20 text-xs text-center">이미지 URL을 입력하세요</p>
+            )}
+          </div>
         </div>
+
       </div>
 
       {/* Right Content */}
