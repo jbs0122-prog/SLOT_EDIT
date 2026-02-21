@@ -560,30 +560,29 @@ export default function AdminAmazonSearch() {
 
         {/* Bottom Buttons */}
         <div className="p-5 border-t border-white/8 space-y-2.5">
-          {filtersChanged && !generatingKeywords && (
-            <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
-              <RefreshCw className="w-3 h-3 text-amber-400 shrink-0" />
-              <p className="text-amber-400 text-[11px] leading-tight">조건이 변경되었습니다. 키워드를 재생성하세요.</p>
-            </div>
-          )}
-          <button
-            onClick={generateKeywords}
-            disabled={!canGenerate || generatingKeywords || autoRunning}
-            className={`w-full flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm ${
-              filtersChanged
-                ? 'bg-amber-400 hover:bg-amber-300 ring-2 ring-amber-400/40 ring-offset-1 ring-offset-[#141414]'
-                : 'bg-amber-500 hover:bg-amber-400'
-            }`}
-          >
-            {generatingKeywords ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : filtersChanged ? (
+          {filtersChanged && !generatingKeywords ? (
+            <button
+              onClick={generateKeywords}
+              disabled={!canGenerate || autoRunning}
+              className="w-full flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm ring-2 ring-amber-400/40 ring-offset-1 ring-offset-[#141414]"
+            >
               <RefreshCw className="w-4 h-4" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
-            {generatingKeywords ? 'AI 키워드 생성 중...' : filtersChanged ? 'AI 키워드 재생성' : 'AI 키워드 생성'}
-          </button>
+              AI 키워드 재생성
+            </button>
+          ) : (
+            <button
+              onClick={generateKeywords}
+              disabled={!canGenerate || generatingKeywords || autoRunning}
+              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm"
+            >
+              {generatingKeywords ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+              {generatingKeywords ? 'AI 키워드 생성 중...' : 'AI 키워드 생성'}
+            </button>
+          )}
 
           {autoMode && keywords.length > 0 && (
             <button
@@ -662,14 +661,12 @@ export default function AdminAmazonSearch() {
                         </span>
                       )}
                     </div>
-                    <button
-                      onClick={generateKeywords}
-                      disabled={autoRunning}
-                      className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors disabled:opacity-30"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      재생성
-                    </button>
+                    {filtersChanged && (
+                      <span className="text-[10px] text-amber-400/70 flex items-center gap-1">
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        조건 변경됨
+                      </span>
+                    )}
                   </div>
 
                   {/* Category tabs for keywords */}
