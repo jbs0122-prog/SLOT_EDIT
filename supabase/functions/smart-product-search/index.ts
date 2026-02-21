@@ -75,13 +75,23 @@ function upgradeImageResolution(url: string): string {
     .replace(/\._[A-Z0-9,_]+_\./g, "._AC_SL1500_.");
 }
 
-function isUsAmazonLink(link: string): boolean {
+function resolveUsAmazonLink(link: string): string | null {
   try {
     const url = new URL(link);
     const host = url.hostname.toLowerCase();
-    return host === "www.amazon.com" || host === "amazon.com";
+
+    if (host === "www.amazon.com" || host === "amazon.com") {
+      return link;
+    }
+
+    if (host === "www.google.com" || host === "google.com") {
+      const q = url.searchParams.get("q") || url.searchParams.get("url");
+      if (q) return resolveUsAmazonLink(q);
+    }
+
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -93,8 +103,9 @@ function parseAmazonResultsFromLens(
   const results: AmazonResult[] = [];
   for (const item of visualMatches) {
     if (!item.link) continue;
-    if (!isUsAmazonLink(item.link)) continue;
-    const asin = extractAsin(item.link);
+    const resolvedLink = resolveUsAmazonLink(item.link);
+    if (!resolvedLink) continue;
+    const asin = extractAsin(resolvedLink);
     if (!asin) continue;
     const canonicalUrl = `https://www.amazon.com/dp/${asin}`;
     const rawImage = item.image || item.thumbnail || "";
