@@ -82,17 +82,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const user = await verifyAuth(req);
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiApiKey) {
       return new Response(

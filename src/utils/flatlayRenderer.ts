@@ -603,18 +603,34 @@ export async function renderFlatlayFromEditorData(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  const slotZOrder: Record<string, number> = {
-    outer: 1, top: 2, mid: 3, bottom: 4, shoes: 5, bag: 6, accessory: 7, accessory_2: 8,
-  };
-
   const sorted = [...editorData].sort(
-    (a, b) => (slotZOrder[a.slot_type] || 99) - (slotZOrder[b.slot_type] || 99)
+    (a, b) => (a.zOrder ?? 0) - (b.zOrder ?? 0)
   );
 
   for (const item of sorted) {
     try {
       const img = await loadImageWithProxy(item.processedImageUrl, opts.useProxy);
       ctx.save();
+
+      const imgAspect = img.naturalWidth / img.naturalHeight;
+      const boxAspect = item.width / item.height;
+      let drawW: number, drawH: number, drawX: number, drawY: number;
+      if (Math.abs(imgAspect - boxAspect) < 0.01) {
+        drawW = item.width;
+        drawH = item.height;
+        drawX = item.x;
+        drawY = item.y;
+      } else if (imgAspect > boxAspect) {
+        drawW = item.width;
+        drawH = item.width / imgAspect;
+        drawX = item.x;
+        drawY = item.y + (item.height - drawH) / 2;
+      } else {
+        drawH = item.height;
+        drawW = item.height * imgAspect;
+        drawY = item.y;
+        drawX = item.x + (item.width - drawW) / 2;
+      }
 
       if (item.rotation) {
         const cx = item.x + item.width / 2;
@@ -629,7 +645,7 @@ export async function renderFlatlayFromEditorData(
       ctx.shadowOffsetX = 4;
       ctx.shadowOffsetY = 6;
 
-      ctx.drawImage(img, item.x, item.y, item.width, item.height);
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
       ctx.restore();
     } catch (error) {
       console.error(`Failed to render ${item.slot_type}:`, error);
