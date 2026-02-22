@@ -111,122 +111,102 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {products.map((product) => (
-        <div
-          key={product.id}
-          className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden"
-        >
-          <div className="relative">
-            <img
-              src={product.image_url}
-              alt={product.name}
-              className="w-full h-48 object-cover"
-            />
-            <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium ${getStockStatusColor(product.stock_status)}`}>
-              {getStockStatusLabel(product.stock_status)}
-            </div>
-          </div>
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+      {products.map((product) => {
+        const usage = usageCounts[product.id] || 0;
+        const isMaxUsage = usage >= MAX_OUTFIT_USAGE;
 
-          <div className="p-4">
-            <div className="mb-2">
-              <div className="text-xs text-gray-500 mb-1">
-                {getItemLabel(product.category)} · {product.gender}
+        return (
+          <div
+            key={product.id}
+            className="group relative bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all duration-200"
+          >
+            <div className="relative aspect-square bg-gray-50">
+              <img
+                src={product.image_url}
+                alt={product.name}
+                className="absolute inset-0 w-full h-full object-contain p-1"
+                onError={(e) => {
+                  e.currentTarget.src = 'https://via.placeholder.com/300x300?text=No+Image';
+                }}
+              />
+
+              <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${getStockStatusColor(product.stock_status)}`}>
+                {getStockStatusLabel(product.stock_status)}
               </div>
-              <h3 className="font-semibold text-gray-900 text-lg">
-                {product.brand || '브랜드 없음'}
-              </h3>
-              <p className="text-sm text-gray-600 line-clamp-2">
+
+              {isMaxUsage && (
+                <div className="absolute top-1.5 left-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium">
+                  <Ban size={9} />
+                  제외
+                </div>
+              )}
+
+              {usage > 0 && !isMaxUsage && (
+                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold">
+                  {usage}회
+                </div>
+              )}
+
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <div className="flex items-center gap-1.5">
+                  {(product.affiliate_link || product.product_link) && (
+                    <a
+                      href={product.affiliate_link || product.product_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 bg-white rounded-full text-gray-700 hover:bg-gray-100 transition-colors shadow-sm"
+                      title="쇼핑"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink size={14} />
+                    </a>
+                  )}
+                  <button
+                    onClick={() => handleCopy(product)}
+                    disabled={copyingId === product.id}
+                    className="p-2 bg-white rounded-full text-green-700 hover:bg-green-50 transition-colors shadow-sm disabled:opacity-50"
+                    title="복사"
+                  >
+                    <Copy size={14} />
+                  </button>
+                  <button
+                    onClick={() => onEditProduct(product)}
+                    className="p-2 bg-white rounded-full text-blue-700 hover:bg-blue-50 transition-colors shadow-sm"
+                    title="수정"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product)}
+                    disabled={deletingId === product.id}
+                    className="p-2 bg-white rounded-full text-red-700 hover:bg-red-50 transition-colors shadow-sm disabled:opacity-50"
+                    title="삭제"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-2.5 py-2">
+              <p className="text-xs text-gray-900 font-medium leading-tight line-clamp-2 min-h-[2rem]">
                 {product.name}
               </p>
-            </div>
-
-            {product.color && (
-              <div className="text-xs text-gray-500 mb-2">
-                색상: {product.color}
-              </div>
-            )}
-
-            {product.price && (
-              <div className="text-lg font-bold text-gray-900 mb-2">
-                ${product.price}
-              </div>
-            )}
-
-            {product.vibe && product.vibe.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-3">
-                {product.vibe.map((v, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs"
-                  >
-                    {v}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="mb-3 pt-2 border-t border-gray-100">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">코디 사용:</span>
-                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                  (usageCounts[product.id] || 0) >= MAX_OUTFIT_USAGE
-                    ? 'bg-red-100 text-red-700'
-                    : (usageCounts[product.id] || 0) > 0
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {usageCounts[product.id] || 0}회
-                </span>
-                {(usageCounts[product.id] || 0) >= MAX_OUTFIT_USAGE && (
-                  <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200">
-                    <Ban size={10} />
-                    자동생성 제외
-                  </span>
+              <div className="mt-1 flex items-baseline justify-between gap-1">
+                {product.price ? (
+                  <span className="text-sm font-bold text-gray-900">${product.price}</span>
+                ) : (
+                  <span className="text-xs text-gray-400">--</span>
                 )}
+                <span className="text-[10px] text-gray-400 truncate">
+                  {getItemLabel(product.category)} · {product.gender}
+                </span>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-3 border-t">
-              {(product.affiliate_link || product.product_link) && (
-                <a
-                  href={product.affiliate_link || product.product_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-                >
-                  <ExternalLink size={14} />
-                  쇼핑
-                </a>
-              )}
-              <button
-                onClick={() => handleCopy(product)}
-                disabled={copyingId === product.id}
-                className="flex items-center justify-center gap-1 px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
-                title="제품 복사"
-              >
-                <Copy size={14} />
-                {copyingId === product.id ? '...' : '복사'}
-              </button>
-              <button
-                onClick={() => onEditProduct(product)}
-                className="flex items-center justify-center gap-1 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-              >
-                <Edit2 size={14} />
-                수정
-              </button>
-              <button
-                onClick={() => handleDelete(product)}
-                disabled={deletingId === product.id}
-                className="flex items-center justify-center gap-1 px-3 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                <Trash2 size={14} />
-                {deletingId === product.id ? '...' : '삭제'}
-              </button>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
