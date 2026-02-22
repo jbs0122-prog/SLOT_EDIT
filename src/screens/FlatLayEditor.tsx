@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Move, Maximize2, RotateCcw, Check, X } from 'lucide-react';
+import { Move, Maximize2, RotateCcw, Check, X, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown } from 'lucide-react';
 import type { EditorProductData } from '../utils/flatlayRenderer';
 
-const SLOT_Z_INDEX: Record<string, number> = {
+const SLOT_BASE_Z: Record<string, number> = {
   outer: 1, top: 2, mid: 3, bottom: 4, shoes: 5, bag: 6, accessory: 7, accessory_2: 8,
 };
 
@@ -10,6 +10,13 @@ const SLOT_LABELS: Record<string, string> = {
   outer: 'Outer', top: 'Top', mid: 'Mid', bottom: 'Bottom',
   shoes: 'Shoes', bag: 'Bag', accessory: 'Acc', accessory_2: 'Acc 2',
 };
+
+function initZOrders(items: EditorProductData[]): EditorProductData[] {
+  return items.map((item, i) => ({
+    ...item,
+    zOrder: item.zOrder ?? (SLOT_BASE_Z[item.slot_type] ?? (i + 1)),
+  }));
+}
 
 const MIN_SIZE = 50;
 
@@ -64,7 +71,7 @@ export default function FlatLayEditor({
   onConfirm,
   onCancel,
 }: FlatLayEditorProps) {
-  const [items, setItems] = useState(initialItems);
+  const [items, setItems] = useState(() => initZOrders(initialItems));
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -142,15 +149,80 @@ export default function FlatLayEditor({
   };
 
   const handleReset = () => {
-    setItems(initialItems);
+    setItems(initZOrders(initialItems));
     setSelectedIndex(null);
+  };
+
+  const bringForward = () => {
+    if (selectedIndex === null) return;
+    setItems(prev => {
+      const sorted = [...prev].sort((a, b) => (a.zOrder ?? 0) - (b.zOrder ?? 0));
+      const cur = prev[selectedIndex];
+      const above = sorted.find(it => it.product_id !== cur.product_id && (it.zOrder ?? 0) > (cur.zOrder ?? 0));
+      if (!above) return prev;
+      const aboveZ = above.zOrder ?? 0;
+      const curZ = cur.zOrder ?? 0;
+      return prev.map(it => {
+        if (it.product_id === cur.product_id) return { ...it, zOrder: aboveZ };
+        if (it.product_id === above.product_id) return { ...it, zOrder: curZ };
+        return it;
+      });
+    });
+  };
+
+  const sendBackward = () => {
+    if (selectedIndex === null) return;
+    setItems(prev => {
+      const sorted = [...prev].sort((a, b) => (a.zOrder ?? 0) - (b.zOrder ?? 0));
+      const cur = prev[selectedIndex];
+      const below = [...sorted].reverse().find(it => it.product_id !== cur.product_id && (it.zOrder ?? 0) < (cur.zOrder ?? 0));
+      if (!below) return prev;
+      const belowZ = below.zOrder ?? 0;
+      const curZ = cur.zOrder ?? 0;
+      return prev.map(it => {
+        if (it.product_id === cur.product_id) return { ...it, zOrder: belowZ };
+        if (it.product_id === below.product_id) return { ...it, zOrder: curZ };
+        return it;
+      });
+    });
+  };
+
+  const bringToFront = () => {
+    if (selectedIndex === null) return;
+    setItems(prev => {
+      const maxZ = Math.max(...prev.map(it => it.zOrder ?? 0));
+      const cur = prev[selectedIndex];
+      if ((cur.zOrder ?? 0) === maxZ) return prev;
+      return prev.map(it =>
+        it.product_id === cur.product_id ? { ...it, zOrder: maxZ + 1 } : it
+      );
+    });
+  };
+
+  const sendToBack = () => {
+    if (selectedIndex === null) return;
+    setItems(prev => {
+      const minZ = Math.min(...prev.map(it => it.zOrder ?? 0));
+      const cur = prev[selectedIndex];
+      if ((cur.zOrder ?? 0) === minZ) return prev;
+      return prev.map(it =>
+        it.product_id === cur.product_id ? { ...it, zOrder: minZ - 1 } : it
+      );
+    });
   };
 
   const proxyBase = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-ibb-image?url=`;
 
   const sortedItems = [...items]
     .map((item, origIndex) => ({ item, origIndex }))
-    .sort((a, b) => (SLOT_Z_INDEX[a.item.slot_type] || 99) - (SLOT_Z_INDEX[b.item.slot_type] || 99));
+    .sort((a, b) => (a.item.zOrder ?? 0) - (b.item.zOrder ?? 0));
+
+  const selectedItem = selectedIndex !== null ? items[selectedIndex] : null;
+  const zOrders = items.map(it => it.zOrder ?? 0);
+  const maxZ = Math.max(...zOrders);
+  const minZ = Math.min(...zOrders);
+  const isAtFront = selectedItem !== null && (selectedItem.zOrder ?? 0) >= maxZ;
+  const isAtBack = selectedItem !== null && (selectedItem.zOrder ?? 0) <= minZ;
 
   return (
     <div className="space-y-4">
@@ -169,6 +241,58 @@ export default function FlatLayEditor({
         </button>
       </div>
 
+      {selectedItem && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+          <span className="text-xs font-medium text-blue-700 mr-1">
+            {SLOT_LABELS[selectedItem.slot_type] || selectedItem.slot_type}
+          </span>
+          <span className="text-[10px] text-blue-400 mr-2">레이어 순서</span>
+          <div className="flex items-center gap-1 ml-auto">
+            <button
+              onClick={sendToBack}
+              disabled={isAtBack}
+              title="맨 뒤로"
+              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed bg-white border border-blue-200 text-blue-600 hover:bg-blue-100"
+            >
+              <ChevronsDown size={13} />
+              맨 뒤로
+            </button>
+            <button
+              onClick={sendBackward}
+              disabled={isAtBack}
+              title="한 단계 뒤로"
+              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed bg-white border border-blue-200 text-blue-600 hover:bg-blue-100"
+            >
+              <ArrowDown size={13} />
+              뒤로
+            </button>
+            <button
+              onClick={bringForward}
+              disabled={isAtFront}
+              title="한 단계 앞으로"
+              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed bg-white border border-blue-200 text-blue-600 hover:bg-blue-100"
+            >
+              <ArrowUp size={13} />
+              앞으로
+            </button>
+            <button
+              onClick={bringToFront}
+              disabled={isAtFront}
+              title="맨 앞으로"
+              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed bg-white border border-blue-200 text-blue-600 hover:bg-blue-100"
+            >
+              <ChevronsUp size={13} />
+              맨 앞으로
+            </button>
+          </div>
+        </div>
+      )}
+      {!selectedItem && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+          <span className="text-xs text-gray-400">아이템을 선택하면 레이어 순서를 조정할 수 있습니다</span>
+        </div>
+      )}
+
       <div ref={wrapperRef} className="w-full">
         {scale > 0 && (
           <div
@@ -182,7 +306,7 @@ export default function FlatLayEditor({
           >
             {sortedItems.map(({ item, origIndex }) => {
               const isSelected = selectedIndex === origIndex;
-              const zIndex = (SLOT_Z_INDEX[item.slot_type] || 99) + (isSelected ? 100 : 0);
+              const zIndex = (item.zOrder ?? 0) * 10 + (isSelected ? 1000 : 0);
 
               return (
                 <div

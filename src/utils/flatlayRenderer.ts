@@ -41,6 +41,7 @@ export interface EditorProductData {
   price?: number | null;
   name?: string;
   aspectRatio: number;
+  zOrder?: number;
 }
 
 const DEFAULT_OPTIONS: Required<RenderOptions> = {
