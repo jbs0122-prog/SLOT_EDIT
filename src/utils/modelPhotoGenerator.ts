@@ -55,7 +55,8 @@ function loadImage(src: string, crossOrigin = true): Promise<HTMLImageElement> {
 
 async function compressImageFromUrl(
   imageUrl: string,
-  targetSizeKB: number
+  targetSizeKB: number,
+  addLogo = false
 ): Promise<Blob> {
   const img = await loadImage(imageUrl);
 
@@ -65,6 +66,19 @@ async function compressImageFromUrl(
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas context not available');
   ctx.drawImage(img, 0, 0);
+
+  if (addLogo) {
+    try {
+      const logo = await loadImage('/logo(white).png', false);
+      const logoWidth = Math.round(canvas.width * 0.5);
+      const logoHeight = Math.round((logo.height / logo.width) * logoWidth);
+      const logoX = (canvas.width - logoWidth) / 2;
+      const logoY = (canvas.height - logoHeight) / 2;
+      ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
+    } catch {
+      console.error('Failed to load logo for model photo overlay');
+    }
+  }
 
   const targetBytes = targetSizeKB * 1024;
   let quality = 0.92;
@@ -117,7 +131,7 @@ export async function generateAndSaveModelPhoto(
   let finalUrl = rawImageUrl;
 
   try {
-    const compressedBlob = await compressImageFromUrl(rawImageUrl, 700);
+    const compressedBlob = await compressImageFromUrl(rawImageUrl, 700, true);
 
     const fileName = `model-photo-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
     const filePath = `outfits/${fileName}`;
