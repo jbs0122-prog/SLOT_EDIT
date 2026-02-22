@@ -66,17 +66,6 @@ async function compressImageFromUrl(
   if (!ctx) throw new Error('Canvas context not available');
   ctx.drawImage(img, 0, 0);
 
-  try {
-    const logo = await loadImage('/logo(white).png', false);
-    const logoWidth = Math.round(canvas.width * 0.5);
-    const logoHeight = Math.round((logo.height / logo.width) * logoWidth);
-    const logoX = (canvas.width - logoWidth) / 2;
-    const logoY = (canvas.height - logoHeight) / 2;
-    ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
-  } catch {
-    console.error('Failed to load logo for model photo overlay');
-  }
-
   const targetBytes = targetSizeKB * 1024;
   let quality = 0.92;
 
