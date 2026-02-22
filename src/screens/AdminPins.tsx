@@ -385,64 +385,80 @@ export default function AdminPins() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
                 {filteredOutfits.map((outfit) => (
-                  <button
+                  <div
                     key={outfit.id}
-                    onClick={() => handleOutfitSelect(outfit)}
-                    className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 text-left"
+                    className="group relative bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all duration-200"
                   >
-                    {outfit.image_url_flatlay ? (
-                      <img
-                        src={outfit.image_url_flatlay}
-                        alt={`${outfit.gender} - ${outfit.vibe}`}
-                        className="w-full h-48 object-cover rounded-lg mb-3"
-                        onError={(e) => {
-                          e.currentTarget.src = 'https://via.placeholder.com/400x300?text=No+Image';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-48 bg-gray-200 rounded-lg mb-3 flex items-center justify-center">
-                        <span className="text-gray-400">이미지 없음</span>
+                    <button
+                      onClick={() => handleOutfitSelect(outfit)}
+                      className="w-full text-left"
+                    >
+                      <div className="relative aspect-square bg-gray-100">
+                        {outfit.image_url_flatlay ? (
+                          <img
+                            src={outfit.image_url_flatlay}
+                            alt={`${outfit.gender} - ${outfit.vibe}`}
+                            className="absolute inset-0 w-full h-full object-contain p-1"
+                            onError={(e) => {
+                              e.currentTarget.src = 'https://via.placeholder.com/300x300?text=No+Image';
+                            }}
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-gray-400 text-xs">이미지 없음</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                          <span className="px-3 py-1.5 bg-white/90 rounded-full text-xs font-medium text-gray-800 shadow-sm">
+                            핀 편집
+                          </span>
+                        </div>
                       </div>
-                    )}
-                    <div className="text-sm text-gray-600">
-                      {outfit.gender} · {outfit.body_type} · {outfit.vibe}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1 mb-2">
-                      ID: {outfit.id.slice(0, 8)} · {outfit.status}
-                    </div>
-                    <div className="relative" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        ref={el => {
-                          if (el) seasonBtnRefs.current.set(outfit.id, el);
-                          else seasonBtnRefs.current.delete(outfit.id);
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (seasonDropdownOpen === outfit.id) {
-                            setSeasonDropdownOpen(null);
-                            setSeasonDropdownPos(null);
-                          } else {
-                            const btn = seasonBtnRefs.current.get(outfit.id);
-                            if (btn) {
-                              const rect = btn.getBoundingClientRect();
-                              setSeasonDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-                            }
-                            setSeasonDropdownOpen(outfit.id);
-                          }
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-gray-300 bg-gray-50 hover:bg-white transition-colors"
-                      >
-                        <span>
-                          {(outfit.season || []).length === 0
-                            ? '계절 미설정'
-                            : (outfit.season || []).map(s => SEASON_LABELS[s] || s).join(' · ')}
+                    </button>
+
+                    <div className="px-2 py-2">
+                      <p className="text-[11px] text-gray-700 font-medium leading-tight truncate">
+                        {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+                      </p>
+                      <div className="mt-1 flex items-center justify-between gap-1">
+                        <span className="text-[10px] text-gray-400 truncate">
+                          {outfit.id.slice(0, 8)} · {outfit.status || '-'}
                         </span>
-                        <ChevronDown size={14} />
-                      </button>
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            ref={el => {
+                              if (el) seasonBtnRefs.current.set(outfit.id, el);
+                              else seasonBtnRefs.current.delete(outfit.id);
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (seasonDropdownOpen === outfit.id) {
+                                setSeasonDropdownOpen(null);
+                                setSeasonDropdownPos(null);
+                              } else {
+                                const btn = seasonBtnRefs.current.get(outfit.id);
+                                if (btn) {
+                                  const rect = btn.getBoundingClientRect();
+                                  setSeasonDropdownPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 100) });
+                                }
+                                setSeasonDropdownOpen(outfit.id);
+                              }
+                            }}
+                            className="flex items-center gap-0.5 px-1.5 py-0.5 border border-gray-200 rounded text-[10px] text-gray-500 hover:border-gray-300 bg-gray-50 hover:bg-white transition-colors"
+                          >
+                            <span className="truncate max-w-[60px]">
+                              {(outfit.season || []).length === 0
+                                ? '계절'
+                                : (outfit.season || []).map(s => SEASON_LABELS[s] || s).join('·')}
+                            </span>
+                            <ChevronDown size={10} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
