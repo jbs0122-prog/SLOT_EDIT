@@ -433,7 +433,7 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                     <ul className="list-disc list-inside space-y-1 text-xs">
                       <li>AI 매칭 엔진이 6가지 기준으로 최적의 조합을 찾습니다</li>
                       <li>컬러 조화, 톤 일치, 패턴 밸런스, 격식 수준, 보온성, 계절 적합성</li>
-                      <li>코디 사용 5회 이상인 제품은 자동으로 제외됩니다</li>
+                      <li>코디 사용 3회 이상인 제품은 자동으로 제외됩니다</li>
                       <li>생성된 코디는 "pending_render" 상태로 저장됩니다</li>
                       {anchorEnabled && anchorProductId && (
                         <li>앵커 아이템은 사용 한도와 관계없이 모든 코디에 포함됩니다</li>

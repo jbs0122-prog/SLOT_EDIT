@@ -30,6 +30,14 @@ export interface Product {
   formality?: number;
   warmth?: number;
   nobg_image_url?: string;
+  image_features?: {
+    dominantColors: string[];
+    texture: string;
+    visualWeight: string;
+    styleAttributes: string[];
+    patternDetail: string;
+    brightnessLevel: string;
+  };
   created_at: string;
   updated_at: string;
 }

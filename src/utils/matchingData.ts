@@ -311,6 +311,103 @@ export const SILHOUETTE_BALANCE: Record<string, string[]> = {
   tapered: ['relaxed', 'oversized', 'regular', 'wide'],
 };
 
+export const BODY_TYPE_SILHOUETTE_PREFS: Record<string, Record<string, string[]>> = {
+  slim: {
+    top: ['regular', 'relaxed', 'oversized'],
+    mid: ['regular', 'relaxed'],
+    outer: ['regular', 'relaxed', 'oversized'],
+    bottom: ['wide', 'straight', 'relaxed'],
+  },
+  regular: {
+    top: ['regular', 'fitted', 'relaxed'],
+    mid: ['regular', 'fitted'],
+    outer: ['regular', 'relaxed'],
+    bottom: ['wide', 'straight', 'tapered'],
+  },
+  'plus-size': {
+    top: ['regular', 'relaxed'],
+    mid: ['regular', 'relaxed'],
+    outer: ['regular', 'relaxed'],
+    bottom: ['wide', 'straight', 'relaxed'],
+  },
+  athletic: {
+    top: ['fitted', 'regular'],
+    mid: ['fitted', 'regular'],
+    outer: ['regular', 'fitted'],
+    bottom: ['wide', 'straight', 'tapered'],
+  },
+};
+
+export function getBodyTypeSilhouetteScore(bodyType: string, category: string, silhouette: string): number {
+  const prefs = BODY_TYPE_SILHOUETTE_PREFS[bodyType]?.[category];
+  if (!prefs || !silhouette) return 0;
+  const idx = prefs.indexOf(silhouette);
+  if (idx === -1) return -10;
+  if (idx === 0) return 20;
+  if (idx === 1) return 12;
+  return 5;
+}
+
+function makePairingKey(s1: string, s2: string): string {
+  return [s1, s2].sort().join('+');
+}
+
+const SUB_CAT_PAIRING_SCORES: Record<string, number> = {};
+function sp(s1: string, s2: string, score: number) {
+  SUB_CAT_PAIRING_SCORES[makePairingKey(s1, s2)] = score;
+}
+
+sp('blazer', 'slacks', 25); sp('blazer', 'shirt', 20); sp('blazer', 'chinos', 18);
+sp('blazer', 'derby', 20); sp('blazer', 'loafer', 22); sp('blazer', 'turtleneck', 15);
+sp('blazer', 'denim', 10); sp('blazer', 'sneaker', -5);
+sp('coat', 'sweater', 18); sp('coat', 'slacks', 15); sp('coat', 'shirt', 12);
+sp('coat', 'boot', 18); sp('coat', 'derby', 15); sp('coat', 'turtleneck', 15);
+sp('jacket', 'tshirt', 18); sp('jacket', 'denim', 20); sp('jacket', 'sneaker', 15);
+sp('jacket', 'chinos', 12); sp('jacket', 'cargo', 15); sp('jacket', 'hoodie', 10);
+sp('trench', 'slacks', 20); sp('trench', 'shirt', 18); sp('trench', 'loafer', 18);
+sp('trench', 'derby', 15); sp('trench', 'turtleneck', 15);
+sp('puffer', 'hoodie', 15); sp('puffer', 'sneaker', 18); sp('puffer', 'denim', 15);
+sp('puffer', 'cargo', 12); sp('puffer', 'sweatshirt', 12);
+sp('shirt', 'slacks', 20); sp('shirt', 'chinos', 18); sp('shirt', 'denim', 15);
+sp('shirt', 'loafer', 18); sp('shirt', 'derby', 20);
+sp('tshirt', 'denim', 20); sp('tshirt', 'cargo', 18); sp('tshirt', 'sneaker', 20);
+sp('tshirt', 'shorts', 15); sp('tshirt', 'chinos', 10);
+sp('polo', 'chinos', 22); sp('polo', 'slacks', 12); sp('polo', 'denim', 15);
+sp('polo', 'loafer', 15); sp('polo', 'sneaker', 12);
+sp('sweater', 'slacks', 15); sp('sweater', 'chinos', 18); sp('sweater', 'denim', 15);
+sp('sweater', 'loafer', 15); sp('sweater', 'derby', 12); sp('sweater', 'boot', 12);
+sp('cardigan', 'shirt', 20); sp('cardigan', 'tshirt', 12); sp('cardigan', 'slacks', 15);
+sp('cardigan', 'denim', 15); sp('cardigan', 'chinos', 18);
+sp('hoodie', 'denim', 18); sp('hoodie', 'cargo', 18); sp('hoodie', 'sneaker', 22);
+sp('hoodie', 'jogger', 15); sp('hoodie', 'slacks', -10);
+sp('turtleneck', 'slacks', 18); sp('turtleneck', 'coat', 15); sp('turtleneck', 'loafer', 15);
+sp('turtleneck', 'denim', 12);
+sp('denim', 'sneaker', 18); sp('denim', 'loafer', 12); sp('denim', 'boot', 15);
+sp('slacks', 'derby', 20); sp('slacks', 'loafer', 22); sp('slacks', 'sneaker', -5);
+sp('chinos', 'loafer', 18); sp('chinos', 'sneaker', 12); sp('chinos', 'derby', 15);
+sp('cargo', 'sneaker', 20); sp('cargo', 'boot', 15);
+sp('necktie', 'blazer', 25); sp('necktie', 'shirt', 22); sp('necktie', 'slacks', 15);
+sp('watch', 'blazer', 10); sp('watch', 'shirt', 10);
+sp('cap', 'hoodie', 15); sp('cap', 'tshirt', 12); sp('cap', 'sneaker', 10);
+sp('belt', 'slacks', 10); sp('belt', 'chinos', 10); sp('belt', 'denim', 8);
+sp('tote', 'shirt', 10); sp('tote', 'slacks', 8);
+sp('backpack', 'hoodie', 12); sp('backpack', 'tshirt', 10); sp('backpack', 'sneaker', 10);
+sp('crossbody', 'jacket', 10); sp('crossbody', 'denim', 8);
+
+export function getSubCategoryPairingBonus(sub1: string, sub2: string): number {
+  if (!sub1 || !sub2) return 0;
+  const k1 = sub1.toLowerCase().replace(/[\s-]/g, '_');
+  const k2 = sub2.toLowerCase().replace(/[\s-]/g, '_');
+  return SUB_CAT_PAIRING_SCORES[makePairingKey(k1, k2)] ?? 0;
+}
+
+export const SEASON_WARMTH_TARGETS: Record<string, { min: number; max: number; ideal: number }> = {
+  spring: { min: 2, max: 3.5, ideal: 2.5 },
+  summer: { min: 1, max: 2.5, ideal: 1.5 },
+  fall: { min: 2.5, max: 4, ideal: 3.2 },
+  winter: { min: 3.5, max: 5, ideal: 4.2 },
+};
+
 const COLOR_NAME_TO_FAMILY: Record<string, string> = {
   '검정': 'black', '검정색': 'black', '블랙': 'black',
   '흰색': 'white', '화이트': 'white', '백색': 'white',

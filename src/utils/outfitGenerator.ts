@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { Product } from '../data/outfits';
-import { findBestOutfits, OutfitCandidate, AnchorItem } from './matchingEngine';
+import { findBestOutfits, OutfitCandidate, AnchorItem, MatchScore } from './matchingEngine';
 import { removeBackground } from './backgroundRemoval';
 
 export interface GenerateOutfitsParams {
@@ -23,7 +23,7 @@ export interface GeneratedOutfit {
   matchScore: number;
 }
 
-export const MAX_OUTFIT_USAGE = 5;
+export const MAX_OUTFIT_USAGE = 3;
 
 export async function generateOutfitsAutomatically(
   params: GenerateOutfitsParams
@@ -52,7 +52,7 @@ export async function generateOutfitsAutomatically(
   );
 
   if (products.length === 0) {
-    throw new Error('사용 가능한 제품이 없습니다. 모든 제품이 코디 사용 한도(5회)에 도달했습니다.');
+    throw new Error('사용 가능한 제품이 없습니다. 모든 제품이 코디 사용 한도(3회)에 도달했습니다.');
   }
 
   const mapProduct = (p: typeof products[number]): Product => ({
@@ -78,6 +78,7 @@ export async function generateOutfitsAutomatically(
     pattern: p.pattern || '',
     formality: typeof p.formality === 'number' ? p.formality : undefined,
     warmth: typeof p.warmth === 'number' ? p.warmth : undefined,
+    image_features: p.image_features || undefined,
     created_at: p.created_at,
     updated_at: p.updated_at,
   });
@@ -95,7 +96,8 @@ export async function generateOutfitsAutomatically(
     }
   }
 
-  const bestOutfits = await findBestOutfits(
+  const aiCandidateCount = Math.min(count * 3, 30);
+  const ruleBased = await findBestOutfits(
     productList,
     {
       gender,
@@ -104,14 +106,16 @@ export async function generateOutfitsAutomatically(
       targetWarmth,
       targetSeason,
     },
-    count,
+    aiCandidateCount,
     anchor,
     usageCounts
   );
 
-  if (bestOutfits.length === 0) {
+  if (ruleBased.length === 0) {
     throw new Error('조건에 맞는 코디를 생성할 수 없습니다. 제품을 더 추가해주세요.');
   }
+
+  const bestOutfits = await refineWithAI(ruleBased, count, { gender, bodyType, vibe, targetSeason, targetWarmth });
 
   const generatedOutfits: GeneratedOutfit[] = [];
 
@@ -192,6 +196,9 @@ export async function generateOutfitsAutomatically(
   );
   generateInsightsForOutfits(bestOutfits, generatedOutfits, productList, { gender, bodyType, vibe, targetSeason }).catch(err =>
     console.error('Insight generation failed:', err)
+  );
+  triggerImageFeatureAnalysis(productList).catch(err =>
+    console.error('Image feature analysis failed:', err)
   );
 
   return generatedOutfits;
@@ -317,4 +324,117 @@ async function generateInsightsForOutfits(
       }
     })
   );
+}
+
+async function refineWithAI(
+  ruleBased: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>,
+  finalCount: number,
+  context: { gender: string; bodyType: string; vibe: string; targetSeason?: string; targetWarmth?: number }
+): Promise<Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>> {
+  if (ruleBased.length <= finalCount) return ruleBased;
+
+  try {
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-match-assist`;
+    const headers = {
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+    };
+
+    const slots: Array<keyof OutfitCandidate> = ['outer', 'mid', 'top', 'bottom', 'shoes', 'bag', 'accessory', 'accessory_2'];
+
+    const candidates = ruleBased.map(({ outfit, matchScore }, idx) => ({
+      index: idx,
+      ruleScore: matchScore.score,
+      items: slots
+        .filter(s => outfit[s])
+        .map(s => {
+          const p = outfit[s] as Product;
+          return {
+            slot_type: s,
+            name: p.name,
+            brand: p.brand || '',
+            color: p.color || '',
+            color_family: p.color_family || '',
+            material: p.material || '',
+            pattern: p.pattern || '',
+            silhouette: p.silhouette || '',
+            sub_category: p.sub_category || '',
+            vibe: p.vibe || [],
+            formality: p.formality,
+            warmth: p.warmth,
+          };
+        }),
+    }));
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        candidates,
+        context: {
+          gender: context.gender,
+          bodyType: context.bodyType,
+          vibe: context.vibe,
+          season: context.targetSeason,
+          warmth: context.targetWarmth,
+        },
+        topN: finalCount,
+      }),
+    });
+
+    if (!response.ok) return ruleBased.slice(0, finalCount);
+
+    const data = await response.json();
+
+    if (!data.success || !data.selected || data.fallback) {
+      return ruleBased.slice(0, finalCount);
+    }
+
+    const selectedIndices: number[] = data.selected
+      .map((s: { index: number }) => s.index)
+      .filter((idx: number) => idx >= 0 && idx < ruleBased.length);
+
+    if (selectedIndices.length === 0) return ruleBased.slice(0, finalCount);
+
+    const result = selectedIndices.map((idx: number) => ruleBased[idx]);
+
+    if (result.length < finalCount) {
+      for (const item of ruleBased) {
+        if (result.length >= finalCount) break;
+        if (!result.includes(item)) result.push(item);
+      }
+    }
+
+    return result.slice(0, finalCount);
+  } catch (err) {
+    console.error('AI refinement failed, falling back to rule-based:', err);
+    return ruleBased.slice(0, finalCount);
+  }
+}
+
+async function triggerImageFeatureAnalysis(products: Product[]): Promise<void> {
+  const needsAnalysis = products.filter(p => p.image_url && !p.image_features);
+  if (needsAnalysis.length === 0) return;
+
+  const BATCH_SIZE = 10;
+  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-product-image`;
+  const headers = {
+    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  for (let i = 0; i < needsAnalysis.length; i += BATCH_SIZE) {
+    const batch = needsAnalysis.slice(i, i + BATCH_SIZE);
+    try {
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          batchProductIds: batch.map(p => p.id),
+        }),
+      });
+    } catch (err) {
+      console.error('Image feature batch analysis failed:', err);
+    }
+  }
 }

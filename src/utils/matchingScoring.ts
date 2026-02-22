@@ -13,6 +13,9 @@ import {
   getVibeCompatScore,
   STYLE_COMPAT,
   SILHOUETTE_BALANCE,
+  getBodyTypeSilhouetteScore,
+  getSubCategoryPairingBonus,
+  SEASON_WARMTH_TARGETS,
 } from './matchingData';
 
 function getAllItems(outfit: OutfitCandidate): Product[] {
@@ -159,7 +162,7 @@ function scoreFormalityMatchAxis(outfit: OutfitCandidate): AxisResult {
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-function scoreWarmthMatchAxis(outfit: OutfitCandidate, targetWarmth?: number): AxisResult {
+function scoreWarmthMatchAxis(outfit: OutfitCandidate, targetWarmth?: number, targetSeason?: string): AxisResult {
   const items = getCoreItems(outfit);
   if (items.length < 3) return { score: 0, hasData: false };
 
@@ -172,11 +175,23 @@ function scoreWarmthMatchAxis(outfit: OutfitCandidate, targetWarmth?: number): A
   let score = 100;
   const avg = warmths.reduce((s, w) => s + w, 0) / warmths.length;
 
-  if (targetWarmth) {
-    const targetDev = Math.abs(avg - targetWarmth);
-    if (targetDev > 1.5) score -= 30;
+  const effectiveTarget = targetWarmth ?? (targetSeason ? SEASON_WARMTH_TARGETS[targetSeason]?.ideal : undefined);
+
+  if (effectiveTarget !== undefined) {
+    const targetDev = Math.abs(avg - effectiveTarget);
+    if (targetDev > 2) score -= 45;
+    else if (targetDev > 1.5) score -= 30;
     else if (targetDev > 1) score -= 15;
-    else score += 10;
+    else if (targetDev <= 0.5) score += 15;
+    else score += 5;
+  }
+
+  if (targetSeason) {
+    const bounds = SEASON_WARMTH_TARGETS[targetSeason];
+    if (bounds) {
+      if (avg < bounds.min) score -= Math.min(30, (bounds.min - avg) * 20);
+      if (avg > bounds.max) score -= Math.min(30, (avg - bounds.max) * 20);
+    }
   }
 
   const range = Math.max(...warmths) - Math.min(...warmths);
@@ -193,25 +208,28 @@ function scoreSeasonMatchAxis(outfit: OutfitCandidate, targetSeason?: string): A
 
   let score = 100;
   let matchCount = 0;
+  let mismatchCount = 0;
 
   for (const item of items) {
     const seasons = item.season || [];
     if (seasons.includes(targetSeason)) {
       matchCount++;
-      score += 5;
+      score += 8;
     } else if (seasons.length === 0) {
       score -= 5;
     } else {
-      score -= 10;
+      mismatchCount++;
+      score -= 18;
     }
   }
 
-  if (matchCount === items.length) score += 15;
+  if (matchCount === items.length) score += 20;
+  if (mismatchCount >= Math.ceil(items.length * 0.5)) score -= 25;
 
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-function scoreSilhouetteBalanceAxis(outfit: OutfitCandidate): AxisResult {
+function scoreSilhouetteBalanceAxis(outfit: OutfitCandidate, bodyType?: string): AxisResult {
   const topSil = outfit.top.silhouette || '';
   const bottomSil = outfit.bottom.silhouette || '';
   const outerSil = outfit.outer?.silhouette || '';
@@ -260,6 +278,23 @@ function scoreSilhouetteBalanceAxis(outfit: OutfitCandidate): AxisResult {
 
   if (evaluations > 0) score += bonusSum / Math.max(1, evaluations);
 
+  if (bodyType) {
+    let bodyBonus = 0;
+    let bodyChecks = 0;
+    const checks: Array<[string, string]> = [
+      ['top', topSil], ['bottom', bottomSil], ['outer', outerSil], ['mid', midSil],
+    ];
+    for (const [cat, sil] of checks) {
+      if (sil) {
+        bodyBonus += getBodyTypeSilhouetteScore(bodyType, cat, sil);
+        bodyChecks++;
+      }
+    }
+    if (bodyChecks > 0) score += bodyBonus / bodyChecks;
+
+    if (bottomSil === 'wide') score += 8;
+  }
+
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
@@ -305,8 +340,24 @@ function scoreSubCategoryMatchAxis(outfit: OutfitCandidate): AxisResult {
     }
   }
 
+  let score = Math.round((totalCompat / pairCount) * 100);
+
+  const subCats = items.map(p => (p.sub_category || '').toLowerCase().replace(/[\s-]/g, '_')).filter(Boolean);
+  let pairingBonus = 0;
+  let pairingChecks = 0;
+  for (let i = 0; i < subCats.length; i++) {
+    for (let j = i + 1; j < subCats.length; j++) {
+      const bonus = getSubCategoryPairingBonus(subCats[i], subCats[j]);
+      if (bonus !== 0) {
+        pairingBonus += bonus;
+        pairingChecks++;
+      }
+    }
+  }
+  if (pairingChecks > 0) score += Math.round(pairingBonus / pairingChecks);
+
   return {
-    score: Math.round((totalCompat / pairCount) * 100),
+    score: Math.max(0, Math.min(100, score)),
     hasData: true,
   };
 }
@@ -320,6 +371,7 @@ function scoreColorDepthAxis(outfit: OutfitCandidate): AxisResult {
   const neutrals = colors.filter(c => isNeutralColor(c));
   const accents = colors.filter(c => !isNeutralColor(c));
   const uniqueAccents = [...new Set(accents)];
+  const uniqueColors = new Set(colors);
 
   let score = 70;
 
@@ -341,7 +393,22 @@ function scoreColorDepthAxis(outfit: OutfitCandidate): AxisResult {
     if (baseRatio >= 0.4 && baseRatio <= 0.7) score += 10;
   }
 
-  if (new Set(colors).size > 4) score -= 15;
+  if (uniqueColors.size > 4) score -= 15;
+
+  if (uniqueColors.size === 1 && isNeutralColor(colors[0])) {
+    score -= 20;
+  }
+  if (uniqueColors.size <= 2 && colors.every(c => isNeutralColor(c)) && colors.length >= 4) {
+    score -= 15;
+  }
+
+  const blackCount = colors.filter(c => c === 'black').length;
+  if (blackCount >= 3) score -= 15;
+  if (blackCount >= 4) score -= 15;
+
+  if (uniqueColors.size >= 2 && !colors.every(c => isNeutralColor(c))) {
+    score += 10;
+  }
 
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
@@ -421,38 +488,74 @@ function scoreAccessoryHarmonyAxis(outfit: OutfitCandidate): AxisResult {
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
+function scoreImageFeatureAxis(outfit: OutfitCandidate): AxisResult {
+  const items = getCoreItems(outfit);
+  const withFeatures = items.filter(i => i.image_features);
+  if (withFeatures.length < 2) return { score: 50, hasData: false };
+
+  let score = 70;
+
+  const textures = withFeatures.map(i => i.image_features!.texture);
+  const textureSet = new Set(textures);
+  if (textureSet.size <= 2) score += 10;
+  if (textureSet.size === 1) score += 5;
+
+  const weights = withFeatures.map(i => i.image_features!.visualWeight);
+  const heavyCount = weights.filter(w => w === 'heavy').length;
+  const lightCount = weights.filter(w => w === 'light').length;
+  if (heavyCount > 0 && lightCount > 0) score += 8;
+  if (heavyCount === weights.length || lightCount === weights.length) score -= 5;
+
+  const allStyles = withFeatures.flatMap(i => i.image_features!.styleAttributes);
+  const styleCounts = new Map<string, number>();
+  allStyles.forEach(s => styleCounts.set(s, (styleCounts.get(s) || 0) + 1));
+  const maxSharedStyle = Math.max(...styleCounts.values());
+  if (maxSharedStyle >= withFeatures.length) score += 15;
+  else if (maxSharedStyle >= Math.ceil(withFeatures.length * 0.6)) score += 8;
+
+  const brightnesses = withFeatures.map(i => i.image_features!.brightnessLevel);
+  const darkItems = brightnesses.filter(b => b === 'dark').length;
+  const brightItems = brightnesses.filter(b => b === 'bright' || b === 'light').length;
+  if (darkItems > 0 && brightItems > 0) score += 5;
+  if (darkItems === brightnesses.length && brightnesses.length >= 3) score -= 10;
+
+  return { score: Math.max(0, Math.min(100, score)), hasData: true };
+}
+
 const BASE_WEIGHTS = {
-  colorMatch: 0.16,
-  toneMatch: 0.10,
-  patternBalance: 0.10,
-  formalityMatch: 0.10,
-  warmthMatch: 0.06,
-  seasonMatch: 0.06,
-  silhouetteBalance: 0.12,
-  materialCompat: 0.08,
-  subCategoryMatch: 0.06,
-  colorDepth: 0.06,
-  moodCoherence: 0.06,
-  accessoryHarmony: 0.04,
+  colorMatch: 0.12,
+  toneMatch: 0.07,
+  patternBalance: 0.07,
+  formalityMatch: 0.09,
+  warmthMatch: 0.12,
+  seasonMatch: 0.12,
+  silhouetteBalance: 0.09,
+  materialCompat: 0.06,
+  subCategoryMatch: 0.09,
+  colorDepth: 0.04,
+  moodCoherence: 0.04,
+  accessoryHarmony: 0.02,
+  imageFeature: 0.07,
 };
 
 export function scoreOutfit(
   outfit: OutfitCandidate,
-  context?: { targetWarmth?: number; targetSeason?: string }
+  context?: { targetWarmth?: number; targetSeason?: string; bodyType?: string }
 ): MatchScore {
   const axes: { key: keyof typeof BASE_WEIGHTS; result: AxisResult }[] = [
     { key: 'colorMatch', result: scoreColorMatchAxis(outfit) },
     { key: 'toneMatch', result: scoreToneMatchAxis(outfit) },
     { key: 'patternBalance', result: scorePatternBalanceAxis(outfit) },
     { key: 'formalityMatch', result: scoreFormalityMatchAxis(outfit) },
-    { key: 'warmthMatch', result: scoreWarmthMatchAxis(outfit, context?.targetWarmth) },
+    { key: 'warmthMatch', result: scoreWarmthMatchAxis(outfit, context?.targetWarmth, context?.targetSeason) },
     { key: 'seasonMatch', result: scoreSeasonMatchAxis(outfit, context?.targetSeason) },
-    { key: 'silhouetteBalance', result: scoreSilhouetteBalanceAxis(outfit) },
+    { key: 'silhouetteBalance', result: scoreSilhouetteBalanceAxis(outfit, context?.bodyType) },
     { key: 'materialCompat', result: scoreMaterialCompatAxis(outfit) },
     { key: 'subCategoryMatch', result: scoreSubCategoryMatchAxis(outfit) },
     { key: 'colorDepth', result: scoreColorDepthAxis(outfit) },
     { key: 'moodCoherence', result: scoreMoodCoherenceAxis(outfit) },
     { key: 'accessoryHarmony', result: scoreAccessoryHarmonyAxis(outfit) },
+    { key: 'imageFeature', result: scoreImageFeatureAxis(outfit) },
   ];
 
   let activeWeight = 0;
