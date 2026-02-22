@@ -346,10 +346,31 @@ export async function generateOutfitCombinations(
               targetWarmth: filters.targetWarmth,
             })) continue;
 
-            const bag = bags.length > 0 ? bags[count % bags.length] : undefined;
-            const acc = accessories.length > 0 ? accessories[count % accessories.length] : undefined;
+            const usedIds = new Set([top.id, bottom.id, shoe.id, outer?.id, mid?.id].filter(Boolean));
+            const coreHash = [top.id, bottom.id, shoe.id, outer?.id || '', mid?.id || ''].join('');
+            const hashNum = coreHash.split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
 
-            if (bag) coreOutfit.bag = bag;
+            let bag: Product | undefined;
+            if (bags.length > 0) {
+              const startIdx = Math.abs(hashNum) % bags.length;
+              for (let bi = 0; bi < bags.length; bi++) {
+                const candidate = bags[(startIdx + bi) % bags.length];
+                if (!usedIds.has(candidate.id)) { bag = candidate; break; }
+              }
+              if (!bag) bag = bags[startIdx % bags.length];
+            }
+
+            let acc: Product | undefined;
+            if (accessories.length > 0) {
+              const startIdx = Math.abs(hashNum * 31) % accessories.length;
+              for (let ai = 0; ai < accessories.length; ai++) {
+                const candidate = accessories[(startIdx + ai) % accessories.length];
+                if (!usedIds.has(candidate.id) && candidate.id !== bag?.id) { acc = candidate; break; }
+              }
+              if (!acc) acc = accessories[startIdx % accessories.length];
+            }
+
+            if (bag) { coreOutfit.bag = bag; usedIds.add(bag.id); }
             if (acc) coreOutfit.accessory = acc;
 
             combinations.push(coreOutfit);
@@ -386,18 +407,15 @@ function selectDiverse(
   const maxOuterRepeat = Math.max(2, Math.ceil(topN / 4));
   const maxPaletteRepeat = Math.max(1, Math.ceil(topN / 4));
   const maxProductRepeat = 1;
-  const anchorOuterId = anchor?.slotType === 'outer' ? anchor.product.id : null;
   const anchorProductId = anchor?.product.id ?? null;
 
-  const getCoreIds = (outfit: OutfitCandidate): string[] => [outfit.top.id, outfit.bottom.id, outfit.shoes.id];
-  const getOptionalIds = (outfit: OutfitCandidate): string[] =>
-    [outfit.outer, outfit.mid, outfit.bag, outfit.accessory, outfit.accessory_2]
+  const getAllIds = (outfit: OutfitCandidate): string[] =>
+    [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
       .filter((p): p is Product => !!p)
       .map(p => p.id);
 
   const hasZeroUsageItem = (outfit: OutfitCandidate): boolean => {
-    const allIds = [...getCoreIds(outfit), ...getOptionalIds(outfit)];
-    return allIds.some(id => id !== anchorProductId && (usageCounts[id] ?? 0) === 0);
+    return getAllIds(outfit).some(id => id !== anchorProductId && (usageCounts[id] ?? 0) === 0);
   };
 
   const hasColorDiversity = (outfit: OutfitCandidate): boolean => {
@@ -417,7 +435,7 @@ function selectDiverse(
       if (requireColorDiversity && !hasColorDiversity(candidate.outfit)) continue;
 
       const outerId = candidate.outfit.outer?.id || 'none';
-      if (outerId !== anchorOuterId) {
+      if (outerId !== 'none' && outerId !== anchorProductId) {
         if ((outerCounts.get(outerId) || 0) >= maxOuterRepeat) continue;
       }
 
@@ -425,14 +443,14 @@ function selectDiverse(
       if (!anchor && (paletteCounts.get(paletteKey) || 0) >= maxPaletteRepeat) continue;
 
       if (enforceProductLimit) {
-        const coreIds = getCoreIds(candidate.outfit);
-        if (coreIds.some(id => id !== anchorProductId && (productCounts.get(id) || 0) >= maxProductRepeat)) continue;
+        const allIds = getAllIds(candidate.outfit);
+        if (allIds.some(id => id !== anchorProductId && (productCounts.get(id) || 0) >= maxProductRepeat)) continue;
       }
 
       selected.push(candidate);
       outerCounts.set(outerId, (outerCounts.get(outerId) || 0) + 1);
       paletteCounts.set(paletteKey, (paletteCounts.get(paletteKey) || 0) + 1);
-      for (const id of [...getCoreIds(candidate.outfit), ...getOptionalIds(candidate.outfit)]) {
+      for (const id of getAllIds(candidate.outfit)) {
         if (id !== anchorProductId) productCounts.set(id, (productCounts.get(id) || 0) + 1);
       }
     }

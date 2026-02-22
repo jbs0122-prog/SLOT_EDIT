@@ -326,6 +326,61 @@ async function generateInsightsForOutfits(
   );
 }
 
+function getOutfitProductIds(outfit: OutfitCandidate): string[] {
+  return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
+    .filter((p): p is Product => !!p)
+    .map(p => p.id);
+}
+
+function canAddWithoutDuplicates(
+  existing: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>,
+  candidate: { outfit: OutfitCandidate; matchScore: MatchScore }
+): boolean {
+  const usedProducts = new Map<string, number>();
+  for (const { outfit } of existing) {
+    for (const id of getOutfitProductIds(outfit)) {
+      usedProducts.set(id, (usedProducts.get(id) || 0) + 1);
+    }
+  }
+  const candidateIds = getOutfitProductIds(candidate.outfit);
+  return !candidateIds.some(id => (usedProducts.get(id) || 0) >= 1);
+}
+
+function deduplicateOutfits(
+  candidates: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>,
+  maxCount: number
+): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
+  const result: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
+  const usedProducts = new Map<string, number>();
+
+  for (const candidate of candidates) {
+    if (result.length >= maxCount) break;
+    const ids = getOutfitProductIds(candidate.outfit);
+    const hasDuplicate = ids.some(id => (usedProducts.get(id) || 0) >= 1);
+
+    if (!hasDuplicate) {
+      result.push(candidate);
+      for (const id of ids) {
+        usedProducts.set(id, (usedProducts.get(id) || 0) + 1);
+      }
+    }
+  }
+
+  if (result.length < maxCount) {
+    for (const candidate of candidates) {
+      if (result.length >= maxCount) break;
+      if (!result.includes(candidate)) {
+        result.push(candidate);
+        for (const id of getOutfitProductIds(candidate.outfit)) {
+          usedProducts.set(id, (usedProducts.get(id) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 async function refineWithAI(
   ruleBased: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>,
   finalCount: number,
@@ -396,16 +451,30 @@ async function refineWithAI(
 
     if (selectedIndices.length === 0) return ruleBased.slice(0, finalCount);
 
-    const result = selectedIndices.map((idx: number) => ruleBased[idx]);
+    const dedupedResult = deduplicateOutfits(
+      selectedIndices.map((idx: number) => ruleBased[idx]),
+      finalCount
+    );
 
-    if (result.length < finalCount) {
+    if (dedupedResult.length < finalCount) {
       for (const item of ruleBased) {
-        if (result.length >= finalCount) break;
-        if (!result.includes(item)) result.push(item);
+        if (dedupedResult.length >= finalCount) break;
+        if (!dedupedResult.includes(item)) {
+          if (canAddWithoutDuplicates(dedupedResult, item)) {
+            dedupedResult.push(item);
+          }
+        }
       }
     }
 
-    return result.slice(0, finalCount);
+    if (dedupedResult.length < finalCount) {
+      for (const item of ruleBased) {
+        if (dedupedResult.length >= finalCount) break;
+        if (!dedupedResult.includes(item)) dedupedResult.push(item);
+      }
+    }
+
+    return dedupedResult.slice(0, finalCount);
   } catch (err) {
     console.error('AI refinement failed, falling back to rule-based:', err);
     return ruleBased.slice(0, finalCount);
