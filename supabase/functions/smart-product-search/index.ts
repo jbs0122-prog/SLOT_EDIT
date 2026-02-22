@@ -497,44 +497,49 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Step 3: 각 카테고리의 첫 번째 키워드로 Amazon 검색 (중복 없이)
+      // Step 3: 각 카테고리별 키워드로 Amazon 검색 (결과 부족 시 fallback)
       let keywordCount = 0;
       const categorySearchResults: Record<string, AmazonResult[]> = {};
+      const MIN_RESULTS_PER_CATEGORY = 4;
 
       if (categories.length > 0) {
         log.push(`Amazon USA 검색 시작 (${categories.length}개 카테고리)...`);
 
-        // 각 카테고리마다 최대 2개 키워드로 검색 (병렬)
         const searchPromises: Promise<void>[] = [];
 
         for (const cat of categories) {
-            const keywordsToSearch = cat.keywords.slice(0, 1);
+          searchPromises.push(
+            (async () => {
+              if (!categorySearchResults[cat.zone]) {
+                categorySearchResults[cat.zone] = [];
+              }
 
-          for (const kw of keywordsToSearch) {
-            searchPromises.push(
-              (async () => {
+              for (const kw of cat.keywords) {
                 const results = await searchAmazonByKeyword(kw, cat.zone);
-                if (!categorySearchResults[cat.zone]) {
-                  categorySearchResults[cat.zone] = [];
-                }
+                let addedCount = 0;
                 for (const r of results) {
                   if (r.asin && !seenAsins.has(r.asin)) {
                     seenAsins.add(r.asin);
                     categorySearchResults[cat.zone].push(r);
                     merged.push(r);
                     keywordCount++;
+                    addedCount++;
                   }
                 }
-              })()
-            );
-          }
+                log.push(`${cat.zone} [${kw}]: ${addedCount}개`);
+
+                if (categorySearchResults[cat.zone].length >= MIN_RESULTS_PER_CATEGORY) {
+                  break;
+                }
+              }
+            })()
+          );
         }
 
         await Promise.all(searchPromises);
 
-        // 카테고리별 결과 로그
         for (const [zone, results] of Object.entries(categorySearchResults)) {
-          log.push(`${zone}: ${results.length}개 상품 발견`);
+          log.push(`${zone} 최종: ${results.length}개 상품`);
         }
       }
 
