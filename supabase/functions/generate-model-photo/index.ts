@@ -8,11 +8,19 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface ClothingItem {
+  slotType: string;
+  name: string;
+  silhouette?: string;
+  subCategory?: string;
+}
+
 interface RequestBody {
   flatlayImageUrl: string;
   gender: string;
   bodyType: string;
   occasion?: string;
+  clothingItems?: ClothingItem[];
   revisionImageUrl?: string;
   revisionPrompt?: string;
 }
@@ -105,7 +113,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { flatlayImageUrl, gender, bodyType, occasion, revisionImageUrl, revisionPrompt }: RequestBody =
+    const { flatlayImageUrl, gender, bodyType, occasion, clothingItems, revisionImageUrl, revisionPrompt }: RequestBody =
       await req.json();
 
     if (!flatlayImageUrl || !gender || !bodyType) {
@@ -184,6 +192,68 @@ Deno.serve(async (req: Request) => {
 
     const safeOccasion = occasion ? occasion.substring(0, 100) : "";
 
+    let clothingDescription = "";
+    if (clothingItems && clothingItems.length > 0) {
+      const slotLabels: Record<string, string> = {
+        outer: "Outerwear",
+        mid: "Mid Layer",
+        top: "Top",
+        bottom: "Pants/Bottom",
+        shoes: "Shoes",
+        bag: "Bag",
+        accessory: "Accessory",
+        accessory_2: "Accessory 2",
+      };
+
+      const fitKeywords: Record<string, string> = {
+        wide: "wide-leg, loose and flowing with significant extra fabric width — NOT slim, NOT fitted, NOT tapered",
+        "wide-leg": "wide-leg, loose and flowing with significant extra fabric width — NOT slim, NOT fitted, NOT tapered",
+        "super wide": "extremely wide-leg, very loose with maximum fabric width — NOT slim, NOT fitted",
+        baggy: "baggy, oversized and very loose-fitting with excess fabric — NOT slim, NOT fitted, NOT tapered",
+        loose: "loose-fitting with relaxed drape — NOT slim, NOT fitted",
+        relaxed: "relaxed fit with comfortable room — NOT slim, NOT tight",
+        straight: "straight-leg, uniform width from hip to hem — NOT tapered, NOT skinny",
+        slim: "slim-fit, close to the body but not skin-tight",
+        skinny: "skinny-fit, very close to the body, tight throughout",
+        tapered: "tapered, wider at thigh and narrowing toward ankle",
+        bootcut: "bootcut, slim through thigh and slightly flared below knee",
+        flare: "flared, fitted through thigh and dramatically wider from knee down",
+        oversized: "oversized, significantly larger than body measurements with excess fabric everywhere",
+        cropped: "cropped length, ending above the ankle",
+      };
+
+      const descriptions: string[] = [];
+      for (const item of clothingItems) {
+        const label = slotLabels[item.slotType] || item.slotType;
+        const parts: string[] = [];
+
+        if (item.silhouette) {
+          const silLower = item.silhouette.toLowerCase();
+          const matchedFit = Object.entries(fitKeywords).find(([key]) =>
+            silLower.includes(key)
+          );
+          if (matchedFit) {
+            parts.push(`fit: ${matchedFit[1]}`);
+          } else {
+            parts.push(`fit: ${item.silhouette}`);
+          }
+        }
+
+        if (item.subCategory) {
+          parts.push(`type: ${item.subCategory}`);
+        }
+
+        const nameHint = item.name.substring(0, 80);
+        if (parts.length > 0) {
+          descriptions.push(`- ${label}: "${nameHint}" (${parts.join(", ")})`);
+        } else {
+          descriptions.push(`- ${label}: "${nameHint}"`);
+        }
+      }
+
+      clothingDescription = descriptions.join("\n");
+    }
+
     let prompt: string;
     const contentParts: Array<Record<string, unknown>> = [];
 
@@ -241,6 +311,15 @@ Photo requirements:
 - The clothing items should match EXACTLY what's shown in the flatlay image
 - The model MUST be ${genderText.toUpperCase()}
 ${safeOccasion ? `- Context: outfit for ${safeOccasion}` : ""}
+${clothingDescription ? `
+CLOTHING FIT DETAILS (MUST follow these exactly):
+${clothingDescription}
+
+CRITICAL FIT INSTRUCTION: The silhouette and fit of each clothing item MUST accurately reflect the descriptions above. Pay special attention to pants/bottoms fit:
+- If pants are described as "wide-leg" or "baggy", they MUST appear wide and loose on the model with visible extra fabric width. Do NOT render them as slim or fitted.
+- If pants are described as "straight", they must have uniform width from hip to hem.
+- If pants are described as "slim" or "skinny", they should be close-fitting.
+- The pants fit shown on the model must match the flatlay image — observe how wide or narrow the pants appear in the flatlay and replicate that exact proportion on the model.` : ""}
 
 REMINDER: The model in the photo MUST be a ${genderText} person. This is a ${genderText === "male" ? "menswear" : "womenswear"} outfit.`;
 

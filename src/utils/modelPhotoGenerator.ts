@@ -1,10 +1,18 @@
 import { supabase } from './supabase';
 
+export interface ClothingItemDescription {
+  slotType: string;
+  name: string;
+  silhouette?: string;
+  subCategory?: string;
+}
+
 export interface ModelPhotoOptions {
   flatlayImageUrl: string;
   gender: string;
   bodyType: string;
   occasion?: string;
+  clothingItems?: ClothingItemDescription[];
   revisionImageUrl?: string;
   revisionPrompt?: string;
 }
@@ -112,14 +120,36 @@ export async function generateAndSaveModelPhoto(
   outfitId: string,
   flatlayImageUrl: string
 ): Promise<string> {
-  const { data: outfit, error: outfitError } = await supabase
-    .from('outfits')
-    .select('gender, body_type, tpo, image_url_flatlay_clean')
-    .eq('id', outfitId)
-    .single();
+  const [outfitResult, itemsResult] = await Promise.all([
+    supabase
+      .from('outfits')
+      .select('gender, body_type, tpo, image_url_flatlay_clean')
+      .eq('id', outfitId)
+      .single(),
+    supabase
+      .from('outfit_items')
+      .select(`
+        slot_type,
+        product:products (name, silhouette, sub_category)
+      `)
+      .eq('outfit_id', outfitId),
+  ]);
 
-  if (outfitError) throw outfitError;
-  if (!outfit) throw new Error('Outfit not found');
+  if (outfitResult.error) throw outfitResult.error;
+  if (!outfitResult.data) throw new Error('Outfit not found');
+  const outfit = outfitResult.data;
+
+  const clothingItems: ClothingItemDescription[] = (itemsResult.data || [])
+    .filter((item: Record<string, unknown>) => item.product)
+    .map((item: Record<string, unknown>) => {
+      const product = item.product as Record<string, string>;
+      return {
+        slotType: item.slot_type as string,
+        name: product.name || '',
+        silhouette: product.silhouette || '',
+        subCategory: product.sub_category || '',
+      };
+    });
 
   const sourceImageUrl = outfit.image_url_flatlay_clean || flatlayImageUrl;
 
@@ -128,6 +158,7 @@ export async function generateAndSaveModelPhoto(
     gender: outfit.gender,
     bodyType: outfit.body_type,
     occasion: outfit.tpo || undefined,
+    clothingItems,
   });
 
   let finalUrl = rawImageUrl;
