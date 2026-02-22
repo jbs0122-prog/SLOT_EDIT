@@ -261,7 +261,10 @@ REMINDER: The model in the photo MUST be a ${genderText} person. This is a ${gen
               parts: contentParts,
             },
           ],
-          generationConfig: { temperature: 0.7 },
+          generationConfig: {
+            temperature: 0.7,
+            responseModalities: ["TEXT", "IMAGE"],
+          },
         }),
       }
     );
