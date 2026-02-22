@@ -5,6 +5,7 @@ import Loading from './screens/Loading';
 import GeneratingLoading from './screens/GeneratingLoading';
 import AdminPins from './screens/AdminPins';
 import AdminProducts from './screens/AdminProducts';
+import AdminOutfitLinker from './screens/AdminOutfitLinker';
 import AdminUsers from './screens/AdminUsers';
 import AdminLayout from './screens/AdminLayout';
 import AdminAmazonSearch from './screens/AdminAmazonSearch';
@@ -25,7 +26,7 @@ import { Outfit } from './data/outfits';
 import { fetchOutfits, fetchOutfitById } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature, getTargetWarmth } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-users' | 'admin-amazon' | 'admin-smart' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
+type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-outfit-linker' | 'admin-users' | 'admin-amazon' | 'admin-smart' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
 
 const RESULTS_KEY = 'slotedit_results';
 
@@ -36,6 +37,7 @@ function getHash(): string {
 function screenFromHash(h: string): Screen {
   if (h === 'admin') return 'admin';
   if (h === 'admin-products') return 'admin-products';
+  if (h === 'admin-outfit-linker') return 'admin-outfit-linker';
   if (h === 'admin-users') return 'admin-users';
   if (h === 'admin-amazon') return 'admin-amazon';
   if (h === 'admin-smart') return 'admin-smart';
@@ -139,7 +141,7 @@ function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: b
 
 function App() {
   const initialHash = getHash();
-  const isAdmin = initialHash.startsWith('admin') || initialHash === 'admin-amazon' || initialHash === 'admin-smart';
+  const isAdmin = initialHash.startsWith('admin') || initialHash === 'admin-amazon' || initialHash === 'admin-smart' || initialHash === 'admin-outfit-linker';
 
   const [currentScreen, setCurrentScreen] = useState<Screen>(isAdmin ? screenFromHash(initialHash) : 'loading');
   const [outfits, setOutfits] = useState<Outfit[]>([]);
@@ -422,6 +424,11 @@ function App() {
       {currentScreen === 'admin-products' && (
         <AdminLayout currentPage="products">
           <AdminProducts />
+        </AdminLayout>
+      )}
+      {currentScreen === 'admin-outfit-linker' && (
+        <AdminLayout currentPage="outfit-linker">
+          <AdminOutfitLinker />
         </AdminLayout>
       )}
       {currentScreen === 'admin-users' && (

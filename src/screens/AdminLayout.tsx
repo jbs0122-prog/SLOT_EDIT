@@ -1,17 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import { LogOut, Package, MapPin, Users, ShoppingBag, Key, GripVertical, Camera } from 'lucide-react';
+import { LogOut, Package, MapPin, Users, ShoppingBag, Key, GripVertical, Camera, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { Session } from '@supabase/supabase-js';
 import AdminLogin from './AdminLogin';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage?: 'pins' | 'products' | 'users' | 'amazon-search' | 'smart-search' | 'api-test';
+  currentPage?: 'pins' | 'products' | 'outfit-linker' | 'users' | 'amazon-search' | 'smart-search' | 'api-test';
 }
 
 const DEFAULT_MENU = [
   { id: 'pins' as const, label: 'Pins', icon: 'MapPin', href: '#admin' },
   { id: 'products' as const, label: 'Products', icon: 'Package', href: '#admin-products' },
+  { id: 'outfit-linker' as const, label: '코디 연결', icon: 'LinkIcon', href: '#admin-outfit-linker' },
   { id: 'amazon-search' as const, label: 'Amazon Search', icon: 'ShoppingBag', href: '#admin-amazon' },
   { id: 'smart-search' as const, label: 'Smart Search', icon: 'Camera', href: '#admin-smart' },
   { id: 'users' as const, label: 'Users', icon: 'Users', href: '#admin-users' },
@@ -21,6 +22,7 @@ const DEFAULT_MENU = [
 const ICON_MAP: Record<string, React.ElementType> = {
   MapPin,
   Package,
+  LinkIcon,
   ShoppingBag,
   Camera,
   Users,
