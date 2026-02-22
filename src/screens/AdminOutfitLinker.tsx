@@ -3,7 +3,7 @@ import { Outfit } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
-import { Sparkles, Trash2, CheckSquare, Square, XSquare, ChevronDown } from 'lucide-react';
+import { Sparkles, Trash2, CheckSquare, Square, XSquare, ChevronDown, Link2 } from 'lucide-react';
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -332,90 +332,102 @@ export default function AdminOutfitLinker() {
               {outfits.length === 0 ? '등록된 코디가 없습니다' : '검색 결과가 없습니다'}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
               {filteredOutfits.map((outfit) => (
                 <div
                   key={outfit.id}
-                  className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-all border-2 overflow-hidden relative ${
+                  className={`group relative bg-white rounded-lg overflow-hidden transition-all duration-200 border-2 ${
                     selectedOutfitIds.has(outfit.id)
                       ? 'border-blue-500 ring-2 ring-blue-200'
-                      : 'border-gray-200'
+                      : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
                   }`}
                 >
-                  <button
-                    onClick={() => toggleOutfitSelection(outfit.id)}
-                    className="absolute top-2 left-2 z-10"
-                  >
-                    {selectedOutfitIds.has(outfit.id) ? (
-                      <CheckSquare size={22} className="text-blue-600 drop-shadow-md" />
+                  <div className="relative aspect-square bg-gray-100">
+                    {outfit.image_url_flatlay ? (
+                      <img
+                        src={outfit.image_url_flatlay}
+                        alt={`${outfit.gender} - ${outfit.vibe}`}
+                        className="absolute inset-0 w-full h-full object-contain p-1"
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://via.placeholder.com/300x300?text=No+Image';
+                        }}
+                      />
                     ) : (
-                      <Square size={22} className="text-white drop-shadow-md" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-gray-400 text-xs">이미지 없음</span>
+                      </div>
                     )}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteOutfit(outfit.id)}
-                    className="absolute top-2 right-2 z-10 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors shadow-md"
-                    title="코디 삭제"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  {outfit.image_url_flatlay ? (
-                    <img
-                      src={outfit.image_url_flatlay}
-                      alt={`${outfit.gender} - ${outfit.vibe}`}
-                      className="w-full h-48 object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = 'https://via.placeholder.com/400x300?text=No+Image';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-                      <span className="text-gray-400">이미지 없음</span>
-                    </div>
-                  )}
-                  <div className="p-4">
-                    <div className="text-sm text-gray-600 mb-2">
-                      {outfit.gender} · {outfit.body_type} · {outfit.vibe}
-                    </div>
-                    <div className="text-xs text-gray-400 mb-2">
-                      연결된 제품: {outfit.items?.length || 0}개 · {outfit.status}
-                    </div>
-                    <div className="relative mb-3">
-                      <button
-                        ref={el => {
-                          if (el) seasonBtnRefs.current.set(outfit.id, el);
-                          else seasonBtnRefs.current.delete(outfit.id);
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (seasonDropdownOpen === outfit.id) {
-                            setSeasonDropdownOpen(null);
-                            setSeasonDropdownPos(null);
-                          } else {
-                            const btn = seasonBtnRefs.current.get(outfit.id);
-                            if (btn) {
-                              const rect = btn.getBoundingClientRect();
-                              setSeasonDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-                            }
-                            setSeasonDropdownOpen(outfit.id);
-                          }
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-gray-300 bg-gray-50 hover:bg-white transition-colors"
-                      >
-                        <span>
-                          {(outfit.season || []).length === 0
-                            ? '계절 미설정'
-                            : (outfit.season || []).map(s => SEASON_LABELS[s] || s).join(' · ')}
-                        </span>
-                        <ChevronDown size={14} />
-                      </button>
-                    </div>
+
                     <button
-                      onClick={() => handleLinkOutfit(outfit)}
-                      className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                      onClick={() => toggleOutfitSelection(outfit.id)}
+                      className="absolute top-1.5 left-1.5 z-10"
                     >
-                      제품 연결
+                      {selectedOutfitIds.has(outfit.id) ? (
+                        <CheckSquare size={20} className="text-blue-600 drop-shadow-md" />
+                      ) : (
+                        <Square size={20} className="text-white/80 drop-shadow-md group-hover:text-white" />
+                      )}
                     </button>
+
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleLinkOutfit(outfit)}
+                          className="p-2 bg-white rounded-full text-blue-700 hover:bg-blue-50 transition-colors shadow-sm"
+                          title="제품 연결"
+                        >
+                          <Link2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteOutfit(outfit.id)}
+                          className="p-2 bg-white rounded-full text-red-700 hover:bg-red-50 transition-colors shadow-sm"
+                          title="삭제"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-2 py-2">
+                    <p className="text-[11px] text-gray-700 font-medium leading-tight truncate">
+                      {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+                    </p>
+                    <div className="mt-1 flex items-center justify-between gap-1">
+                      <span className="text-[10px] text-gray-400">
+                        {outfit.items?.length || 0}개 · {outfit.status || '-'}
+                      </span>
+                      <div className="relative">
+                        <button
+                          ref={el => {
+                            if (el) seasonBtnRefs.current.set(outfit.id, el);
+                            else seasonBtnRefs.current.delete(outfit.id);
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (seasonDropdownOpen === outfit.id) {
+                              setSeasonDropdownOpen(null);
+                              setSeasonDropdownPos(null);
+                            } else {
+                              const btn = seasonBtnRefs.current.get(outfit.id);
+                              if (btn) {
+                                const rect = btn.getBoundingClientRect();
+                                setSeasonDropdownPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 100) });
+                              }
+                              setSeasonDropdownOpen(outfit.id);
+                            }
+                          }}
+                          className="flex items-center gap-0.5 px-1.5 py-0.5 border border-gray-200 rounded text-[10px] text-gray-500 hover:border-gray-300 bg-gray-50 hover:bg-white transition-colors"
+                        >
+                          <span className="truncate max-w-[60px]">
+                            {(outfit.season || []).length === 0
+                              ? '계절'
+                              : (outfit.season || []).map(s => SEASON_LABELS[s] || s).join('·')}
+                          </span>
+                          <ChevronDown size={10} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
