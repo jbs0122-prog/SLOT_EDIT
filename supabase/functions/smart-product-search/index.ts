@@ -153,13 +153,14 @@ KEYWORD RULES:
 - Make keywords specific enough to find visually similar products
 - Generate 3 different keyword variations per item (broad → specific)
 - Example for navy slim blazer: ["mens navy slim fit blazer", "mens navy suit jacket office", "mens navy blazer single breasted"]
-- BRAND DETECTION: If a brand logo, label, or name is clearly visible on any item (e.g., Nike swoosh, Adidas stripes, Supreme box logo), include that brand name as the FIRST word of the keyword for that item. Example: "Nike mens oversized tech fleece hoodie"
+- BRAND DETECTION (CRITICAL): If a brand logo, label, tag, or name is visible on any item (e.g., Nike swoosh, Adidas three stripes, Supreme box logo, Carhartt label, New Balance "N", etc.), you MUST place the brand-specific keyword FIRST in the keywords array. The first keyword MUST start with the brand name. Example: ["Nike mens tech fleece hoodie zip up", "mens nike hoodie grey", "nike zip hoodie athletic"]
 
 IMPORTANT:
 - Include ALL visible items, even partially visible ones
 - If layered (jacket over shirt), list BOTH as separate items
 - Focus on Amazon USA product naming conventions
-- If brand is detected, always use it in the keyword — brand-specific searches yield far more accurate results`;
+- BRAND PRIORITY: Brand-detected keywords always go first in the array — they yield far more accurate results
+- If no brand is visible, use descriptive style keywords only`;
 
   try {
     const geminiRes = await fetch(
