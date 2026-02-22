@@ -114,15 +114,17 @@ export async function generateAndSaveModelPhoto(
 ): Promise<string> {
   const { data: outfit, error: outfitError } = await supabase
     .from('outfits')
-    .select('gender, body_type, tpo')
+    .select('gender, body_type, tpo, image_url_flatlay_clean')
     .eq('id', outfitId)
     .single();
 
   if (outfitError) throw outfitError;
   if (!outfit) throw new Error('Outfit not found');
 
+  const sourceImageUrl = outfit.image_url_flatlay_clean || flatlayImageUrl;
+
   const { imageUrl: rawImageUrl } = await generateModelPhoto({
-    flatlayImageUrl,
+    flatlayImageUrl: sourceImageUrl,
     gender: outfit.gender,
     bodyType: outfit.body_type,
     occasion: outfit.tpo || undefined,
