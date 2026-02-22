@@ -369,6 +369,14 @@ export async function renderFlatlay(
     }
   }
 
+  const pinsWithPercentages = positions.map(pos => ({
+    ...pos,
+    x: ((pos.x + pos.width / 2) / opts.canvasWidth) * 100,
+    y: ((pos.y + pos.height / 2) / opts.canvasHeight) * 100,
+  }));
+
+  const cleanBlob = await compressCanvasToTarget(canvas, 600, true);
+
   try {
     const logoImg = await loadImageWithProxy('/logo(white).png', false);
     const logoWidth = 616;
@@ -380,14 +388,6 @@ export async function renderFlatlay(
   } catch (error) {
     console.error('Failed to load logo:', error);
   }
-
-  const pinsWithPercentages = positions.map(pos => ({
-    ...pos,
-    x: ((pos.x + pos.width / 2) / opts.canvasWidth) * 100,
-    y: ((pos.y + pos.height / 2) / opts.canvasHeight) * 100,
-  }));
-
-  const cleanBlob = await compressCanvasToTarget(canvas, 600, true);
 
   for (const position of positions) {
     drawPriceLabel(ctx, position, opts.canvasWidth);
@@ -654,15 +654,6 @@ export async function renderFlatlayFromEditorData(
     }
   }
 
-  try {
-    const logoImg = await loadImageWithProxy('/logo(white).png', false);
-    const logoWidth = 616;
-    const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
-    const logoX = (canvas.width - logoWidth) / 2;
-    const logoY = (canvas.height - logoHeight) / 2;
-    ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
-  } catch { /* skip logo */ }
-
   const positions: ProductPosition[] = sorted.map(item => ({
     product_id: item.product_id,
     image_url: item.processedImageUrl,
@@ -678,6 +669,15 @@ export async function renderFlatlayFromEditorData(
   }));
 
   const cleanBlob = await compressCanvasToTarget(canvas, 600, true);
+
+  try {
+    const logoImg = await loadImageWithProxy('/logo(white).png', false);
+    const logoWidth = 616;
+    const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
+    const logoX = (canvas.width - logoWidth) / 2;
+    const logoY = (canvas.height - logoHeight) / 2;
+    ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
+  } catch { /* skip logo */ }
 
   for (const item of sorted) {
     drawPriceLabel(ctx, {

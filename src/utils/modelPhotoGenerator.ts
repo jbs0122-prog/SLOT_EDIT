@@ -194,7 +194,7 @@ export async function reviseModelPhoto(
   let finalUrl = rawImageUrl;
 
   try {
-    const compressedBlob = await compressImageFromUrl(rawImageUrl, 700);
+    const compressedBlob = await compressImageFromUrl(rawImageUrl, 700, true);
 
     const fileName = `model-photo-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
     const filePath = `outfits/${fileName}`;
