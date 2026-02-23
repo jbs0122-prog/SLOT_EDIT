@@ -68,7 +68,14 @@ Extract and return ONLY a valid JSON object with these exact fields:
   "brand": "brand name (extract from title if not given)",
   "name": "clean product name without brand (max 80 chars)",
   "category": "one of: outer|mid|top|bottom|shoes|bag|accessory",
-  "sub_category": "specific type e.g. 'crewneck sweatshirt', 'chino pants', 'sneakers', 'tote bag'",
+  "sub_category": "Pick the MOST SPECIFIC value from the list below based on the detected category:
+    outer: puffer|coat|blazer|jacket|trench|bomber|parka|peacoat|anorak|windbreaker|duffle_coat|biker_jacket|denim_jacket|coach_jacket|varsity_jacket|shearling|field_jacket|harrington|quilted_jacket|corduroy_jacket|cape|poncho|kimono|noragi|chore_coat|safari_jacket|utility_jacket|shell|gilet|faux_fur|rain_jacket|track_jacket|shacket|leather_trench|tweed_jacket
+    mid: knit|cardigan|sweater|vest|fleece|hoodie|sweatshirt|half_zip|turtleneck_knit|cable_knit|argyle_sweater|fair_isle|cricket_jumper|mock_neck|zip_knit|quilted_vest|down_vest|fleece_vest|knitted_vest|cashmere_sweater|boucle_knit|mohair_knit|crochet_cardigan
+    top: tshirt|shirt|polo|turtleneck|tank|blouse|oxford_shirt|linen_shirt|silk_blouse|graphic_tee|rugby_shirt|henley|crop_top|camisole|bodysuit|tunic|corset|breton_stripe|band_tee|jersey|wrap_top|peasant_blouse|puff_sleeve|flannel_shirt|denim_shirt|chambray|western_shirt|sports_bra|performance_tee|compression_top|mesh_top|lace_top|embroidered_blouse|halter_top
+    bottom: denim|slacks|chinos|jogger|cargo|shorts|wide_leg|culottes|pleated_trousers|leather_pants|corduroy_pants|parachute_pants|track_pants|linen_trousers|maxi_skirt|midi_skirt|mini_skirt|pencil_skirt|pleated_skirt|wrap_skirt|flared_jeans|baggy_jeans|carpenter_pants|overalls|bermuda_shorts|biker_shorts|leggings|yoga_pants|sweatpants|sailor_pants|harem_pants|velvet_skirt|silk_skirt|tiered_skirt|tennis_skirt
+    shoes: sneaker|derby|loafer|boot|runner|chelsea_boot|combat_boot|ankle_boot|knee_boot|hiking_boot|desert_boot|work_boot|mule|slide|sandal|espadrille|clog|mary_jane|ballet_flat|oxford|brogue|monk_strap|platform|kitten_heel|block_heel|slingback|boat_shoe|moccasin|western_boot|tabi|driving_shoe|trail_runner|training_shoe|high_top|creeper
+    bag: tote|backpack|crossbody|duffle|clutch|shoulder_bag|satchel|messenger|bucket_bag|hobo|belt_bag|sling|baguette|box_bag|frame_bag|saddle_bag|doctor_bag|wristlet|briefcase|gym_bag|camera_bag|weekender|straw_bag|woven_bag|canvas_tote|chain_bag|phone_pouch|sacoche|vanity_case
+    accessory: necktie|belt|cap|scarf|glove|watch|sunglasses|beanie|bucket_hat|beret|headband|choker|chain_necklace|pendant|pearl_necklace|hoop_earring|stud_earring|ring|bracelet|bangle|brooch|hair_clip|bow_tie|suspenders|silk_scarf|bandana|anklet|ear_cuff|hair_stick|tights|wide_brim_hat|visor|wallet_chain",
   "gender": "MALE|FEMALE|UNISEX",
   "color": "primary color name e.g. 'Navy Blue', 'Cream White'",
   "color_family": "one of: black|white|gray|navy|blue|green|red|pink|yellow|orange|brown|beige|purple|multicolor",
@@ -88,6 +95,7 @@ Rules:
 - formality: 1=very casual, 5=formal (integer 1-5)
 - warmth: 1=very light, 5=very warm (integer 1-5)
 - body_type array MUST include "${body_type || "regular"}"
+- For sub_category, always prefer the MOST SPECIFIC type from the list. For example, use "bomber" instead of generic "jacket", "chelsea_boot" instead of generic "boot", "oxford_shirt" instead of generic "shirt"
 - Return ONLY the JSON object, no markdown, no explanation`;
 
     const geminiRes = await fetch(

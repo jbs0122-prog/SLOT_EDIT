@@ -453,6 +453,18 @@ export const SUB_CATEGORY_STYLE: Record<string, string> = {
   terrace_sneakers: 'sporty', indoor_soccer_shoes: 'sporty',
   football_trainers: 'sporty', futsal_shoes: 'sporty',
 
+  duffle_coat: 'smart_casual', shell: 'sporty', gilet: 'casual',
+  turtleneck_knit: 'smart_casual', zip_knit: 'smart_casual',
+  boucle_knit: 'smart_casual', mohair_knit: 'smart_casual',
+  puff_sleeve: 'smart_casual', chambray: 'casual',
+  mesh_top: 'sporty', halter_top: 'casual',
+  parachute_pants: 'casual', carpenter_pants: 'casual', bermuda_shorts: 'casual',
+  sweatpants: 'casual', sailor_pants: 'smart_casual',
+  slingback: 'formal', driving_shoe: 'smart_casual',
+  trail_runner: 'sporty', high_top: 'casual', creeper: 'casual',
+  stud_earring: 'smart_casual', anklet: 'casual', ear_cuff: 'casual',
+  hair_stick: 'smart_casual', tights: 'casual', wallet_chain: 'casual', visor: 'sporty',
+
   leather_biker: 'casual', vinyl_trench: 'casual', studs_jacket: 'casual',
   leopard_coat: 'casual', military_jacket: 'casual',
   corset: 'casual', mesh_bodysuit: 'casual', fishnet_top: 'casual',
