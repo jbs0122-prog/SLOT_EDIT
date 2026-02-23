@@ -48,7 +48,6 @@ const SEASON_MODIFIERS: Record<string, { fabric: string[]; keywords: string[] }>
   winter: { fabric: ["wool", "cashmere", "fleece", "thermal", "down"], keywords: ["winter", "warm", "insulated"] },
 };
 
-// Each sub-category gets exactly 1 keyword — total = sum of all sub-categories per category
 const CATEGORY_DEFS = [
   { key: "outer",     label: "Outer",     subCategories: ["puffer", "coat", "blazer", "jacket", "trench"] },
   { key: "mid",       label: "Mid-layer", subCategories: ["knit", "cardigan", "sweater", "vest", "fleece", "hoodie", "sweatshirt"] },
@@ -58,6 +57,97 @@ const CATEGORY_DEFS = [
   { key: "bag",       label: "Bag",       subCategories: ["tote", "backpack", "crossbody", "duffle"] },
   { key: "accessory", label: "Accessory", subCategories: ["necktie", "belt", "cap", "scarf", "glove", "watch"] },
 ];
+
+const GENDER_SUB_EXCLUDE: Record<string, string[]> = {
+  MALE:   ["tote"],
+  FEMALE: ["polo", "derby", "necktie", "cargo"],
+};
+
+const VIBE_SUB_EXCLUDE: Record<string, string[]> = {
+  elevated_cool:      ["jogger", "runner", "hoodie", "sweatshirt", "cap", "duffle", "cargo"],
+  effortless_natural: ["puffer", "blazer", "derby", "necktie", "runner"],
+  artistic_minimal:   ["puffer", "hoodie", "sweatshirt", "jogger", "cargo", "runner", "cap", "duffle"],
+  retro_luxe:         ["jogger", "runner", "hoodie", "sweatshirt", "puffer", "cargo"],
+  sport_modern:       ["blazer", "trench", "coat", "slacks", "necktie", "derby", "loafer", "tote"],
+  creative_layered:   ["necktie", "derby"],
+};
+
+const VIBE_SUB_ADD: Record<string, Record<string, string[]>> = {
+  elevated_cool: {
+    shoes: ["chelsea-boot", "combat-boot"],
+    outer: ["leather-jacket", "moto-jacket"],
+  },
+  effortless_natural: {
+    shoes: ["sandal", "espadrille"],
+    accessory: ["straw-hat", "woven-bracelet"],
+  },
+  artistic_minimal: {
+    shoes: ["minimal-sneaker", "mule"],
+  },
+  retro_luxe: {
+    shoes: ["oxford", "penny-loafer"],
+    outer: ["peacoat", "overcoat"],
+    accessory: ["pocket-square", "tie-bar"],
+  },
+  sport_modern: {
+    top: ["jersey", "performance-tee"],
+    bottom: ["track-pant", "athletic-short"],
+    shoes: ["trail-runner", "training-shoe"],
+    bag: ["gym-bag", "sling-bag"],
+  },
+  creative_layered: {
+    outer: ["kimono", "poncho"],
+    accessory: ["beret", "statement-ring"],
+  },
+};
+
+const SEASON_SUB_EXCLUDE: Record<string, string[]> = {
+  summer: ["puffer", "coat", "trench", "fleece", "sweater", "knit", "cardigan", "turtleneck", "boot", "scarf", "glove"],
+  spring: ["puffer", "fleece", "turtleneck", "glove"],
+  fall:   ["tank", "shorts", "sandal", "espadrille"],
+  winter: ["tank", "shorts", "sandal", "espadrille", "mesh"],
+};
+
+const SEASON_CATEGORY_EXCLUDE: Record<string, string[]> = {
+  summer: ["outer", "mid"],
+};
+
+type CategoryDef = { key: string; label: string; subCategories: string[] };
+
+function buildFilteredCategories(
+  gender: string,
+  vibeKey: string,
+  seasonLabel: string,
+): CategoryDef[] {
+  const excludedCategories = new Set(SEASON_CATEGORY_EXCLUDE[seasonLabel] || []);
+  const genderExclude = new Set(GENDER_SUB_EXCLUDE[gender] || []);
+  const vibeExclude = new Set(VIBE_SUB_EXCLUDE[vibeKey] || []);
+  const seasonExclude = new Set(SEASON_SUB_EXCLUDE[seasonLabel] || []);
+  const vibeAdd = VIBE_SUB_ADD[vibeKey] || {};
+
+  const result: CategoryDef[] = [];
+
+  for (const cat of CATEGORY_DEFS) {
+    if (excludedCategories.has(cat.key)) continue;
+
+    const filtered = cat.subCategories.filter(sub =>
+      !genderExclude.has(sub) && !vibeExclude.has(sub) && !seasonExclude.has(sub)
+    );
+
+    const additions = vibeAdd[cat.key] || [];
+    const additionsFiltered = additions.filter(sub =>
+      !genderExclude.has(sub) && !seasonExclude.has(sub)
+    );
+
+    const merged = [...filtered, ...additionsFiltered];
+
+    if (merged.length > 0) {
+      result.push({ key: cat.key, label: cat.label, subCategories: merged });
+    }
+  }
+
+  return result;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -105,6 +195,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const filteredCategoryDefs = buildFilteredCategories(gender, vibeKey, seasonLabel);
+
     const vibeAdjStr = vibeAdjs.join(", ");
     const seasonFabrics = seasonMod.fabric.join(", ") || "any";
     const seasonKws = seasonMod.keywords.join(", ") || seasonLabel;
@@ -146,7 +238,7 @@ BAD examples (too repetitive / formulaic):
 
 OUTPUT: Return ONLY a valid JSON object with this exact structure:
 ${JSON.stringify(
-  Object.fromEntries(CATEGORY_DEFS.map(cat => [
+  Object.fromEntries(filteredCategoryDefs.map(cat => [
     cat.key,
     Object.fromEntries(cat.subCategories.map(s => [s, ""]))
   ])),
@@ -204,7 +296,7 @@ Fill every empty string with a keyword. Return only JSON, nothing else.`;
     const categories: Record<string, string[]> = {};
     const allKeywords: string[] = [];
 
-    for (const cat of CATEGORY_DEFS) {
+    for (const cat of filteredCategoryDefs) {
       const catData = parsed[cat.key];
       let kws: string[] = [];
       if (catData && !Array.isArray(catData) && typeof catData === "object") {
@@ -227,4 +319,3 @@ Fill every empty string with a keyword. Return only JSON, nothing else.`;
     });
   }
 });
-
