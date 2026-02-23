@@ -8,6 +8,7 @@ import {
   getBodyTypeSilhouetteScore,
   SEASON_WARMTH_TARGETS,
 } from './matchingData';
+import { getVibeItemAffinityBonus } from './vibeMatching';
 
 export interface MatchScore {
   score: number;
@@ -60,6 +61,10 @@ function scoreProductForContext(
   if (filters.vibe && product.vibe && product.vibe.length > 0) {
     const vibeScore = Math.max(...product.vibe.map(v => getVibeCompatScore(v, filters.vibe!)));
     score += (vibeScore - 50) * 0.6;
+  }
+
+  if (filters.vibe) {
+    score += getVibeItemAffinityBonus(product, filters.vibe);
   }
 
   if (filters.targetSeason && product.season && product.season.length > 0) {
@@ -530,6 +535,7 @@ export async function findBestOutfits(
           targetWarmth: filters.targetWarmth,
           targetSeason: filters.targetSeason,
           bodyType: filters.bodyType,
+          vibe: filters.vibe,
         }),
       });
     }

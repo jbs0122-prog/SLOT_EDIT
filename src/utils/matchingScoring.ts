@@ -17,6 +17,7 @@ import {
   getSubCategoryPairingBonus,
   SEASON_WARMTH_TARGETS,
 } from './matchingData';
+import { getVibeItemAffinity } from './vibeMatching';
 
 function getAllItems(outfit: OutfitCandidate): Product[] {
   return [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
@@ -413,7 +414,7 @@ function scoreColorDepthAxis(outfit: OutfitCandidate): AxisResult {
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-function scoreMoodCoherenceAxis(outfit: OutfitCandidate): AxisResult {
+function scoreMoodCoherenceAxis(outfit: OutfitCandidate, targetVibe?: string): AxisResult {
   const items = getCoreItems(outfit);
   const vibeArrays = items.map(item => item.vibe || []).filter(v => v.length > 0);
 
@@ -449,6 +450,17 @@ function scoreMoodCoherenceAxis(outfit: OutfitCandidate): AxisResult {
   const maxShared = Math.max(...vibeCounts.values());
   if (maxShared >= vibeArrays.length) score += 10;
   else if (maxShared >= vibeArrays.length * 0.75) score += 5;
+
+  if (targetVibe) {
+    const affinities = items.map(item => getVibeItemAffinity(item, targetVibe));
+    const avgAffinity = affinities.reduce((s, a) => s + a, 0) / affinities.length;
+    const highAffinityCount = affinities.filter(a => a >= 0.5).length;
+
+    if (avgAffinity >= 0.5) score += 12;
+    else if (avgAffinity >= 0.3) score += 6;
+
+    if (highAffinityCount >= items.length * 0.6) score += 8;
+  }
 
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
@@ -540,7 +552,7 @@ const BASE_WEIGHTS = {
 
 export function scoreOutfit(
   outfit: OutfitCandidate,
-  context?: { targetWarmth?: number; targetSeason?: string; bodyType?: string }
+  context?: { targetWarmth?: number; targetSeason?: string; bodyType?: string; vibe?: string }
 ): MatchScore {
   const axes: { key: keyof typeof BASE_WEIGHTS; result: AxisResult }[] = [
     { key: 'colorMatch', result: scoreColorMatchAxis(outfit) },
@@ -553,7 +565,7 @@ export function scoreOutfit(
     { key: 'materialCompat', result: scoreMaterialCompatAxis(outfit) },
     { key: 'subCategoryMatch', result: scoreSubCategoryMatchAxis(outfit) },
     { key: 'colorDepth', result: scoreColorDepthAxis(outfit) },
-    { key: 'moodCoherence', result: scoreMoodCoherenceAxis(outfit) },
+    { key: 'moodCoherence', result: scoreMoodCoherenceAxis(outfit, context?.vibe) },
     { key: 'accessoryHarmony', result: scoreAccessoryHarmonyAxis(outfit) },
     { key: 'imageFeature', result: scoreImageFeatureAxis(outfit) },
   ];
