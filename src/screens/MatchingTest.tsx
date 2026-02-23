@@ -248,7 +248,6 @@ export default function MatchingTest() {
                     ['colorMatch', 'Color', '16%'],
                     ['toneMatch', 'Tone', '10%'],
                     ['patternBalance', 'Pattern', '10%'],
-                    ['formalityMatch', 'Formality', '10%'],
                     ['warmthMatch', 'Warmth', '6%'],
                     ['seasonMatch', 'Season', '6%'],
                     ['silhouetteBalance', 'Silhouette', '12%'],

@@ -16,7 +16,6 @@ export interface MatchScore {
     colorMatch: number;
     toneMatch: number;
     patternBalance: number;
-    formalityMatch: number;
     warmthMatch: number;
     seasonMatch: number;
     silhouetteBalance: number;
@@ -167,12 +166,6 @@ function passesHardConstraints(
 ): boolean {
   const allItems = [outfit.outer, outfit.mid, outfit.top, outfit.bottom, outfit.shoes, outfit.bag, outfit.accessory, outfit.accessory_2]
     .filter(Boolean) as Product[];
-
-  const formalities = allItems.map(i => i.formality).filter((f): f is number => typeof f === 'number');
-  if (formalities.length >= 2) {
-    const range = Math.max(...formalities) - Math.min(...formalities);
-    if (range > 3) return false;
-  }
 
   const warmths = allItems.map(i => i.warmth).filter((w): w is number => typeof w === 'number');
   const avgWarmth = warmths.length > 0 ? warmths.reduce((s, w) => s + w, 0) / warmths.length : undefined;

@@ -135,34 +135,6 @@ function scorePatternBalanceAxis(outfit: OutfitCandidate): AxisResult {
   return { score: Math.max(0, Math.min(100, score)), hasData: true };
 }
 
-function scoreFormalityMatchAxis(outfit: OutfitCandidate): AxisResult {
-  const items = getCoreItems(outfit);
-  if (items.length < 3) return { score: 0, hasData: false };
-
-  const formalities = items
-    .map(i => i.formality)
-    .filter((f): f is number => typeof f === 'number');
-
-  if (formalities.length < 2) return { score: 50, hasData: false };
-
-  let score = 100;
-  const avg = formalities.reduce((s, f) => s + f, 0) / formalities.length;
-
-  for (const f of formalities) {
-    const dev = Math.abs(f - avg);
-    if (dev > 2) score -= 20;
-    else if (dev > 1) score -= 10;
-  }
-
-  const avgDev = formalities.reduce((s, f) => s + Math.abs(f - avg), 0) / formalities.length;
-  if (avgDev < 0.5) score += 15;
-
-  const range = Math.max(...formalities) - Math.min(...formalities);
-  if (range > 2) score -= 15;
-
-  return { score: Math.max(0, Math.min(100, score)), hasData: true };
-}
-
 function scoreWarmthMatchAxis(outfit: OutfitCandidate, targetWarmth?: number, targetSeason?: string): AxisResult {
   const items = getCoreItems(outfit);
   if (items.length < 3) return { score: 0, hasData: false };
@@ -471,13 +443,11 @@ function scoreAccessoryHarmonyAxis(outfit: OutfitCandidate): AxisResult {
 
   const mainItems = getCoreItems(outfit);
   const mainColors = mainItems.map(getColorFamily).filter(Boolean);
-  const mainFormalities = mainItems.map(i => i.formality).filter((f): f is number => typeof f === 'number');
 
   let score = 70;
 
   for (const acc of accessories) {
     const accColor = getColorFamily(acc);
-    const accFormality = acc.formality;
 
     if (accColor && mainColors.length > 0) {
       let bestHarmony = 0;
@@ -487,13 +457,6 @@ function scoreAccessoryHarmonyAxis(outfit: OutfitCandidate): AxisResult {
       if (bestHarmony >= 85) score += 10;
       else if (bestHarmony >= 70) score += 5;
       else if (bestHarmony < 50) score -= 10;
-    }
-
-    if (accFormality !== undefined && mainFormalities.length > 0) {
-      const avgMain = mainFormalities.reduce((s, f) => s + f, 0) / mainFormalities.length;
-      const deviation = Math.abs(accFormality - avgMain);
-      if (deviation > 2) score -= 15;
-      else if (deviation <= 1) score += 5;
     }
   }
 
@@ -535,19 +498,18 @@ function scoreImageFeatureAxis(outfit: OutfitCandidate): AxisResult {
 }
 
 const BASE_WEIGHTS = {
-  colorMatch: 0.12,
-  toneMatch: 0.07,
-  patternBalance: 0.07,
-  formalityMatch: 0.09,
-  warmthMatch: 0.12,
-  seasonMatch: 0.12,
-  silhouetteBalance: 0.09,
-  materialCompat: 0.06,
-  subCategoryMatch: 0.09,
-  colorDepth: 0.04,
-  moodCoherence: 0.04,
+  colorMatch: 0.13,
+  toneMatch: 0.08,
+  patternBalance: 0.08,
+  warmthMatch: 0.13,
+  seasonMatch: 0.13,
+  silhouetteBalance: 0.10,
+  materialCompat: 0.07,
+  subCategoryMatch: 0.10,
+  colorDepth: 0.05,
+  moodCoherence: 0.05,
   accessoryHarmony: 0.02,
-  imageFeature: 0.07,
+  imageFeature: 0.06,
 };
 
 export function scoreOutfit(
@@ -558,7 +520,6 @@ export function scoreOutfit(
     { key: 'colorMatch', result: scoreColorMatchAxis(outfit) },
     { key: 'toneMatch', result: scoreToneMatchAxis(outfit) },
     { key: 'patternBalance', result: scorePatternBalanceAxis(outfit) },
-    { key: 'formalityMatch', result: scoreFormalityMatchAxis(outfit) },
     { key: 'warmthMatch', result: scoreWarmthMatchAxis(outfit, context?.targetWarmth, context?.targetSeason) },
     { key: 'seasonMatch', result: scoreSeasonMatchAxis(outfit, context?.targetSeason) },
     { key: 'silhouetteBalance', result: scoreSilhouetteBalanceAxis(outfit, context?.bodyType) },
