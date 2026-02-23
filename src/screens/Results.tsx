@@ -47,7 +47,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   const [localOutfits, setLocalOutfits] = useState<Outfit[]>(outfits);
   const [feedbackCounts, setFeedbackCounts] = useState<FeedbackCounts>({});
   const [sortedOutfits, setSortedOutfits] = useState<Outfit[]>(outfits);
-  const [sortOrder, setSortOrder] = useState<'likes' | 'latest'>('likes');
+  const [sortOrder, setSortOrder] = useState<'likes' | 'latest'>('latest');
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const [outfitProducts, setOutfitProducts] = useState<{ [outfitId: string]: Product[] }>({});
@@ -570,14 +570,14 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <button onClick={() => setSortOrder('likes')}
-              className={`font-light transition-colors uppercase ${sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
-              Most Liked
-            </button>
-            <span className="text-gray-300">/</span>
             <button onClick={() => setSortOrder('latest')}
               className={`font-light transition-colors uppercase ${sortOrder === 'latest' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
               Latest
+            </button>
+            <span className="text-gray-300">/</span>
+            <button onClick={() => setSortOrder('likes')}
+              className={`font-light transition-colors uppercase ${sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
+              Most Liked
             </button>
           </div>
         </div>
@@ -647,14 +647,14 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
           </div>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <button onClick={() => setSortOrder('likes')}
-            className={`font-light transition-colors uppercase ${sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
-            Most Liked
-          </button>
-          <span className="text-gray-300">/</span>
           <button onClick={() => setSortOrder('latest')}
             className={`font-light transition-colors uppercase ${sortOrder === 'latest' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
             Latest
+          </button>
+          <span className="text-gray-300">/</span>
+          <button onClick={() => setSortOrder('likes')}
+            className={`font-light transition-colors uppercase ${sortOrder === 'likes' ? 'text-black font-medium' : 'text-gray-400 hover:text-gray-600'}`}>
+            Most Liked
           </button>
         </div>
       </div>
