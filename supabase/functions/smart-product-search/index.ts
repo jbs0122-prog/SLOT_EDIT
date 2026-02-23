@@ -29,6 +29,7 @@ interface AmazonResult {
 
 interface CategoryKeyword {
   zone: string;
+  brand: string;
   keywords: string[];
   description: string;
 }
@@ -126,16 +127,23 @@ Context:
 - Style vibe: ${vibe ? vibe.replace(/_/g, " ").toLowerCase() : "general"}
 - Season: ${season || "all season"}
 
-TASK: Identify EVERY clothing and accessory item visible in this image. For each item, generate highly specific Amazon USA search keywords that will find the most similar products.
+TASK: Identify EVERY clothing and accessory item visible in this image. For each item, detect brands and generate highly specific Amazon USA search keywords.
 
 Return a JSON array of objects with this structure:
 [
   {
     "zone": "outer|mid|top|bottom|shoes|bag|accessory",
+    "brand": "BrandName or empty string",
     "description": "brief description of the specific item (e.g., 'navy slim fit blazer with notch lapel')",
     "keywords": ["keyword1", "keyword2", "keyword3"]
   }
 ]
+
+BRAND FIELD RULES:
+- "brand" MUST be a separate field — NOT mixed into keywords
+- If a brand logo, label, tag, or name is clearly visible (e.g., Nike swoosh, Adidas three stripes, Supreme box logo, Carhartt label, New Balance "N", Polo Ralph Lauren horse, Converse star, The North Face, etc.), set "brand" to the exact brand name (e.g., "Nike", "Adidas", "New Balance")
+- If NO brand is visible, set "brand" to "" (empty string)
+- Do NOT guess brands — only set brand if you are confident from visible logos/labels/text
 
 Zone definitions:
 - "outer": jacket, coat, blazer, cardigan (outermost layer)
@@ -150,17 +158,20 @@ KEYWORD RULES:
 - Each keyword must be a complete Amazon search query (3-7 words)
 - Include: item type + specific style features + color + material (if visible)
 - For ${genderLabel}: always include gender in keywords (e.g., "mens", "womens")
-- Make keywords specific enough to find visually similar products
 - Generate 3 different keyword variations per item (broad → specific)
-- Example for navy slim blazer: ["mens navy slim fit blazer", "mens navy suit jacket office", "mens navy blazer single breasted"]
-- BRAND DETECTION (CRITICAL): If a brand logo, label, tag, or name is visible on any item (e.g., Nike swoosh, Adidas three stripes, Supreme box logo, Carhartt label, New Balance "N", etc.), you MUST place the brand-specific keyword FIRST in the keywords array. The first keyword MUST start with the brand name. Example: ["Nike mens tech fleece hoodie zip up", "mens nike hoodie grey", "nike zip hoodie athletic"]
+- Do NOT include the brand name in keywords — the brand field handles that separately
+- Example for a navy slim blazer (no brand): ["mens navy slim fit blazer", "mens navy suit jacket office", "mens navy blazer single breasted"]
+
+WHEN NO BRAND IS VISIBLE (CRITICAL):
+- Compensate with MORE descriptive detail in keywords
+- Include: color + material + silhouette + style detail + item type
+- Add texture, finish, or distinguishing features (e.g., "ribbed", "cropped", "oversized", "distressed", "quilted")
+- Example: ["mens charcoal wool oversized overcoat", "mens dark grey long heavy coat belted", "mens charcoal double breasted wool topcoat"]
 
 IMPORTANT:
 - Include ALL visible items, even partially visible ones
 - If layered (jacket over shirt), list BOTH as separate items
-- Focus on Amazon USA product naming conventions
-- BRAND PRIORITY: Brand-detected keywords always go first in the array — they yield far more accurate results
-- If no brand is visible, use descriptive style keywords only`;
+- Focus on Amazon USA product naming conventions`;
 
   try {
     const geminiRes = await fetch(
@@ -225,6 +236,7 @@ IMPORTANT:
       )
       .map((item: any) => ({
         zone: item.zone.toLowerCase(),
+        brand: typeof item.brand === "string" ? item.brand.trim() : "",
         keywords: item.keywords.filter(
           (k: any) => typeof k === "string" && k.trim().length > 0
         ),
@@ -497,10 +509,12 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Step 3: 각 카테고리별 키워드로 Amazon 검색 (결과 부족 시 fallback)
+      // Step 3: 브랜드 우선 검색 → 일반 키워드 검색 (카테고리별)
       let keywordCount = 0;
       const categorySearchResults: Record<string, AmazonResult[]> = {};
-      const MIN_RESULTS_PER_CATEGORY = 4;
+      const BRAND_QUOTA = 2;
+      const GENERIC_QUOTA = 2;
+      const MAX_PER_CATEGORY = BRAND_QUOTA + GENERIC_QUOTA;
 
       if (categories.length > 0) {
         log.push(`Amazon USA 검색 시작 (${categories.length}개 카테고리)...`);
@@ -514,33 +528,59 @@ Deno.serve(async (req: Request) => {
                 categorySearchResults[cat.zone] = [];
               }
 
-              for (const kw of cat.keywords) {
-                const results = await searchAmazonByKeyword(kw, cat.zone);
-                let addedCount = 0;
-                for (const r of results) {
+              let brandResultCount = 0;
+              let genericResultCount = 0;
+
+              // Phase 1: Brand-specific search (if brand detected)
+              if (cat.brand) {
+                const brandKeyword = `${cat.brand} ${cat.keywords[0] || cat.description}`;
+                log.push(`${cat.zone} 브랜드 검색: "${brandKeyword}"`);
+                const brandResults = await searchAmazonByKeyword(brandKeyword, cat.zone);
+                for (const r of brandResults) {
+                  if (brandResultCount >= BRAND_QUOTA) break;
                   if (r.asin && !seenAsins.has(r.asin)) {
                     seenAsins.add(r.asin);
                     categorySearchResults[cat.zone].push(r);
                     merged.push(r);
                     keywordCount++;
+                    brandResultCount++;
+                  }
+                }
+                log.push(`${cat.zone} 브랜드 결과: ${brandResultCount}개`);
+              }
+
+              // Phase 2: Generic keyword search (fill remaining quota)
+              const remainingQuota = cat.brand
+                ? GENERIC_QUOTA
+                : MAX_PER_CATEGORY;
+
+              for (const kw of cat.keywords) {
+                if (genericResultCount >= remainingQuota) break;
+
+                const results = await searchAmazonByKeyword(kw, cat.zone);
+                let addedCount = 0;
+                for (const r of results) {
+                  if (genericResultCount >= remainingQuota) break;
+                  if (r.asin && !seenAsins.has(r.asin)) {
+                    seenAsins.add(r.asin);
+                    categorySearchResults[cat.zone].push(r);
+                    merged.push(r);
+                    keywordCount++;
+                    genericResultCount++;
                     addedCount++;
                   }
                 }
                 log.push(`${cat.zone} [${kw}]: ${addedCount}개`);
-
-                if (categorySearchResults[cat.zone].length >= MIN_RESULTS_PER_CATEGORY) {
-                  break;
-                }
               }
+
+              log.push(
+                `${cat.zone} 최종: ${categorySearchResults[cat.zone].length}개 (브랜드:${brandResultCount} + 일반:${genericResultCount})${cat.brand ? ` [${cat.brand}]` : " [브랜드 없음→상세 키워드]"}`
+              );
             })()
           );
         }
 
         await Promise.all(searchPromises);
-
-        for (const [zone, results] of Object.entries(categorySearchResults)) {
-          log.push(`${zone} 최종: ${results.length}개 상품`);
-        }
       }
 
       // Step 4: Lens 검색도 병렬 시도 (Amazon CDN URL이면 추가 검색)
@@ -555,9 +595,23 @@ Deno.serve(async (req: Request) => {
           image_url,
           "lens"
         );
+
+        const allBrands = categories
+          .filter((c) => c.brand)
+          .map((c) => c.brand.toLowerCase());
+
         for (const r of lensResults) {
           if (r.asin && !seenAsins.has(r.asin)) {
             seenAsins.add(r.asin);
+            if (!r.brand && r.title) {
+              const titleLower = r.title.toLowerCase();
+              const matchedBrand = allBrands.find((b) => titleLower.includes(b));
+              if (matchedBrand) {
+                r.brand = categories.find(
+                  (c) => c.brand.toLowerCase() === matchedBrand
+                )?.brand || "";
+              }
+            }
             merged.push(r);
             lensDirectCount++;
           }
