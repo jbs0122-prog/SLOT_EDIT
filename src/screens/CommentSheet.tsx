@@ -102,6 +102,9 @@ export default function CommentSheet({
   const sessionId = getOrCreateSessionId();
   const nickname = getOrCreateNickname();
 
+  const onCommentCountChangeRef = useRef(onCommentCountChange);
+  onCommentCountChangeRef.current = onCommentCountChange;
+
   const loadComments = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -113,10 +116,10 @@ export default function CommentSheet({
     if (!error && data) {
       setComments(data);
       const topLevelCount = data.filter(c => !c.parent_id).length;
-      onCommentCountChange?.(topLevelCount);
+      onCommentCountChangeRef.current?.(topLevelCount);
     }
     setLoading(false);
-  }, [outfitId, onCommentCountChange]);
+  }, [outfitId]);
 
   useEffect(() => {
     loadComments();
