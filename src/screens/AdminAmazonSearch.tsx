@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ShoppingBag, Search, Sparkles, Check, Star, ExternalLink,
   ChevronLeft, ChevronRight, Loader2, AlertCircle, Tag,
-  RefreshCw, Filter, Zap, Square, Play, Pause
+  RefreshCw, Filter, Zap, Square, Play, Pause, X, Plus
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
@@ -127,6 +127,8 @@ export default function AdminAmazonSearch() {
   const [keywordsError, setKeywordsError] = useState('');
 
   const [activeKeyword, setActiveKeyword] = useState(saved?.activeKeyword || '');
+  const [userKeyword, setUserKeyword] = useState(saved?.userKeyword || '');
+  const [userKeywordInput, setUserKeywordInput] = useState(saved?.userKeyword || '');
   const [products, setProducts] = useState<AnalyzedProduct[]>(saved?.products || []);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
@@ -175,6 +177,7 @@ export default function AdminAmazonSearch() {
         activeKeywordCategory,
         keywordsSource,
         activeKeyword,
+        userKeyword,
         products: products.map(p => ({ ...p, analyzing: false, analyzeError: undefined })),
         page,
         total,
@@ -183,7 +186,7 @@ export default function AdminAmazonSearch() {
         sortBy,
       }));
     } catch { /* ignore */ }
-  }, [step, gender, bodyType, vibe, season, keywords, keywordCategories, activeKeywordCategory, keywordsSource, activeKeyword, products, page, total, categoryFilter, savedAsins, sortBy, generatingKeywords, autoRunning]);
+  }, [step, gender, bodyType, vibe, season, keywords, keywordCategories, activeKeywordCategory, keywordsSource, activeKeyword, userKeyword, products, page, total, categoryFilter, savedAsins, sortBy, generatingKeywords, autoRunning]);
 
   const canGenerate = gender && vibe;
 
@@ -198,6 +201,8 @@ export default function AdminAmazonSearch() {
     setProducts([]);
     setSelected(new Set());
     setActiveKeyword('');
+    setUserKeyword('');
+    setUserKeywordInput('');
     setCategoryFilter('all');
     setFiltersChanged(false);
     savedFiltersRef.current = { gender, bodyType, vibe, season };
@@ -226,6 +231,14 @@ export default function AdminAmazonSearch() {
     }
   };
 
+  const userKeywordRef = useRef(userKeyword);
+  userKeywordRef.current = userKeyword;
+
+  const buildQuery = (kw: string, extra: string) => {
+    const trimmed = extra.trim();
+    return trimmed ? `${kw} ${trimmed}` : kw;
+  };
+
   const searchByKeyword = useCallback(async (kw: string, p = 1) => {
     const isNewKeyword = kw !== activeKeyword;
     setActiveKeyword(kw);
@@ -237,9 +250,11 @@ export default function AdminAmazonSearch() {
     setCategoryFilter('all');
     if (isNewKeyword) setSortBy('default');
 
+    const query = buildQuery(kw, userKeywordRef.current);
+
     try {
       const { data, error } = await supabase.functions.invoke('amazon-search', {
-        body: { query: kw, page: p },
+        body: { query, page: p },
       });
       if (error) throw new Error(error.message);
       if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
@@ -661,12 +676,20 @@ export default function AdminAmazonSearch() {
                         </span>
                       )}
                     </div>
-                    {filtersChanged && (
-                      <span className="text-[10px] text-amber-400/70 flex items-center gap-1">
-                        <RefreshCw className="w-2.5 h-2.5" />
-                        조건 변경됨
-                      </span>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {userKeyword && (
+                        <span className="text-[10px] text-amber-400/70 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                          <Search className="w-2.5 h-2.5" />
+                          +{userKeyword} 필터 적용 중
+                        </span>
+                      )}
+                      {filtersChanged && (
+                        <span className="text-[10px] text-amber-400/70 flex items-center gap-1">
+                          <RefreshCw className="w-2.5 h-2.5" />
+                          조건 변경됨
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Category tabs for keywords */}
@@ -706,6 +729,56 @@ export default function AdminAmazonSearch() {
                     </div>
                   )}
 
+                  {/* User keyword filter */}
+                  <div className="flex items-center gap-2 px-6 py-2 border-b border-white/5">
+                    <Plus className="w-3.5 h-3.5 text-white/25 shrink-0" />
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const val = userKeywordInput.trim();
+                        setUserKeyword(val);
+                        userKeywordRef.current = val;
+                        if (activeKeyword) searchByKeyword(activeKeyword, 1);
+                      }}
+                      className="flex items-center gap-2 flex-1"
+                    >
+                      <input
+                        type="text"
+                        value={userKeywordInput}
+                        onChange={(e) => setUserKeywordInput(e.target.value)}
+                        placeholder="색상, 브랜드 등 추가 키워드 (ex: purple, nike)"
+                        disabled={autoRunning}
+                        className="flex-1 bg-transparent text-sm text-white/80 placeholder:text-white/20 outline-none py-1"
+                      />
+                      {userKeyword && (
+                        <span className="flex items-center gap-1 bg-amber-500/15 text-amber-400 text-[11px] font-medium px-2.5 py-1 rounded-full shrink-0">
+                          +{userKeyword}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUserKeyword('');
+                              setUserKeywordInput('');
+                              if (activeKeyword) {
+                                userKeywordRef.current = '';
+                                searchByKeyword(activeKeyword, 1);
+                              }
+                            }}
+                            className="hover:text-amber-200 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={autoRunning || !userKeywordInput.trim() || userKeywordInput.trim() === userKeyword}
+                        className="shrink-0 px-3 py-1 bg-white/8 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed rounded-md text-[11px] text-white/50 font-medium transition-all"
+                      >
+                        적용
+                      </button>
+                    </form>
+                  </div>
+
                   {/* Keyword chips */}
                   <div className="flex flex-wrap gap-2 px-6 py-3">
                     {(activeKeywordCategory === 'all'
@@ -723,6 +796,9 @@ export default function AdminAmazonSearch() {
                         }`}
                       >
                         {kw}
+                        {activeKeyword === kw && userKeyword && (
+                          <span className="ml-1 text-amber-800">+{userKeyword}</span>
+                        )}
                       </button>
                     ))}
                   </div>
