@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, TouchEvent, useCallback } from 'react';
-import { Bookmark, Share2, Check } from 'lucide-react';
+import { Bookmark, Share2, Check, MessageSquare } from 'lucide-react';
 import { Outfit, Product } from '../data/outfits';
 import { WeatherData, getWeatherEmoji } from '../utils/weather';
 import ImageSlider from './ImageSlider';
 import { supabase } from '../utils/supabase';
 import { useAuth } from '../utils/AuthContext';
+import CommentSheet from './CommentSheet';
 
 interface ResultsProps {
   outfits: Outfit[];
@@ -56,6 +57,8 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   const firstOutfitRef = useRef<HTMLDivElement>(null);
   const outfitRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [copiedOutfitId, setCopiedOutfitId] = useState<string | null>(null);
+  const [commentSheetOutfitId, setCommentSheetOutfitId] = useState<string | null>(null);
+  const [commentCounts, setCommentCounts] = useState<{ [outfitId: string]: number }>({});
 
   const [newGender, setNewGender] = useState<string>(gender);
   const [newBodyType, setNewBodyType] = useState<string>(bodyType);
@@ -370,6 +373,23 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
       setSavedOutfitIds(prev => new Set(prev).add(outfitId));
     }
   };
+
+  const loadCommentCounts = async () => {
+    const outfitIds = localOutfits.map(o => o.id);
+    if (outfitIds.length === 0) return;
+    const { data, error } = await supabase
+      .from('outfit_comments')
+      .select('outfit_id')
+      .in('outfit_id', outfitIds)
+      .is('parent_id', null);
+    if (!error && data) {
+      const counts: { [id: string]: number } = {};
+      data.forEach(c => { counts[c.outfit_id] = (counts[c.outfit_id] || 0) + 1; });
+      setCommentCounts(counts);
+    }
+  };
+
+  useEffect(() => { loadCommentCounts(); }, [outfits]);
 
   const handleTouchStart = (e: TouchEvent) => { setTouchEnd(0); setTouchStart(e.targetTouches[0].clientX); };
   const handleTouchMove = (e: TouchEvent) => { setTouchEnd(e.targetTouches[0].clientX); };
@@ -696,6 +716,8 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
                     images={images} alt={`Look ${index + 1}`} outfitNumber={index + 1} outfitId={outfit.id}
                     onFeedback={handleFeedback} likeCount={feedback.likes} dislikeCount={feedback.dislikes}
                     userFeedback={feedback.userFeedback} outfit={outfit} products={outfitProducts[outfit.id] || []}
+                    onCommentClick={() => setCommentSheetOutfitId(outfit.id)}
+                    commentCount={commentCounts[outfit.id] || 0}
                   />
                 </div>
                 <div className="w-full md:w-[500px] px-6 md:px-0 flex flex-col">
@@ -841,6 +863,22 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
         )}
         {footer}
       </div>
+
+      {commentSheetOutfitId && (() => {
+        const outfit = localOutfits.find(o => o.id === commentSheetOutfitId);
+        if (!outfit) return null;
+        const thumbnail = outfit.image_url_flatlay || outfit.image_url_on_model || '';
+        const label = outfit.vibe ? `${outfit.vibe} Look` : 'Outfit';
+        return (
+          <CommentSheet
+            outfitId={commentSheetOutfitId}
+            outfitThumbnail={thumbnail}
+            outfitLabel={label}
+            onClose={() => setCommentSheetOutfitId(null)}
+            onCommentCountChange={(count) => setCommentCounts(prev => ({ ...prev, [commentSheetOutfitId]: count }))}
+          />
+        );
+      })()}
     </div>
   );
 }

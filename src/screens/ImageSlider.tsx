@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, TouchEvent } from 'react';
-import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown, Plus, MessageSquare } from 'lucide-react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import ProductDetailModal from './ProductDetailModal';
 
@@ -15,6 +15,8 @@ interface ImageSliderProps {
   outfit?: Outfit;
   showOutfitInfo?: boolean;
   products?: Product[];
+  onCommentClick?: () => void;
+  commentCount?: number;
 }
 
 export default function ImageSlider({
@@ -28,7 +30,9 @@ export default function ImageSlider({
   userFeedback = null,
   outfit,
   showOutfitInfo = false,
-  products = []
+  products = [],
+  onCommentClick,
+  commentCount = 0,
 }: ImageSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
@@ -222,6 +226,19 @@ export default function ImageSlider({
 
         {onFeedback && (
           <div className="absolute bottom-6 right-6 flex gap-2 z-30">
+            {onCommentClick && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCommentClick(); }}
+                onTouchEnd={(e) => e.stopPropagation()}
+                className="p-2 transition-all bg-white/90 hover:bg-white text-gray-800"
+                aria-label="Comments"
+              >
+                <MessageSquare className="w-5 h-5" />
+                {commentCount > 0 && (
+                  <span className="ml-1 text-xs font-light">{commentCount}</span>
+                )}
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); onFeedback(outfitId, 'like'); }}
               onTouchEnd={(e) => e.stopPropagation()}
@@ -390,6 +407,19 @@ export default function ImageSlider({
 
       {onFeedback && (
         <div className="absolute bottom-6 right-6 flex gap-2 z-30">
+          {onCommentClick && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCommentClick(); }}
+              onTouchEnd={(e) => e.stopPropagation()}
+              className="p-2 transition-all bg-white/90 hover:bg-white text-gray-800"
+              aria-label="Comments"
+            >
+              <MessageSquare className="w-5 h-5" />
+              {commentCount > 0 && (
+                <span className="ml-1 text-xs font-light">{commentCount}</span>
+              )}
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onFeedback(outfitId, 'like'); }}
             onTouchEnd={(e) => e.stopPropagation()}
