@@ -4,6 +4,7 @@ import { evaluateAllRules } from './rules';
 import { computeSeasonFit, computeWarmthFit, computeAccessoryHarmony, computeImageFeatureScore, computePatternBalance } from './contextLayer';
 import { resolveColorFamily, isNeutralColor, analyzeColorComposition } from './colorDna';
 import { getVibeItemAffinity } from './vibeAffinity';
+import { getMaterialCompatScore, inferMaterialGroup } from './itemDna';
 import { getVibeDistance, getLookDNA, getVibeDNA } from '../../data/vibeItems/vibeDna';
 import { VibeKey, VibeDNA, LookKey } from '../../data/vibeItems/types';
 
@@ -70,6 +71,27 @@ function scoreVibeAffinity(items: Record<string, Product>, vibe?: string): numbe
   }
 
   return Math.max(0, Math.min(100, score));
+}
+
+function scoreMaterialCompat(items: Record<string, Product>): number {
+  const coreKeys = ['outer', 'mid', 'top', 'bottom', 'shoes'];
+  const coreItems = coreKeys.map(k => items[k]).filter(Boolean) as Product[];
+
+  if (coreItems.length < 2) return 50;
+
+  const groups = coreItems.map(p => inferMaterialGroup(p.material || '', p.name));
+
+  let compatTotal = 0;
+  let compatCount = 0;
+  for (let i = 0; i < groups.length; i++) {
+    for (let j = i + 1; j < groups.length; j++) {
+      compatTotal += getMaterialCompatScore(groups[i], groups[j]);
+      compatCount++;
+    }
+  }
+  const avgCompat = compatCount > 0 ? compatTotal / compatCount : 0.5;
+
+  return Math.max(0, Math.min(100, Math.round(avgCompat * 100)));
 }
 
 function scoreColorDepth(items: Record<string, Product>): number {
@@ -140,6 +162,7 @@ export function scoreComposition(
 
   const vibeAffinity = scoreVibeAffinity(items, context.vibe);
   const colorDepth = scoreColorDepth(items);
+  const materialCompat = scoreMaterialCompat(items);
 
   const breakdown = {
     proportion: ruleMap.proportion ?? 50,
@@ -148,7 +171,7 @@ export function scoreComposition(
     formalityCoherence: ruleMap.formalityCoherence ?? 50,
     vibeAffinity: Math.round(vibeAffinity),
     colorDepth: Math.round(colorDepth),
-    materialCompat: ruleMap.textureContrast ?? 50,
+    materialCompat: Math.round(materialCompat),
     contextFit: Math.round(contextFit),
   };
 
