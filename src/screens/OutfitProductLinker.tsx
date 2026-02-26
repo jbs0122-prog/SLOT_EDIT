@@ -80,25 +80,29 @@ function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggl
     <div>
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between py-2 px-1 text-sm group"
+        className={`w-full flex items-center justify-between py-2 px-2.5 rounded-lg text-sm transition-colors ${
+          expanded
+            ? 'bg-blue-50 border border-blue-200'
+            : 'bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-100 hover:border-blue-300'
+        }`}
       >
-        <div className="flex items-center gap-2 text-blue-600">
-          <Sparkles size={14} />
-          <span className="font-medium">
-            추천 아이템
+        <div className="flex items-center gap-2 text-blue-700">
+          <Sparkles size={13} className="text-blue-500" />
+          <span className="font-semibold text-xs">AI 추천 아이템</span>
+          <div className="flex items-center gap-1">
             {hasRegistered && (
-              <span className="text-[10px] ml-1 text-blue-400">
+              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
                 등록 {recommendations!.registered.length}
               </span>
             )}
             {hasUnregistered && (
-              <span className="text-[10px] ml-1 text-amber-500">
+              <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
                 미등록 {recommendations!.unregistered.length}
               </span>
             )}
-          </span>
+          </div>
         </div>
-        {expanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+        {expanded ? <ChevronUp size={13} className="text-blue-400" /> : <ChevronDown size={13} className="text-blue-400" />}
       </button>
 
       {expanded && (
@@ -438,7 +442,9 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     return map;
   }, [availableProducts, linkedItems, outfit.vibe, outfit.gender, outfit.body_type, outfit.season]);
 
-  const [expandedRecSlots, setExpandedRecSlots] = useState<Set<string>>(new Set());
+  const [expandedRecSlots, setExpandedRecSlots] = useState<Set<string>>(
+    new Set(['outer', 'top', 'bottom', 'shoes'])
+  );
 
   const toggleRecSlot = (slotValue: string) => {
     setExpandedRecSlots(prev => {
