@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { X, Sparkles, AlertCircle, Anchor, Search, Check, Wand2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { X, Sparkles, AlertCircle, Anchor, Search, Check, Wand2, Star, List } from 'lucide-react';
 import { generateOutfitsAutomatically, GeneratedOutfit } from '../utils/outfitGenerator';
 import { supabase } from '../utils/supabase';
 import { Product } from '../data/outfits';
+import { getSlotRecommendations } from '../utils/slotRecommender';
 
 interface AutoOutfitGeneratorProps {
   onClose: () => void;
@@ -63,14 +64,17 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
   const [anchorProducts, setAnchorProducts] = useState<Product[]>([]);
   const [anchorSearchQuery, setAnchorSearchQuery] = useState('');
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [anchorViewMode, setAnchorViewMode] = useState<'recommended' | 'all'>('recommended');
 
   useEffect(() => {
     if (!anchorEnabled || !anchorSlot) {
       setAnchorProducts([]);
       setAnchorProductId('');
       setAnchorSearchQuery('');
+      setAnchorViewMode('recommended');
       return;
     }
+    setAnchorViewMode('recommended');
 
     const loadProducts = async () => {
       setLoadingProducts(true);
@@ -125,6 +129,32 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
       p.name.toLowerCase().includes(q) ||
       p.brand.toLowerCase().includes(q) ||
       (p.color || '').toLowerCase().includes(q)
+    );
+  });
+
+  const recommendedAnchorProducts = useMemo(() => {
+    if (!anchorSlot || anchorProducts.length === 0) return [];
+    const recs = getSlotRecommendations(
+      anchorSlot,
+      anchorProducts,
+      [],
+      vibe,
+      gender,
+      bodyType,
+      season || undefined,
+      anchorProducts.length,
+      0
+    );
+    return recs.registered;
+  }, [anchorSlot, anchorProducts, vibe, gender, bodyType, season]);
+
+  const filteredRecommendedProducts = recommendedAnchorProducts.filter(r => {
+    if (!anchorSearchQuery) return true;
+    const q = anchorSearchQuery.toLowerCase();
+    return (
+      r.product.name.toLowerCase().includes(q) ||
+      r.product.brand.toLowerCase().includes(q) ||
+      (r.product.color || '').toLowerCase().includes(q)
     );
   });
 
@@ -370,6 +400,45 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
 
                         {!selectedAnchorProduct && (
                           <>
+                            <div className="flex items-center gap-1 mb-3 bg-gray-100 rounded-lg p-1">
+                              <button
+                                onClick={() => setAnchorViewMode('recommended')}
+                                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                  anchorViewMode === 'recommended'
+                                    ? 'bg-white text-blue-700 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                              >
+                                <Star size={11} />
+                                추천순
+                                {recommendedAnchorProducts.length > 0 && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                                    anchorViewMode === 'recommended' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'
+                                  }`}>
+                                    {recommendedAnchorProducts.length}
+                                  </span>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setAnchorViewMode('all')}
+                                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                  anchorViewMode === 'all'
+                                    ? 'bg-white text-gray-800 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                              >
+                                <List size={11} />
+                                전체
+                                {anchorProducts.length > 0 && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                                    anchorViewMode === 'all' ? 'bg-gray-200 text-gray-700' : 'bg-gray-200 text-gray-500'
+                                  }`}>
+                                    {anchorProducts.length}
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+
                             <div className="relative mb-2">
                               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                               <input
@@ -385,37 +454,103 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                               <div className="flex items-center justify-center py-6">
                                 <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                               </div>
-                            ) : filteredAnchorProducts.length === 0 ? (
-                              <p className="text-xs text-gray-400 text-center py-4">
-                                {anchorProducts.length === 0 ? '해당 슬롯에 제품이 없습니다' : '검색 결과가 없습니다'}
-                              </p>
+                            ) : anchorViewMode === 'recommended' ? (
+                              filteredRecommendedProducts.length === 0 ? (
+                                <p className="text-xs text-gray-400 text-center py-4">
+                                  {anchorSearchQuery ? '검색 결과가 없습니다' : '추천 제품이 없습니다'}
+                                </p>
+                              ) : (
+                                <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                                  {filteredRecommendedProducts.map(({ product, score, reasons }, rankIdx) => (
+                                    <button
+                                      key={product.id}
+                                      onClick={() => setAnchorProductId(product.id)}
+                                      className={`w-full flex items-center gap-3 p-2.5 hover:bg-gray-50 transition-colors text-left ${
+                                        product.id === anchorProductId ? 'bg-blue-50' : ''
+                                      }`}
+                                    >
+                                      <div className="relative flex-shrink-0">
+                                        {product.image_url ? (
+                                          <img
+                                            src={product.image_url}
+                                            alt=""
+                                            className="w-12 h-12 object-cover rounded"
+                                          />
+                                        ) : (
+                                          <div className="w-12 h-12 bg-gray-100 rounded" />
+                                        )}
+                                        {rankIdx < 3 && (
+                                          <span className={`absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${
+                                            rankIdx === 0 ? 'bg-amber-400' : rankIdx === 1 ? 'bg-gray-400' : 'bg-orange-400'
+                                          }`}>
+                                            {rankIdx + 1}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-gray-900 truncate font-medium">{product.name}</p>
+                                        <p className="text-xs text-gray-500 truncate">{product.brand}{product.color ? ` / ${product.color}` : ''}</p>
+                                        {reasons.length > 0 && (
+                                          <div className="flex flex-wrap gap-1 mt-1">
+                                            {reasons.slice(0, 2).map(r => (
+                                              <span key={r} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full">
+                                                {r}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                          score >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                                          score >= 60 ? 'bg-blue-100 text-blue-700' :
+                                          'bg-gray-100 text-gray-600'
+                                        }`}>
+                                          {score}점
+                                        </span>
+                                        {product.id === anchorProductId && (
+                                          <Check size={14} className="text-blue-600" />
+                                        )}
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )
                             ) : (
-                              <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
-                                {filteredAnchorProducts.map(product => (
-                                  <button
-                                    key={product.id}
-                                    onClick={() => setAnchorProductId(product.id)}
-                                    className="w-full flex items-center gap-3 p-2.5 hover:bg-gray-50 transition-colors text-left"
-                                  >
-                                    {product.image_url ? (
-                                      <img
-                                        src={product.image_url}
-                                        alt=""
-                                        className="w-10 h-10 object-cover rounded flex-shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="w-10 h-10 bg-gray-100 rounded flex-shrink-0" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm text-gray-900 truncate">{product.name}</p>
-                                      <p className="text-xs text-gray-500">{product.brand} {product.color ? `/ ${product.color}` : ''}</p>
-                                    </div>
-                                    {product.id === anchorProductId && (
-                                      <Check size={16} className="text-blue-600 flex-shrink-0" />
-                                    )}
-                                  </button>
-                                ))}
-                              </div>
+                              filteredAnchorProducts.length === 0 ? (
+                                <p className="text-xs text-gray-400 text-center py-4">
+                                  {anchorProducts.length === 0 ? '해당 슬롯에 제품이 없습니다' : '검색 결과가 없습니다'}
+                                </p>
+                              ) : (
+                                <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                                  {filteredAnchorProducts.map(product => (
+                                    <button
+                                      key={product.id}
+                                      onClick={() => setAnchorProductId(product.id)}
+                                      className={`w-full flex items-center gap-3 p-2.5 hover:bg-gray-50 transition-colors text-left ${
+                                        product.id === anchorProductId ? 'bg-blue-50' : ''
+                                      }`}
+                                    >
+                                      {product.image_url ? (
+                                        <img
+                                          src={product.image_url}
+                                          alt=""
+                                          className="w-10 h-10 object-cover rounded flex-shrink-0"
+                                        />
+                                      ) : (
+                                        <div className="w-10 h-10 bg-gray-100 rounded flex-shrink-0" />
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-gray-900 truncate">{product.name}</p>
+                                        <p className="text-xs text-gray-500">{product.brand}{product.color ? ` / ${product.color}` : ''}</p>
+                                      </div>
+                                      {product.id === anchorProductId && (
+                                        <Check size={16} className="text-blue-600 flex-shrink-0" />
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              )
                             )}
                           </>
                         )}
