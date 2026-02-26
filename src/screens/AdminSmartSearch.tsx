@@ -1,11 +1,12 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   Camera, Search, Check, Star, ExternalLink,
   Loader2, AlertCircle, Tag, Zap, ChevronDown,
   ChevronUp, ImageIcon, ArrowRight, X, Square, RefreshCw,
-  Sparkles, ShoppingBag
+  Sparkles, ShoppingBag, ArrowUpDown
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { scoreProductForVibe, COLOR_TIER_LABELS, type ColorTier } from '../utils/vibeCompatibility';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -175,6 +176,7 @@ export default function AdminSmartSearch() {
   const [manualSearching, setManualSearching] = useState(false);
 
   const [showFilters, setShowFilters] = useState(true);
+  const [vibeRankEnabled, setVibeRankEnabled] = useState(false);
 
   const [lastSearchFilters, setLastSearchFilters] = useState(
     cached.current?.lastSearchFilters || { gender: '', bodyType: '', vibe: '', season: '' }
@@ -396,15 +398,82 @@ export default function AdminSmartSearch() {
     setSavingAll(false);
   };
 
+  const scoreResultForVibe = useCallback((r: SmartResult): number | null => {
+    if (!vibe || !r.analyzed) return null;
+    const fakeProduct = {
+      id: r.asin,
+      brand: r.analyzed.brand || '',
+      name: r.analyzed.name || r.title,
+      category: r.analyzed.category as any || 'top',
+      gender: r.analyzed.gender || '',
+      body_type: r.analyzed.body_type || [],
+      vibe: r.analyzed.vibe || [],
+      color: r.analyzed.color || '',
+      season: r.analyzed.season || [],
+      silhouette: r.analyzed.silhouette || '',
+      image_url: r.image,
+      product_link: r.url,
+      price: r.price,
+      stock_status: 'in_stock' as const,
+      material: r.analyzed.material || '',
+      color_family: r.analyzed.color_family || '',
+      formality: r.analyzed.formality,
+      created_at: '',
+      updated_at: '',
+    };
+    return scoreProductForVibe(fakeProduct, vibe).total;
+  }, [vibe]);
+
+  const getResultColorTier = useCallback((r: SmartResult): ColorTier | null => {
+    if (!vibe || !r.analyzed) return null;
+    const fakeProduct = {
+      id: r.asin,
+      brand: r.analyzed.brand || '',
+      name: r.analyzed.name || r.title,
+      category: r.analyzed.category as any || 'top',
+      gender: r.analyzed.gender || '',
+      body_type: r.analyzed.body_type || [],
+      vibe: r.analyzed.vibe || [],
+      color: r.analyzed.color || '',
+      season: r.analyzed.season || [],
+      silhouette: r.analyzed.silhouette || '',
+      image_url: r.image,
+      product_link: r.url,
+      price: r.price,
+      stock_status: 'in_stock' as const,
+      material: r.analyzed.material || '',
+      color_family: r.analyzed.color_family || '',
+      formality: r.analyzed.formality,
+      created_at: '',
+      updated_at: '',
+    };
+    return scoreProductForVibe(fakeProduct, vibe).colorTier;
+  }, [vibe]);
+
   const categoryCounts = results.reduce((acc, r) => {
     const cat = r.analyzed?.category || r.category;
     if (cat) acc[cat] = (acc[cat] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const filteredResults = activeCategory === 'all'
-    ? results
-    : results.filter(r => (r.analyzed?.category || r.category) === activeCategory);
+  const filteredResults = useMemo(() => {
+    let base = activeCategory === 'all'
+      ? results
+      : results.filter(r => (r.analyzed?.category || r.category) === activeCategory);
+
+    if (vibeRankEnabled && vibe) {
+      base = [...base].sort((a, b) => {
+        const sa = scoreResultForVibe(a);
+        const sb = scoreResultForVibe(b);
+        if (sa !== null && sb !== null) return sb - sa;
+        if (sa !== null) return -1;
+        if (sb !== null) return 1;
+        return 0;
+      });
+    }
+
+    return base;
+  }, [activeCategory, results, vibeRankEnabled, vibe, scoreResultForVibe]);
 
   const isSearching = phase !== 'idle' && phase !== 'done';
   const searchPhaseLabel =
@@ -700,6 +769,28 @@ export default function AdminSmartSearch() {
           </div>
         )}
 
+        {/* Vibe Rank Toggle */}
+        {results.length > 0 && vibe && (
+          <div className="border-b border-white/8 px-6 py-2 flex items-center gap-3">
+            <button
+              onClick={() => setVibeRankEnabled(!vibeRankEnabled)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                vibeRankEnabled
+                  ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40'
+                  : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10'
+              }`}
+            >
+              <ArrowUpDown className="w-3 h-3" />
+              {vibeRankEnabled ? 'Vibe 호환순 ON' : 'Vibe 호환순'}
+            </button>
+            {vibeRankEnabled && (
+              <span className="text-[10px] text-white/25">
+                분석 완료된 제품이 Vibe 호환성 점수순으로 정렬됩니다
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Manual Keyword Search */}
         {phase === 'done' && (
           <div className="border-b border-white/8 px-6 py-2.5 flex items-center gap-2">
@@ -908,6 +999,20 @@ export default function AdminSmartSearch() {
                             {product.analyzed.color_family}
                           </span>
                         )}
+                        {(() => {
+                          const vs = scoreResultForVibe(product);
+                          const ct = getResultColorTier(product);
+                          if (vs === null) return null;
+                          return (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                              vs >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
+                              vs >= 50 ? 'bg-blue-500/20 text-blue-400' :
+                              'bg-red-500/20 text-red-400'
+                            }`}>
+                              {vs}pt {ct ? COLOR_TIER_LABELS[ct] : ''}
+                            </span>
+                          );
+                        })()}
                       </div>
                       {product.keyword_used && !product.analyzed && (
                         <p className="mt-1 text-[9px] text-white/20 truncate" title={product.keyword_used}>

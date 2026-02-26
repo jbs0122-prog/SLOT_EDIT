@@ -10,6 +10,45 @@ const corsHeaders = {
 const SERPAPI_KEY =
   "b0fefa497aabd408066e3eea994a5f30b80daf942e491415c255c95b98a43584";
 
+const VIBE_COLOR_VOCABULARY: Record<string, { primary: string[]; secondary: string[]; accent: string[]; keywords: string[] }> = {
+  ELEVATED_COOL: {
+    primary: ['black', 'charcoal', 'navy', 'white'],
+    secondary: ['grey', 'cream', 'camel'],
+    accent: ['burgundy', 'teal', 'metallic'],
+    keywords: ['monochrome', 'tonal', 'dark neutrals', 'high contrast'],
+  },
+  EFFORTLESS_NATURAL: {
+    primary: ['beige', 'cream', 'ivory', 'white'],
+    secondary: ['olive', 'khaki', 'tan', 'sage', 'brown'],
+    accent: ['rust', 'mustard', 'burgundy'],
+    keywords: ['earthy', 'warm neutrals', 'muted', 'organic tones'],
+  },
+  ARTISTIC_MINIMAL: {
+    primary: ['black', 'white', 'grey'],
+    secondary: ['navy', 'charcoal', 'cream'],
+    accent: ['red', 'mustard'],
+    keywords: ['achromatic', 'stark contrast', 'desaturated', 'sculptural'],
+  },
+  RETRO_LUXE: {
+    primary: ['brown', 'camel', 'cream', 'burgundy'],
+    secondary: ['gold', 'ivory', 'navy', 'olive'],
+    accent: ['mustard', 'rust', 'teal'],
+    keywords: ['rich', 'vintage tones', 'warm luxe', 'jewel-adjacent'],
+  },
+  SPORT_MODERN: {
+    primary: ['black', 'white', 'grey', 'navy'],
+    secondary: ['olive', 'khaki', 'charcoal'],
+    accent: ['orange', 'teal', 'red'],
+    keywords: ['technical', 'bold accent', 'high-vis', 'utility neutral'],
+  },
+  CREATIVE_LAYERED: {
+    primary: ['black', 'denim', 'brown', 'burgundy'],
+    secondary: ['grey', 'olive', 'navy', 'cream'],
+    accent: ['mustard', 'rust', 'red', 'orange'],
+    keywords: ['eclectic', 'pattern-rich', 'mixed tones', 'vintage-warm'],
+  },
+};
+
 interface AmazonResult {
   asin: string;
   title: string;
@@ -119,13 +158,22 @@ async function analyzeImageWithGemini(
   const genderLabel =
     gender === "MALE" ? "men" : gender === "FEMALE" ? "women" : "unisex";
 
+  const vibeColorSection = vibe && VIBE_COLOR_VOCABULARY[vibe]
+    ? `\n\nVIBE COLOR GUIDANCE (${vibe.replace(/_/g, " ")}):
+- Primary palette: ${VIBE_COLOR_VOCABULARY[vibe].primary.join(", ")}
+- Secondary palette: ${VIBE_COLOR_VOCABULARY[vibe].secondary.join(", ")}
+- Accent colors: ${VIBE_COLOR_VOCABULARY[vibe].accent.join(", ")}
+- Color mood: ${VIBE_COLOR_VOCABULARY[vibe].keywords.join(", ")}
+When generating keywords, PREFER color terms from this palette. Use the vibe's color vocabulary (e.g., "${VIBE_COLOR_VOCABULARY[vibe].keywords[0]}") instead of generic color words when describing items.`
+    : "";
+
   const prompt = `You are a fashion expert analyzing a reference outfit image to find similar products on Amazon USA.
 
 Context:
 - Target gender: ${genderLabel}
 - Body type: ${bodyType || "regular"}
 - Style vibe: ${vibe ? vibe.replace(/_/g, " ").toLowerCase() : "general"}
-- Season: ${season || "all season"}
+- Season: ${season || "all season"}${vibeColorSection}
 
 TASK: Identify EVERY clothing and accessory item visible in this image. For each item, detect brands and generate highly specific Amazon USA search keywords.
 

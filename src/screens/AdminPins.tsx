@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { X, Save, ArrowLeft, Package, ChevronDown } from 'lucide-react';
+import { scoreProductForVibe, COLOR_TIER_LABELS, type VibeCompatScore } from '../utils/vibeCompatibility';
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -121,6 +122,13 @@ export default function AdminPins() {
         affiliate_link: p.affiliate_link || '',
         price: p.price,
         stock_status: p.stock_status || 'in_stock',
+        material: p.material || '',
+        color_family: p.color_family || '',
+        color_tone: p.color_tone || '',
+        sub_category: p.sub_category || '',
+        pattern: p.pattern || '',
+        formality: p.formality,
+        warmth: p.warmth,
         created_at: p.created_at,
         updated_at: p.updated_at,
       })) || []);
@@ -538,10 +546,12 @@ export default function AdminPins() {
                     )}
                   </div>
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">모든 제품 ({allProducts.length})</h4>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">모든 제품 - Vibe 호환순 ({allProducts.filter(p => p.gender === selectedOutfit.gender).length})</h4>
                     <div className="max-h-96 overflow-y-auto space-y-2">
                       {allProducts
                         .filter(p => p.gender === selectedOutfit.gender)
+                        .map(p => ({ ...p, _vs: scoreProductForVibe(p, selectedOutfit.vibe) }))
+                        .sort((a, b) => b._vs.total - a._vs.total)
                         .map((product) => (
                           <div key={product.id} className="bg-white rounded p-3 border border-gray-200">
                             <div className="flex items-start gap-3">
@@ -551,9 +561,21 @@ export default function AdminPins() {
                                 className="w-16 h-16 object-cover rounded"
                               />
                               <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">
-                                  {getItemLabel(product.category)}: {product.brand}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {getItemLabel(product.category)}: {product.brand}
+                                  </p>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                    product._vs.total >= 70 ? 'bg-emerald-100 text-emerald-700' :
+                                    product._vs.total >= 50 ? 'bg-blue-100 text-blue-700' :
+                                    'bg-red-100 text-red-700'
+                                  }`}>
+                                    {product._vs.total}점
+                                  </span>
+                                  <span className="text-[9px] text-gray-400">
+                                    {COLOR_TIER_LABELS[product._vs.colorTier]}
+                                  </span>
+                                </div>
                                 <p className="text-xs text-gray-600">{product.name}</p>
                                 <p className="text-xs text-gray-500 mt-1">
                                   {product.color} · ${product.price}
@@ -671,10 +693,13 @@ export default function AdminPins() {
                     <label className="block text-sm text-gray-600 mb-2">
                       연결할 제품
                     </label>
-                    <select
-                      value={pins[selectedPinIndex].product_id || ''}
-                      onChange={(e) => {
-                        const productId = e.target.value;
+                    <RankedProductSelect
+                      products={allProducts}
+                      gender={selectedOutfit.gender}
+                      category={pins[selectedPinIndex].item}
+                      vibeKey={selectedOutfit.vibe}
+                      selectedId={pins[selectedPinIndex].product_id || ''}
+                      onChange={(productId) => {
                         const product = allProducts.find(p => p.id === productId);
                         if (product) {
                           handleProductSelect(selectedPinIndex, product);
@@ -682,17 +707,7 @@ export default function AdminPins() {
                           handlePinProductIdChange(selectedPinIndex, '');
                         }
                       }}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
-                    >
-                      <option value="">제품 선택...</option>
-                      {allProducts
-                        .filter(p => p.gender === selectedOutfit.gender && p.category === pins[selectedPinIndex].item)
-                        .map(product => (
-                          <option key={product.id} value={product.id}>
-                            {product.brand} - {product.name} {product.affiliate_link ? '(Affiliate)' : ''}
-                          </option>
-                        ))}
-                    </select>
+                    />
                     {pins[selectedPinIndex].product_id && (() => {
                       const product = allProducts.find(p => p.id === pins[selectedPinIndex].product_id);
                       return product ? (
@@ -817,5 +832,41 @@ export default function AdminPins() {
         );
       })()}
     </div>
+  );
+}
+
+interface RankedProductSelectProps {
+  products: Product[];
+  gender: string;
+  category: string;
+  vibeKey: string;
+  selectedId: string;
+  onChange: (productId: string) => void;
+}
+
+function RankedProductSelect({ products, gender, category, vibeKey, selectedId, onChange }: RankedProductSelectProps) {
+  const rankedProducts = useMemo(() => {
+    const filtered = products.filter(p => p.gender === gender && p.category === category);
+    if (!vibeKey) return filtered.map(p => ({ product: p, score: null as VibeCompatScore | null }));
+    return filtered
+      .map(p => ({ product: p, score: scoreProductForVibe(p, vibeKey) }))
+      .sort((a, b) => (b.score?.total ?? 0) - (a.score?.total ?? 0));
+  }, [products, gender, category, vibeKey]);
+
+  return (
+    <select
+      value={selectedId}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2 text-sm"
+    >
+      <option value="">제품 선택 (Vibe 호환순)...</option>
+      {rankedProducts.map(({ product, score }) => (
+        <option key={product.id} value={product.id}>
+          {score ? `[${score.total}점 ${COLOR_TIER_LABELS[score.colorTier]}] ` : ''}
+          {product.brand} - {product.name}
+          {product.affiliate_link ? ' (Affiliate)' : ''}
+        </option>
+      ))}
+    </select>
   );
 }

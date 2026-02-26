@@ -1,10 +1,18 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Outfit, Product, OutfitItem } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader, Download } from 'lucide-react';
+import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader, Download, ArrowUpDown, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { reviseModelPhoto } from '../utils/modelPhotoGenerator';
 import { downloadHighQualityImage } from '../utils/imageCompression';
 import FlatlayRenderer from './FlatlayRenderer';
+import {
+  scoreProductForVibe,
+  sortProductsByVibeCompat,
+  analyzeOutfitCompleteness,
+  COLOR_TIER_STYLES,
+  COLOR_TIER_LABELS,
+  type VibeCompatScore,
+} from '../utils/vibeCompatibility';
 
 interface OutfitProductLinkerProps {
   outfit: Outfit;
@@ -33,6 +41,11 @@ const PRODUCT_CATEGORIES = [
   { value: 'accessory', label: '액세서리' },
 ];
 
+function ScoreBadge({ score }: { score: number }) {
+  const color = score >= 80 ? 'text-emerald-600 bg-emerald-50' : score >= 60 ? 'text-blue-600 bg-blue-50' : score >= 40 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50';
+  return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>{score}</span>;
+}
+
 export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }: OutfitProductLinkerProps) {
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [linkedItems, setLinkedItems] = useState<OutfitItem[]>([]);
@@ -50,6 +63,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const [currentCleanUrl, setCurrentCleanUrl] = useState(outfit.image_url_flatlay_clean || '');
   const [downloadingFlatlay, setDownloadingFlatlay] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
+  const [vibeSort, setVibeSort] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef<number | null>(null);
 
@@ -64,101 +78,60 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     e.preventDefault();
     const container = scrollContainerRef.current;
     if (!container) return;
-
     const rect = container.getBoundingClientRect();
     const edgeZone = 80;
     const y = e.clientY;
-
     stopAutoScroll();
-
     if (y < rect.top + edgeZone) {
       const intensity = 1 - (y - rect.top) / edgeZone;
       const speed = Math.max(4, intensity * 20);
-      const scroll = () => {
-        container.scrollTop -= speed;
-        autoScrollRef.current = requestAnimationFrame(scroll);
-      };
+      const scroll = () => { container.scrollTop -= speed; autoScrollRef.current = requestAnimationFrame(scroll); };
       autoScrollRef.current = requestAnimationFrame(scroll);
     } else if (y > rect.bottom - edgeZone) {
       const intensity = 1 - (rect.bottom - y) / edgeZone;
       const speed = Math.max(4, intensity * 20);
-      const scroll = () => {
-        container.scrollTop += speed;
-        autoScrollRef.current = requestAnimationFrame(scroll);
-      };
+      const scroll = () => { container.scrollTop += speed; autoScrollRef.current = requestAnimationFrame(scroll); };
       autoScrollRef.current = requestAnimationFrame(scroll);
     }
   }, [stopAutoScroll]);
 
-  useEffect(() => {
-    loadData();
-  }, [outfit.id]);
+  useEffect(() => { loadData(); }, [outfit.id]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       const [productsResult, itemsResult] = await Promise.all([
-        supabase
-          .from('products')
-          .select('*')
-          .eq('gender', outfit.gender)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('outfit_items')
-          .select(`
-            *,
-            product:products(*)
-          `)
-          .eq('outfit_id', outfit.id)
+        supabase.from('products').select('*').eq('gender', outfit.gender).order('created_at', { ascending: false }),
+        supabase.from('outfit_items').select(`*, product:products(*)`).eq('outfit_id', outfit.id)
       ]);
-
       if (productsResult.error) throw productsResult.error;
       if (itemsResult.error) throw itemsResult.error;
 
       setAvailableProducts(productsResult.data?.map(p => ({
-        id: p.id,
-        brand: p.brand,
-        name: p.name,
-        category: p.category,
-        gender: p.gender,
-        body_type: p.body_type || [],
-        vibe: p.vibe || [],
-        color: p.color || '',
-        season: p.season || [],
-        silhouette: p.silhouette || '',
-        image_url: p.image_url,
-        product_link: p.product_link || '',
-        affiliate_link: p.affiliate_link || '',
-        price: p.price,
-        stock_status: p.stock_status || 'in_stock',
-        created_at: p.created_at,
-        updated_at: p.updated_at,
-      })) || []);
+        id: p.id, brand: p.brand, name: p.name, category: p.category, gender: p.gender,
+        body_type: p.body_type || [], vibe: p.vibe || [], color: p.color || '', season: p.season || [],
+        silhouette: p.silhouette || '', image_url: p.image_url, product_link: p.product_link || '',
+        affiliate_link: p.affiliate_link || '', price: p.price, stock_status: p.stock_status || 'in_stock',
+        material: p.material || '', color_family: p.color_family || '', color_tone: p.color_tone || '',
+        sub_category: p.sub_category || '', pattern: p.pattern || '', formality: p.formality, warmth: p.warmth,
+        created_at: p.created_at, updated_at: p.updated_at,
+      } as Product)) || []);
 
       setLinkedItems(itemsResult.data?.map((item: any) => ({
-        id: item.id,
-        outfit_id: item.outfit_id,
-        product_id: item.product_id,
-        slot_type: item.slot_type,
-        created_at: item.created_at,
+        id: item.id, outfit_id: item.outfit_id, product_id: item.product_id,
+        slot_type: item.slot_type, created_at: item.created_at,
         product: item.product ? {
-          id: item.product.id,
-          brand: item.product.brand,
-          name: item.product.name,
-          category: item.product.category,
-          gender: item.product.gender,
-          body_type: item.product.body_type || [],
-          vibe: item.product.vibe || [],
-          color: item.product.color || '',
-          season: item.product.season || [],
-          silhouette: item.product.silhouette || '',
-          image_url: item.product.image_url,
-          product_link: item.product.product_link || '',
-          affiliate_link: item.product.affiliate_link || '',
-          price: item.product.price,
-          stock_status: item.product.stock_status || 'in_stock',
-          created_at: item.product.created_at,
-          updated_at: item.product.updated_at,
+          id: item.product.id, brand: item.product.brand, name: item.product.name,
+          category: item.product.category, gender: item.product.gender,
+          body_type: item.product.body_type || [], vibe: item.product.vibe || [],
+          color: item.product.color || '', season: item.product.season || [],
+          silhouette: item.product.silhouette || '', image_url: item.product.image_url,
+          product_link: item.product.product_link || '', affiliate_link: item.product.affiliate_link || '',
+          price: item.product.price, stock_status: item.product.stock_status || 'in_stock',
+          material: item.product.material || '', color_family: item.product.color_family || '',
+          color_tone: item.product.color_tone || '', sub_category: item.product.sub_category || '',
+          pattern: item.product.pattern || '', formality: item.product.formality, warmth: item.product.warmth,
+          created_at: item.product.created_at, updated_at: item.product.updated_at,
         } : undefined
       })) || []);
     } catch (error) {
@@ -169,39 +142,19 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     }
   };
 
-  const handleDragStart = (product: Product) => {
-    setDraggedProduct(product);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedProduct(null);
-    setDragOverSlot(null);
-    stopAutoScroll();
-  };
+  const handleDragStart = (product: Product) => { setDraggedProduct(product); };
+  const handleDragEnd = () => { setDraggedProduct(null); setDragOverSlot(null); stopAutoScroll(); };
 
   const handleDrop = async (slotType: string) => {
     if (!draggedProduct) return;
-
     setSaving(true);
     try {
       const existingItem = linkedItems.find(item => item.slot_type === slotType);
       if (existingItem) {
-        await supabase
-          .from('outfit_items')
-          .delete()
-          .eq('id', existingItem.id);
+        await supabase.from('outfit_items').delete().eq('id', existingItem.id);
       }
-
-      const { error } = await supabase
-        .from('outfit_items')
-        .insert([{
-          outfit_id: outfit.id,
-          product_id: draggedProduct.id,
-          slot_type: slotType
-        }]);
-
+      const { error } = await supabase.from('outfit_items').insert([{ outfit_id: outfit.id, product_id: draggedProduct.id, slot_type: slotType }]);
       if (error) throw error;
-
       await loadData();
       onLinksUpdated();
     } catch (error) {
@@ -216,13 +169,8 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const handleRemoveLink = async (itemId: string) => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('outfit_items')
-        .delete()
-        .eq('id', itemId);
-
+      const { error } = await supabase.from('outfit_items').delete().eq('id', itemId);
       if (error) throw error;
-
       await loadData();
       onLinksUpdated();
     } catch (error) {
@@ -234,11 +182,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   };
 
   const refreshOutfitImages = async () => {
-    const { data } = await supabase
-      .from('outfits')
-      .select('image_url_on_model, image_url_flatlay_clean')
-      .eq('id', outfit.id)
-      .maybeSingle();
+    const { data } = await supabase.from('outfits').select('image_url_on_model, image_url_flatlay_clean').eq('id', outfit.id).maybeSingle();
     if (data) {
       setCurrentModelUrl(data.image_url_on_model || '');
       setCurrentCleanUrl(data.image_url_flatlay_clean || '');
@@ -247,14 +191,10 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   const handleModelRevision = async () => {
     if (!modelRevisionText.trim() || !currentModelUrl || !currentCleanUrl) return;
-
     setModelRevising(true);
     setModelRevisionError('');
-
     try {
-      const newModelUrl = await reviseModelPhoto(
-        outfit.id, currentCleanUrl, currentModelUrl, modelRevisionText.trim()
-      );
+      const newModelUrl = await reviseModelPhoto(outfit.id, currentCleanUrl, currentModelUrl, modelRevisionText.trim());
       setCurrentModelUrl(newModelUrl);
       setModelRevisionText('');
       onLinksUpdated();
@@ -269,45 +209,45 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const handleDownloadFlatlay = async () => {
     if (!outfit.image_url_flatlay) return;
     setDownloadingFlatlay(true);
-    try {
-      await downloadHighQualityImage(
-        outfit.image_url_flatlay,
-        `flatlay_${outfit.id}.png`,
-        import.meta.env.VITE_SUPABASE_URL
-      );
-    } catch (err) {
-      console.error('Download failed:', err);
-    } finally {
-      setDownloadingFlatlay(false);
-    }
+    try { await downloadHighQualityImage(outfit.image_url_flatlay, `flatlay_${outfit.id}.png`, import.meta.env.VITE_SUPABASE_URL); } catch (err) { console.error('Download failed:', err); } finally { setDownloadingFlatlay(false); }
   };
 
   const handleDownloadModel = async () => {
     if (!currentModelUrl) return;
     setDownloadingModel(true);
-    try {
-      await downloadHighQualityImage(
-        currentModelUrl,
-        `model_${outfit.id}.png`,
-        import.meta.env.VITE_SUPABASE_URL
-      );
-    } catch (err) {
-      console.error('Download failed:', err);
-    } finally {
-      setDownloadingModel(false);
+    try { await downloadHighQualityImage(currentModelUrl, `model_${outfit.id}.png`, import.meta.env.VITE_SUPABASE_URL); } catch (err) { console.error('Download failed:', err); } finally { setDownloadingModel(false); }
+  };
+
+  const getSlotItem = (slotType: string): OutfitItem | undefined => linkedItems.find(item => item.slot_type === slotType);
+
+  // #12: Vibe-aware product sorting
+  const filteredProducts = useMemo(() => {
+    let products = availableProducts.filter(product => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           product.brand.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+    if (vibeSort && outfit.vibe) {
+      return sortProductsByVibeCompat(products, outfit.vibe);
     }
-  };
+    return products.map(p => ({ ...p, _vibeScore: scoreProductForVibe(p, outfit.vibe || '') }));
+  }, [availableProducts, searchTerm, selectedCategory, vibeSort, outfit.vibe]);
 
-  const getSlotItem = (slotType: string): OutfitItem | undefined => {
-    return linkedItems.find(item => item.slot_type === slotType);
-  };
+  // #13: Drag compatibility preview score
+  const dragPreviewScore = useMemo<VibeCompatScore | null>(() => {
+    if (!draggedProduct || !outfit.vibe) return null;
+    return scoreProductForVibe(draggedProduct, outfit.vibe);
+  }, [draggedProduct, outfit.vibe]);
 
-  const filteredProducts = availableProducts.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.brand.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // #14: Outfit completeness analysis
+  const completeness = useMemo(() => {
+    const itemsForAnalysis = linkedItems.map(item => ({
+      slot_type: item.slot_type,
+      product: item.product,
+    }));
+    return analyzeOutfitCompleteness(itemsForAnalysis, outfit.vibe || '');
+  }, [linkedItems, outfit.vibe]);
 
   if (loading) {
     return (
@@ -331,89 +271,153 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">코디 - 제품 연결</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              제품을 슬롯으로 드래그하여 연결하세요
-            </p>
+            <p className="text-sm text-gray-600 mt-1">제품을 슬롯으로 드래그하여 연결하세요</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X size={24} />
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
         </div>
 
+        {/* #13: Drag compatibility preview */}
+        {draggedProduct && dragPreviewScore && (
+          <div className="sticky top-[73px] z-20 mx-6 mt-2 bg-gray-900 text-white rounded-lg px-4 py-2.5 flex items-center gap-4 shadow-xl">
+            <span className="text-xs font-medium opacity-60">드래그 중:</span>
+            <span className="text-sm font-semibold truncate max-w-[200px]">{draggedProduct.name}</span>
+            <div className="flex items-center gap-3 ml-auto">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] opacity-50">호환도</span>
+                <span className={`text-sm font-bold ${dragPreviewScore.total >= 70 ? 'text-emerald-400' : dragPreviewScore.total >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                  {dragPreviewScore.total}
+                </span>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded border ${
+                dragPreviewScore.colorTier === 'primary' ? 'border-emerald-500 text-emerald-400' :
+                dragPreviewScore.colorTier === 'secondary' ? 'border-blue-500 text-blue-400' :
+                dragPreviewScore.colorTier === 'accent' ? 'border-amber-500 text-amber-400' :
+                'border-red-500 text-red-400'
+              }`}>
+                {COLOR_TIER_LABELS[dragPreviewScore.colorTier]}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="p-6">
+          {/* #14: Outfit completeness panel */}
+          <div className="mb-6 bg-gray-50 rounded-xl p-4 border border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                {completeness.overallScore >= 70 ? (
+                  <CheckCircle2 size={18} className="text-emerald-500" />
+                ) : completeness.overallScore >= 40 ? (
+                  <AlertTriangle size={18} className="text-amber-500" />
+                ) : (
+                  <Info size={18} className="text-gray-400" />
+                )}
+                <h3 className="text-sm font-semibold text-gray-900">코디 완성도</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      completeness.overallScore >= 70 ? 'bg-emerald-500' : completeness.overallScore >= 40 ? 'bg-amber-500' : 'bg-gray-400'
+                    }`}
+                    style={{ width: `${completeness.overallScore}%` }}
+                  />
+                </div>
+                <span className={`text-sm font-bold ${
+                  completeness.overallScore >= 70 ? 'text-emerald-600' : completeness.overallScore >= 40 ? 'text-amber-600' : 'text-gray-500'
+                }`}>{completeness.overallScore}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">아이템</p>
+                <p className="text-lg font-bold text-gray-900">{completeness.totalItems}<span className="text-xs text-gray-400">/8</span></p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">필수 슬롯</p>
+                <p className={`text-lg font-bold ${completeness.hasCoreItems ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {completeness.hasCoreItems ? 'OK' : 'NEED'}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">컬러 조화</p>
+                <p className={`text-lg font-bold ${
+                  completeness.colorHarmony === 'excellent' ? 'text-emerald-600' :
+                  completeness.colorHarmony === 'good' ? 'text-blue-600' :
+                  completeness.colorHarmony === 'fair' ? 'text-amber-600' : 'text-red-500'
+                }`}>
+                  {completeness.colorHarmony === 'excellent' ? 'A+' :
+                   completeness.colorHarmony === 'good' ? 'A' :
+                   completeness.colorHarmony === 'fair' ? 'B' : 'C'}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">격식 편차</p>
+                <p className={`text-lg font-bold ${completeness.formalitySpread <= 1 ? 'text-emerald-600' : completeness.formalitySpread <= 2 ? 'text-amber-600' : 'text-red-500'}`}>
+                  {completeness.formalitySpread}
+                </p>
+              </div>
+            </div>
+            {completeness.missingSlots.length > 0 && completeness.missingSlots.length <= 5 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="text-[10px] text-gray-400">빈 슬롯:</span>
+                {completeness.missingSlots.map(s => (
+                  <span key={s} className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-500 rounded">
+                    {SLOT_TYPES.find(st => st.value === s)?.label || s}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">코디 슬롯</h3>
               <div className="text-sm text-gray-500 mb-3">
-                {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+                {outfit.gender} / {outfit.body_type} / {outfit.vibe}
               </div>
 
               <div className="space-y-3">
                 {SLOT_TYPES.map(slot => {
                   const item = getSlotItem(slot.value);
+                  const itemScore = item?.product ? scoreProductForVibe(item.product, outfit.vibe || '') : null;
                   return (
                     <div
                       key={slot.value}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (dragOverSlot !== slot.value) setDragOverSlot(slot.value);
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDragOverSlot(null);
-                        handleDrop(slot.value);
-                      }}
-                      onDragEnter={(e) => {
-                        e.preventDefault();
-                        setDragOverSlot(slot.value);
-                      }}
-                      onDragLeave={(e) => {
-                        e.preventDefault();
-                        if (dragOverSlot === slot.value) setDragOverSlot(null);
-                      }}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragOverSlot !== slot.value) setDragOverSlot(slot.value); }}
+                      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverSlot(null); handleDrop(slot.value); }}
+                      onDragEnter={(e) => { e.preventDefault(); setDragOverSlot(slot.value); }}
+                      onDragLeave={(e) => { e.preventDefault(); if (dragOverSlot === slot.value) setDragOverSlot(null); }}
                       className={`border-2 border-dashed rounded-lg p-4 transition-all ${
-                        dragOverSlot === slot.value
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-300'
+                        dragOverSlot === slot.value ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-gray-900">{slot.label}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-gray-900">{slot.label}</h4>
+                          {itemScore && <ScoreBadge score={itemScore.total} />}
+                          {itemScore && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded border ${COLOR_TIER_STYLES[itemScore.colorTier]}`}>
+                              {COLOR_TIER_LABELS[itemScore.colorTier]}
+                            </span>
+                          )}
+                        </div>
                         {item && (
-                          <button
-                            onClick={() => handleRemoveLink(item.id)}
-                            disabled={saving}
-                            className="text-red-600 hover:text-red-700 disabled:opacity-50"
-                          >
+                          <button onClick={() => handleRemoveLink(item.id)} disabled={saving} className="text-red-600 hover:text-red-700 disabled:opacity-50">
                             <Trash2 size={16} />
                           </button>
                         )}
                       </div>
-
                       {item?.product ? (
                         <div className="flex items-start gap-3 bg-white rounded p-3">
-                          <img
-                            src={item.product.image_url}
-                            alt={item.product.name}
-                            className="w-16 h-16 object-cover rounded"
-                          />
+                          <img src={item.product.image_url} alt={item.product.name} className="w-16 h-16 object-cover rounded" />
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 text-sm truncate">
-                              {item.product.brand}
-                            </p>
-                            <p className="text-xs text-gray-600 truncate">
-                              {item.product.name}
-                            </p>
-                            {item.product.price && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                ${item.product.price.toLocaleString()}
-                              </p>
-                            )}
+                            <p className="font-medium text-gray-900 text-sm truncate">{item.product.brand}</p>
+                            <p className="text-xs text-gray-600 truncate">{item.product.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              {item.product.price && <p className="text-xs text-gray-500">${item.product.price.toLocaleString()}</p>}
+                              {item.product.color_family && <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">{item.product.color_family}</span>}
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -435,56 +439,30 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                       <div className="bg-gray-50 rounded-lg p-2">
                         <div className="flex items-center justify-between mb-1.5">
                           <p className="text-xs text-gray-500 font-medium">플랫레이</p>
-                          <button
-                            onClick={handleDownloadFlatlay}
-                            disabled={downloadingFlatlay}
-                            title="고화질 PNG 다운로드"
-                            className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
-                          >
-                            {downloadingFlatlay
-                              ? <Loader className="animate-spin" size={12} />
-                              : <Download size={12} />}
+                          <button onClick={handleDownloadFlatlay} disabled={downloadingFlatlay} title="고화질 PNG 다운로드" className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors disabled:opacity-50">
+                            {downloadingFlatlay ? <Loader className="animate-spin" size={12} /> : <Download size={12} />}
                           </button>
                         </div>
-                        <img
-                          src={outfit.image_url_flatlay}
-                          alt="Flatlay"
-                          className="w-full rounded object-contain"
-                        />
+                        <img src={outfit.image_url_flatlay} alt="Flatlay" className="w-full rounded object-contain" />
                       </div>
                     )}
                     {currentModelUrl && (
                       <div className="bg-gray-50 rounded-lg p-2 relative">
                         <div className="flex items-center justify-between mb-1.5">
                           <p className="text-xs text-gray-500 font-medium">모델컷</p>
-                          <button
-                            onClick={handleDownloadModel}
-                            disabled={downloadingModel || modelRevising}
-                            title="고화질 PNG 다운로드"
-                            className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
-                          >
-                            {downloadingModel
-                              ? <Loader className="animate-spin" size={12} />
-                              : <Download size={12} />}
+                          <button onClick={handleDownloadModel} disabled={downloadingModel || modelRevising} title="고화질 PNG 다운로드" className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors disabled:opacity-50">
+                            {downloadingModel ? <Loader className="animate-spin" size={12} /> : <Download size={12} />}
                           </button>
                         </div>
                         {modelRevising && (
                           <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center z-10">
-                            <div className="flex items-center gap-2 text-gray-700">
-                              <Loader className="animate-spin" size={18} />
-                              <span className="text-xs font-medium">수정 중...</span>
-                            </div>
+                            <div className="flex items-center gap-2 text-gray-700"><Loader className="animate-spin" size={18} /><span className="text-xs font-medium">수정 중...</span></div>
                           </div>
                         )}
-                        <img
-                          src={currentModelUrl}
-                          alt="Model"
-                          className="w-full rounded object-contain"
-                        />
+                        <img src={currentModelUrl} alt="Model" className="w-full rounded object-contain" />
                       </div>
                     )}
                   </div>
-
                   {currentModelUrl && currentCleanUrl && (
                     <div className="mt-3 bg-gray-50 rounded-lg p-3">
                       <div className="flex items-center gap-1.5 mb-2">
@@ -492,27 +470,13 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                         <h5 className="text-xs font-semibold text-gray-700">모델컷 AI 수정</h5>
                       </div>
                       <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={modelRevisionText}
-                          onChange={(e) => setModelRevisionText(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && !modelRevising) handleModelRevision(); }}
-                          placeholder="예: 포즈를 바꿔줘, 코트를 열어줘..."
-                          disabled={modelRevising}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                        />
-                        <button
-                          onClick={handleModelRevision}
-                          disabled={modelRevising || !modelRevisionText.trim()}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition-colors"
-                        >
+                        <input type="text" value={modelRevisionText} onChange={(e) => setModelRevisionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !modelRevising) handleModelRevision(); }} placeholder="예: 포즈를 바꿔줘, 코트를 열어줘..." disabled={modelRevising} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50" />
+                        <button onClick={handleModelRevision} disabled={modelRevising || !modelRevisionText.trim()} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition-colors">
                           {modelRevising ? <Loader className="animate-spin" size={14} /> : <Send size={14} />}
                           수정
                         </button>
                       </div>
-                      {modelRevisionError && (
-                        <p className="text-xs text-red-600 mt-1.5">{modelRevisionError}</p>
-                      )}
+                      {modelRevisionError && <p className="text-xs text-red-600 mt-1.5">{modelRevisionError}</p>}
                     </div>
                   )}
                 </div>
@@ -520,121 +484,95 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">제품 목록</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">제품 목록</h3>
+                {/* #12: Vibe sort toggle */}
+                <button
+                  onClick={() => setVibeSort(!vibeSort)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    vibeSort ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+                  }`}
+                >
+                  <ArrowUpDown size={13} />
+                  {vibeSort ? 'Vibe 호환순' : '등록순'}
+                </button>
+              </div>
 
               <div className="mb-4 space-y-2">
-                <input
-                  type="text"
-                  placeholder="제품명 또는 브랜드 검색..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
+                <input type="text" placeholder="제품명 또는 브랜드 검색..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                   <option value="all">전체 카테고리</option>
-                  {PRODUCT_CATEGORIES.map(cat => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
-                  ))}
+                  {PRODUCT_CATEGORIES.map(cat => (<option key={cat.value} value={cat.value}>{cat.label}</option>))}
                 </select>
               </div>
 
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
                 {filteredProducts.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    제품이 없습니다
-                  </div>
+                  <div className="text-center py-8 text-gray-500">제품이 없습니다</div>
                 ) : (
-                  filteredProducts.map(product => (
-                    <div
-                      key={product.id}
-                      draggable={true}
-                      onDragStart={(e) => {
-                        handleDragStart(product);
-                        e.dataTransfer.effectAllowed = 'move';
-                        e.dataTransfer.setData('text/plain', product.id);
-                      }}
-                      onDragEnd={handleDragEnd}
-                      className={`flex items-start gap-3 bg-white border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-500 hover:shadow-md transition-all ${
-                        draggedProduct?.id === product.id ? 'opacity-50 scale-95' : ''
-                      }`}
-                    >
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="w-20 h-20 object-cover rounded"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 text-sm">
-                              {product.brand}
-                            </p>
-                            <p className="text-xs text-gray-600 line-clamp-2">
-                              {product.name}
-                            </p>
-                          </div>
-                          <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded whitespace-nowrap">
-                            {PRODUCT_CATEGORIES.find(c => c.value === product.category)?.label}
-                          </span>
-                        </div>
-                        {product.price && (
-                          <p className="text-sm font-semibold text-gray-900 mt-1">
-                            ${product.price.toLocaleString()}
-                          </p>
-                        )}
-                        {product.vibe && product.vibe.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {product.vibe.slice(0, 2).map((v, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs"
-                              >
-                                {v}
+                  filteredProducts.map(product => {
+                    const score = (product as any)._vibeScore as VibeCompatScore | undefined;
+                    return (
+                      <div
+                        key={product.id}
+                        draggable={true}
+                        onDragStart={(e) => { handleDragStart(product); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', product.id); }}
+                        onDragEnd={handleDragEnd}
+                        className={`flex items-start gap-3 bg-white border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-500 hover:shadow-md transition-all ${
+                          draggedProduct?.id === product.id ? 'opacity-50 scale-95' : ''
+                        }`}
+                      >
+                        <img src={product.image_url} alt={product.name} className="w-20 h-20 object-cover rounded" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 text-sm">{product.brand}</p>
+                              <p className="text-xs text-gray-600 line-clamp-2">{product.name}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded whitespace-nowrap">
+                                {PRODUCT_CATEGORIES.find(c => c.value === product.category)?.label}
                               </span>
-                            ))}
+                              {score && <ScoreBadge score={score.total} />}
+                            </div>
                           </div>
-                        )}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {product.price && <p className="text-sm font-semibold text-gray-900">${product.price.toLocaleString()}</p>}
+                            {score && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded border ${COLOR_TIER_STYLES[score.colorTier]}`}>
+                                {COLOR_TIER_LABELS[score.colorTier]}
+                              </span>
+                            )}
+                            {product.color_family && <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">{product.color_family}</span>}
+                          </div>
+                          {product.vibe && product.vibe.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {product.vibe.slice(0, 2).map((v, idx) => (
+                                <span key={idx} className={`px-2 py-0.5 rounded text-xs ${v === outfit.vibe ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{v}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
           </div>
 
           <div className="mt-6 pt-6 border-t flex justify-between items-center">
-            <button
-              onClick={() => setShowRenderer(true)}
-              disabled={linkedItems.length === 0}
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-            >
+            <button onClick={() => setShowRenderer(true)} disabled={linkedItems.length === 0} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md">
               <ImageIcon size={18} />
               플랫레이 렌더링
             </button>
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-            >
-              완료
-            </button>
+            <button onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">완료</button>
           </div>
         </div>
       </div>
 
       {showRenderer && (
-        <FlatlayRenderer
-          outfitId={outfit.id}
-          onClose={() => setShowRenderer(false)}
-          onRendered={() => {
-            setShowRenderer(false);
-            refreshOutfitImages();
-            onLinksUpdated();
-          }}
-        />
+        <FlatlayRenderer outfitId={outfit.id} onClose={() => setShowRenderer(false)} onRendered={() => { setShowRenderer(false); refreshOutfitImages(); onLinksUpdated(); }} />
       )}
     </div>
   );

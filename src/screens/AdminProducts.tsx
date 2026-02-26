@@ -4,6 +4,7 @@ import { supabase } from '../utils/supabase';
 import ProductForm from './ProductForm';
 import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
+import VibeQualityDashboard from './VibeQualityDashboard';
 import { Plus, Upload } from 'lucide-react';
 
 export default function AdminProducts() {
@@ -31,6 +32,7 @@ export default function AdminProducts() {
   const [filterBodyType, setFilterBodyTypeRaw] = useState<string>(savedFilters?.filterBodyType ?? 'all');
   const [filterVibe, setFilterVibeRaw] = useState<string>(savedFilters?.filterVibe ?? 'all');
   const [filterSeason, setFilterSeasonRaw] = useState<string>(savedFilters?.filterSeason ?? 'all');
+  const [filterUnused, setFilterUnused] = useState(false);
 
   const saveFilters = (updates: Partial<{ searchTerm: string; filterCategory: string; filterGender: string; filterBodyType: string; filterVibe: string; filterSeason: string }>) => {
     try {
@@ -144,6 +146,7 @@ export default function AdminProducts() {
   };
 
   const filteredProducts = products.filter(product => {
+    if (filterUnused && productUsageCounts[product.id] > 0) return false;
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.brand.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = filterCategory === 'all' || product.category === filterCategory;
@@ -260,10 +263,26 @@ export default function AdminProducts() {
           </div>
         </div>
 
+        <div className="mb-6">
+          <VibeQualityDashboard
+            products={products}
+            usageCounts={productUsageCounts}
+            onFilterUnused={() => setFilterUnused(prev => !prev)}
+          />
+        </div>
+
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-bold text-gray-900">
               제품 목록 ({filteredProducts.length})
+              {filterUnused && (
+                <button
+                  onClick={() => setFilterUnused(false)}
+                  className="ml-2 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded transition-colors"
+                >
+                  미사용 필터 해제
+                </button>
+              )}
             </h2>
           </div>
           <ProductList

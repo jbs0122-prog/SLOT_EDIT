@@ -6,6 +6,169 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface VibeDNA {
+  formality_range: [number, number];
+  preferred_tonal_strategy: string[];
+  silhouette_preference: string[];
+  texture_rules: {
+    preferred_textures: string[];
+    forbidden_textures?: string[];
+  };
+  color_palette: {
+    primary: string[];
+    secondary: string[];
+    accent: string[];
+    max_accent_ratio: number;
+  };
+  proportion_style: string;
+  material_preferences: string[];
+  era_mood_tags: string[];
+}
+
+const VIBE_DNA: Record<string, VibeDNA> = {
+  elevated_cool: {
+    formality_range: [5, 9],
+    preferred_tonal_strategy: ['tone-on-tone', 'contrast'],
+    silhouette_preference: ['I', 'V'],
+    texture_rules: { preferred_textures: ['structured', 'matte', 'sheen'] },
+    color_palette: {
+      primary: ['black', 'charcoal', 'navy', 'white'],
+      secondary: ['grey', 'cream', 'camel'],
+      accent: ['burgundy', 'metallic', 'wine'],
+      max_accent_ratio: 0.10,
+    },
+    proportion_style: 'column',
+    material_preferences: ['structured', 'luxe', 'classic'],
+    era_mood_tags: ['minimalist', 'architectural', 'city-noir'],
+  },
+  effortless_natural: {
+    formality_range: [2, 6],
+    preferred_tonal_strategy: ['tone-in-tone', 'tone-on-tone'],
+    silhouette_preference: ['A', 'H', 'I'],
+    texture_rules: { preferred_textures: ['matte', 'rough', 'smooth'], forbidden_textures: ['sheen'] },
+    color_palette: {
+      primary: ['beige', 'cream', 'ivory', 'white'],
+      secondary: ['olive', 'khaki', 'tan', 'sage', 'brown'],
+      accent: ['rust', 'mustard', 'burgundy'],
+      max_accent_ratio: 0.15,
+    },
+    proportion_style: 'relaxed',
+    material_preferences: ['classic', 'eco', 'knit'],
+    era_mood_tags: ['japandi', 'french-casual', 'organic', 'wabi-sabi'],
+  },
+  artistic_minimal: {
+    formality_range: [3, 8],
+    preferred_tonal_strategy: ['tone-on-tone', 'contrast'],
+    silhouette_preference: ['I', 'A', 'Y'],
+    texture_rules: { preferred_textures: ['structured', 'matte', 'rough'] },
+    color_palette: {
+      primary: ['black', 'white', 'grey', 'charcoal'],
+      secondary: ['cream', 'beige', 'navy'],
+      accent: ['rust', 'olive', 'burgundy'],
+      max_accent_ratio: 0.10,
+    },
+    proportion_style: 'column',
+    material_preferences: ['classic', 'structured', 'eco', 'knit'],
+    era_mood_tags: ['avant-garde', 'gallery', 'architectural', 'deconstructed'],
+  },
+  retro_luxe: {
+    formality_range: [3, 8],
+    preferred_tonal_strategy: ['tone-in-tone', 'contrast'],
+    silhouette_preference: ['A', 'X', 'I'],
+    texture_rules: { preferred_textures: ['smooth', 'sheen', 'rough'] },
+    color_palette: {
+      primary: ['burgundy', 'navy', 'brown', 'cream'],
+      secondary: ['camel', 'olive', 'wine', 'beige'],
+      accent: ['rust', 'mustard', 'teal', 'gold'],
+      max_accent_ratio: 0.20,
+    },
+    proportion_style: 'balanced',
+    material_preferences: ['luxe', 'structured', 'classic', 'knit'],
+    era_mood_tags: ['70s', 'heritage', 'cinematic', 'old-money'],
+  },
+  sport_modern: {
+    formality_range: [0, 4],
+    preferred_tonal_strategy: ['contrast', 'tone-on-tone'],
+    silhouette_preference: ['I', 'V'],
+    texture_rules: { preferred_textures: ['smooth', 'matte', 'structured'] },
+    color_palette: {
+      primary: ['black', 'grey', 'white', 'navy'],
+      secondary: ['olive', 'khaki', 'charcoal'],
+      accent: ['orange', 'teal', 'red', 'green'],
+      max_accent_ratio: 0.15,
+    },
+    proportion_style: 'balanced',
+    material_preferences: ['technical', 'casual', 'blend'],
+    era_mood_tags: ['gorpcore', 'athleisure', 'tech-wear', 'sport'],
+  },
+  creative_layered: {
+    formality_range: [0, 5],
+    preferred_tonal_strategy: ['contrast', 'tone-in-tone'],
+    silhouette_preference: ['V', 'A', 'Y'],
+    texture_rules: { preferred_textures: ['rough', 'matte', 'sheen'] },
+    color_palette: {
+      primary: ['black', 'grey', 'white', 'denim'],
+      secondary: ['burgundy', 'brown', 'olive', 'navy'],
+      accent: ['red', 'purple', 'orange', 'pink', 'yellow'],
+      max_accent_ratio: 0.25,
+    },
+    proportion_style: 'top-heavy',
+    material_preferences: ['structured', 'casual', 'classic', 'sheer'],
+    era_mood_tags: ['grunge', 'punk', 'DIY', 'eclectic', 'vintage'],
+  },
+};
+
+const VIBE_LOOK_ITEMS: Record<string, Record<string, string[]>> = {
+  elevated_cool: {
+    outer: ['oversized wool coat', 'structured trench', 'boxy leather blazer', 'cropped tailored jacket', 'tuxedo jacket', 'cape blazer', 'biker jacket', 'coach jacket', 'technical bomber', 'shearling jacket', 'nylon trench', 'varsity jacket', 'cropped bomber', 'wool peacoat', 'harrington jacket', 'puffer vest', 'heavy hoodie', 'anorak', 'windbreaker', 'track jacket'],
+    top: ['high-neck knit', 'crisp poplin shirt', 'silk button-down', 'structured tee', 'satin blouse', 'mock-neck sweat', 'boxy tee', 'cashmere hoodie', 'oxford shirt', 'polo shirt', 'cable vest', 'rugby shirt', 'argyle sweater', 'v-neck jumper', 'mesh tee', 'thermal', 'graphic tee', 'crewneck', 'muscle tank', 'neoprene top'],
+    bottom: ['wide-leg wool trousers', 'leather pants', 'pleated trousers', 'cigarette pants', 'cargo sweats', 'parachute pants', 'track pants', 'tailored joggers', 'raw denim', 'chinos', 'pleated mini skirt', 'straight jeans', 'wide chinos', 'tartan trousers', 'corduroy pants', 'grey denim', 'cargo jeans', 'biker jeans', 'nylon pants', 'baggy jeans'],
+    shoes: ['square-toe boots', 'chunky loafers', 'chelsea boots', 'combat boots', 'sock boots', 'dad sneakers', 'high-top sneakers', 'tabi boots', 'leather sneakers', 'platform loafers', 'loafers with socks', 'derby', 'retro sneakers', 'mary janes', 'boat shoes'],
+    bag: ['geometric tote', 'box bag', 'metal clutch', 'sling bag', 'chest rig', 'belt bag', 'cassette bag', 'briefcase', 'tech backpack', 'crossbody box', 'satchel', 'canvas tote', 'bowling bag', 'messenger bag'],
+    accessory: ['silver chain', 'metal sunglasses', 'leather gloves', 'chain necklace', 'beanie', 'bucket hat', 'shield sunglasses', 'industrial belt', 'wallet chain', 'smart watch', 'skinny tie', 'baseball cap', 'crest brooch', 'glasses chain'],
+  },
+  effortless_natural: {
+    outer: ['collarless liner', 'kimono cardigan', 'robe coat', 'chore coat', 'linen jacket', 'trench coat', 'wool blazer', 'field jacket', 'duffle coat', 'barn jacket', 'quilted liner', 'soft blazer', 'noragi', 'poncho', 'oversized cardigan', 'boucle jacket', 'peacoat', 'clean denim jacket', 'flannel shirt-jacket', 'corduroy jacket'],
+    top: ['linen tunic', 'organic tee', 'wrap top', 'breton stripe tee', 'cashmere crew', 'silk blouse', 'chambray shirt', 'flannel shirt', 'grandad shirt', 'boat neck tee', 'waffle henley', 'boat neck knit', 'gauze blouse', 'raw silk top', 'drop-shoulder tee', 'knit tank', 'cashmere sweater', 'fair isle knit', 'layered turtle', 'sweatshirt'],
+    bottom: ['wide linen trousers', 'drawstring pants', 'culottes', 'midi skirt', 'vintage denim', 'white jeans', 'fatigue pants', 'corduroy trousers', 'wide chinos', 'slip skirt', 'maxi skirt', 'balloon pants', 'relaxed trousers', 'wrap pants', 'carpenter jeans', 'raw denim', 'bermuda shorts', 'tiered skirt', 'denim skirt', 'work pants'],
+    shoes: ['suede mules', 'leather slides', 'canvas sneakers', 'clogs', 'espadrilles', 'ballet flats', 'desert boots', 'wallabees', 'mary janes', 'moccasins', 'tabi flats', 'babouche', 'leather sandals', 'soft loafers', 'woven flats'],
+    bag: ['soft hobo', 'canvas tote', 'straw bag', 'woven bag', 'basket bag', 'satchel', 'backpack', 'messenger', 'bucket bag', 'market tote', 'canvas bucket', 'knot bag', 'net bag', 'linen shopper'],
+    accessory: ['silk scarf', 'gold hoops', 'beret', 'straw hat', 'wooden beads', 'leather belt', 'cotton scarf', 'pearl studs', 'minimalist watch', 'canvas belt', 'beanie', 'bandana', 'thick belt', 'tortoiseshell glasses'],
+  },
+  artistic_minimal: {
+    outer: ['collarless coat', 'kimono jacket', 'longline blazer', 'cocoon coat', 'cape coat', 'asymmetric jacket', 'boucle coat', 'shearling jacket', 'crushed velvet jacket', 'draped cardigan', 'wrap jacket', 'cape', 'asymmetric jacket', 'shawl coat', 'blanket coat', 'fluid trench'],
+    top: ['tunic shirt', 'asymmetric knit', 'pleated top', 'cowl neck', 'sheer mesh top', 'mohair knit', 'ribbed tank', 'organza blouse', 'structured tee', 'bias cut top', 'uneven hem shirt', 'layered tunic', 'ruched top', 'draped jersey'],
+    bottom: ['culottes', 'wide cropped trousers', 'barrel pants', 'hakama', 'pleated skirt', 'satin pants', 'leather skirt', 'balloon pants', 'sarouel pants', 'jersey pants', 'wrapped skirt', 'dhoti pants', 'asymmetric skirt'],
+    shoes: ['tabi boots', 'architectural mules', 'derby', 'square flats', 'platform sandals', 'sock boots', 'minimal sneakers', 'sculptural heels', 'velvet slippers', 'glove shoes', 'soft boots'],
+    bag: ['pleated tote', 'geometric bag', 'origami bag', 'circle bag', 'slouchy sack', 'knot bag', 'portfolio', 'soft tote', 'dumpling bag', 'envelope bag'],
+    accessory: ['sculptural bangle', 'bold eyewear', 'single earring', 'geometric necklace', 'velvet choker', 'crystal earrings', 'layered bangles', 'long necklace', 'statement ring', 'head wrap'],
+  },
+  retro_luxe: {
+    outer: ['shearling coat', 'velvet blazer', 'cape', 'afghan coat', 'tapestry jacket', 'suede jacket', 'tweed jacket', 'quilted jacket', 'barbour jacket', 'camel coat', 'gold button blazer', 'cable cardigan', 'polo coat', 'faux fur', 'leather trench', 'safari jacket'],
+    top: ['embroidered blouse', 'lace top', 'peasant blouse', 'corset top', 'pussy-bow blouse', 'cable sweater', 'printed shirt', 'silk blouse', 'cashmere turtle', 'halter top', 'crochet vest', 'floral shirt', 'turtleneck', 'ringer tee'],
+    bottom: ['wool maxi skirt', 'velvet trousers', 'corduroy pants', 'flared jeans', 'suede skirt', 'pleated skirt', 'riding pants', 'wool skirt', 'culottes', 'tiered skirt', 'bell-bottoms', 'button skirt', 'gaucho pants'],
+    shoes: ['lace-up boots', 'mary janes', 'western boots', 'clogs', 'riding boots', 'horsebit loafers', 'platform boots', 'kitten heels', 'penny loafers', 'slingbacks'],
+    bag: ['tapestry bag', 'frame bag', 'saddle bag', 'structured handbag', 'bucket bag', 'vintage handbag', 'wicker bag', 'doctor bag', 'canvas tote', 'box bag'],
+    accessory: ['headscarf', 'pearl earrings', 'pearl necklace', 'tinted sunglasses', 'wide brim hat', 'silk scarf', 'cameo', 'gold hoops', 'leather belt', 'bangle stack'],
+  },
+  sport_modern: {
+    outer: ['3-layer shell', 'windbreaker', 'puffer', 'fleece', 'anorak', 'track jacket', 'cropped puffer', 'coach jacket', 'softshell', 'rain jacket', 'hoodie', 'bolero', 'zip fleece', 'bomber', 'stadium parka', 'varsity bomber'],
+    top: ['performance tee', 'compression top', 'mock neck', 'half-zip', 'graphic tee', 'sports bra', 'soccer jersey', 'training top', 'rugby shirt', 'mesh top', 'merino base', 'tech-fleece', 'seamless top', 'ringer tee', 'polo'],
+    bottom: ['cargo pants', 'joggers', 'hiking shorts', 'leggings', 'track pants', 'biker shorts', 'running shorts', 'yoga pants', 'nylon pants', 'tennis skirt', 'waterproof trousers', 'convertible pants', 'parachute pants', 'jorts', 'nylon shorts'],
+    shoes: ['trail runners', 'running shoes', 'hiking boots', 'training shoes', 'slides', 'chunky sneakers', 'high-tops', 'sock sneakers', 'terrace sneakers', 'platform sneakers', 'gore-tex sneakers', 'retro runners'],
+    bag: ['sacoche', 'backpack', 'chest rig', 'gym bag', 'sling', 'belt bag', 'duffle', 'hydration pack', 'crossbody', 'drawstring bag'],
+    accessory: ['bucket hat', 'sunglasses', 'beanie', 'cap', 'headband', 'visor', 'sweatband', 'fitness tracker', 'carabiner', 'utility belt'],
+  },
+  creative_layered: {
+    outer: ['leather biker', 'denim jacket', 'leopard coat', 'vinyl trench', 'patchwork jacket', 'faux fur coat', 'military jacket', 'fleece', 'tapestry coat', 'field jacket', 'windbreaker', 'cardigan', 'kimono', 'tapestry coat', 'blazer', 'embroidered jacket'],
+    top: ['corset', 'band tee', 'mesh bodysuit', 'fishnet top', 'graphic tee', 'lace blouse', 'crochet top', 'floral shirt', 'hawaiian shirt', 'animal print top', 'knit', 'polka dot blouse', 'tie-dye', 'striped shirt'],
+    bottom: ['ripped jeans', 'cargo mini', 'plaid skirt', 'leather pants', 'tulle skirt', 'checkered pants', 'patchwork jeans', 'velvet skirt', 'colored denim', 'floral skirt', 'striped skirt', 'cargo pants', 'suspender skirt'],
+    shoes: ['combat boots', 'mary janes', 'creepers', 'platform boots', 'cowboy boots', 'studded boots', 'high-tops', 'sneakers', 'chelsea boots', 'loafers'],
+    bag: ['backpack', 'chain bag', 'studded bag', 'guitar strap bag', 'tapestry bag', 'patchwork bag', 'novelty bag', 'fringe bag', 'beaded bag', 'sequin bag'],
+    accessory: ['choker', 'safety pins', 'beret', 'brooch', 'bandana', 'chain necklace', 'hair clips', 'arm warmer', 'tights', 'wide belt'],
+  },
+};
+
 const BODY_TYPE_SILHOUETTE: Record<string, {
   topFit: string;
   bottomFit: string;
@@ -32,6 +195,15 @@ const BODY_TYPE_SILHOUETTE: Record<string, {
   },
 };
 
+const SILHOUETTE_BODY_CROSSOVER: Record<string, Record<string, string>> = {
+  I: { slim: "oversized or boxy to add volume", regular: "straight and clean lines", "plus-size": "straight structured silhouettes" },
+  V: { slim: "wide shoulders narrow bottom — balance with wider pants", regular: "strong shoulders tapered bottoms", "plus-size": "open structure top with streamlined bottom" },
+  A: { slim: "volume on bottom, fitted top", regular: "fitted top with full skirts or wide pants", "plus-size": "empire waist with A-line flow" },
+  Y: { slim: "structured oversized top with slim bottom", regular: "volume on top, tapered bottom", "plus-size": "structured jacket with slim pant" },
+  X: { slim: "cinched waist with volume both top and bottom", regular: "balanced hourglass proportions", "plus-size": "defined waist with structured pieces" },
+  H: { slim: "relaxed uniform proportions", regular: "column dressing, same width top to bottom", "plus-size": "loose tunic over relaxed pant" },
+};
+
 const VIBE_ADJECTIVES: Record<string, string[]> = {
   elevated_cool:     ["edgy", "structured", "dark", "sharp", "monochrome", "sleek"],
   effortless_natural: ["earthy", "soft", "natural", "organic", "muted", "linen"],
@@ -46,6 +218,24 @@ const SEASON_MODIFIERS: Record<string, { fabric: string[]; keywords: string[] }>
   summer: { fabric: ["linen", "mesh", "breathable", "lightweight"], keywords: ["summer", "breathable", "sleeveless"] },
   fall:   { fabric: ["wool", "flannel", "corduroy", "tweed"], keywords: ["fall", "layering", "warm-tone"] },
   winter: { fabric: ["wool", "cashmere", "fleece", "thermal", "down"], keywords: ["winter", "warm", "insulated"] },
+};
+
+const MATERIAL_PREF_MAP: Record<string, string[]> = {
+  structured: ['wool', 'gabardine', 'neoprene', 'stiff cotton', 'poplin', 'canvas'],
+  luxe: ['cashmere', 'silk', 'satin', 'fine wool', 'leather', 'suede'],
+  classic: ['cotton', 'wool', 'linen', 'denim', 'leather', 'tweed'],
+  eco: ['organic cotton', 'linen', 'hemp', 'raw silk', 'bamboo'],
+  knit: ['cashmere', 'cable-knit', 'ribbed', 'waffle', 'merino', 'mohair'],
+  technical: ['nylon', 'gore-tex', 'ripstop', 'mesh', 'fleece', 'softshell'],
+  casual: ['cotton', 'denim', 'jersey', 'fleece', 'canvas', 'flannel'],
+  blend: ['cotton blend', 'polyester blend', 'spandex', 'nylon blend'],
+  sheer: ['mesh', 'organza', 'tulle', 'lace', 'chiffon', 'gauze'],
+};
+
+const TONAL_STRATEGY_GUIDANCE: Record<string, string> = {
+  'tone-on-tone': "Use similar shades of a single color family (e.g., different browns, layered greys). Keywords should suggest tonal, monochromatic, or same-color-family combinations.",
+  'tone-in-tone': "Use colors from the same warmth/coolness spectrum with subtle variation (e.g., cream + beige + tan). Keywords should lean toward earthy, muted, or warm/cool unified palettes.",
+  'contrast': "Use deliberate high-contrast color pairings (e.g., black + white, navy + cream). Keywords can include bold color names and contrasting descriptors.",
 };
 
 const CATEGORY_DEFS = [
@@ -110,102 +300,9 @@ const CATEGORY_DEFS = [
   ]},
 ];
 
-const VIBE_ITEM_POOL: Record<string, Record<string, string[]>> = {
-  elevated_cool: {
-    outer: ["oversized wool coat", "structured trench", "leather blazer", "cropped tailored jacket", "tuxedo jacket", "cape blazer", "biker jacket", "coach jacket", "technical bomber", "shearling jacket", "nylon trench"],
-    top: ["high-neck knit", "crisp poplin shirt", "silk button-down", "structured tee", "satin blouse", "mock-neck sweat", "boxy tee", "cashmere hoodie", "oxford shirt", "polo shirt"],
-    bottom: ["wide-leg wool trousers", "leather pants", "pleated trousers", "cigarette pants", "cargo sweats", "parachute pants", "track pants", "tailored joggers", "raw denim", "chinos"],
-    shoes: ["square-toe boots", "chunky loafers", "chelsea boots", "combat boots", "sock boots", "dad sneakers", "high-top sneakers", "tabi boots", "leather sneakers", "platform loafers"],
-    bag: ["geometric tote", "box bag", "metal clutch", "sling bag", "chest rig", "belt bag", "cassette bag", "briefcase", "tech backpack", "crossbody box"],
-    accessory: ["silver chain", "metal sunglasses", "leather gloves", "chain necklace", "beanie", "bucket hat", "shield sunglasses", "industrial belt", "wallet chain", "smart watch"],
-  },
-  effortless_natural: {
-    outer: ["collarless liner", "kimono cardigan", "robe coat", "chore coat", "linen jacket", "trench coat", "wool blazer", "field jacket", "duffle coat", "barn jacket"],
-    top: ["linen tunic", "organic tee", "wrap top", "breton stripe tee", "cashmere crew", "silk blouse", "chambray shirt", "flannel shirt", "grandad shirt", "boat neck tee"],
-    bottom: ["wide linen trousers", "drawstring pants", "culottes", "midi skirt", "vintage denim", "white jeans", "fatigue pants", "corduroy trousers", "wide chinos", "slip skirt"],
-    shoes: ["suede mules", "leather slides", "canvas sneakers", "clogs", "espadrilles", "ballet flats", "desert boots", "wallabees", "mary janes", "moccasins"],
-    bag: ["soft hobo", "canvas tote", "straw bag", "woven bag", "basket bag", "satchel", "backpack", "messenger", "bucket bag", "market tote"],
-    accessory: ["silk scarf", "gold hoops", "beret", "straw hat", "wooden beads", "leather belt", "cotton scarf", "pearl studs", "minimalist watch", "canvas belt"],
-  },
-  artistic_minimal: {
-    outer: ["collarless coat", "cocoon coat", "kimono jacket", "cape coat", "asymmetric jacket", "boucle coat", "shearling jacket", "crushed velvet jacket", "draped cardigan", "wrap jacket"],
-    top: ["tunic shirt", "asymmetric knit", "pleated top", "cowl neck", "sheer mesh top", "mohair knit", "ribbed tank", "organza blouse", "structured tee", "bias cut top"],
-    bottom: ["culottes", "wide cropped trousers", "barrel pants", "hakama", "pleated skirt", "satin pants", "leather skirt", "balloon pants", "sarouel pants", "jersey pants"],
-    shoes: ["tabi boots", "architectural mules", "square flats", "sock boots", "minimal sneakers", "sculptural heels", "velvet slippers", "platform sandals", "glove shoes", "soft boots"],
-    bag: ["pleated tote", "geometric bag", "origami bag", "circle bag", "slouchy sack", "knot bag", "portfolio", "soft tote", "dumpling bag", "envelope bag"],
-    accessory: ["sculptural bangle", "bold eyewear", "single earring", "geometric necklace", "velvet choker", "crystal earrings", "layered bangles", "long necklace", "statement ring", "head wrap"],
-  },
-  retro_luxe: {
-    outer: ["shearling coat", "velvet blazer", "cape", "afghan coat", "tapestry jacket", "suede jacket", "tweed jacket", "quilted jacket", "barbour jacket", "camel coat"],
-    top: ["embroidered blouse", "lace top", "peasant blouse", "corset top", "pussy-bow blouse", "cable sweater", "printed shirt", "silk blouse", "cashmere turtle", "halter top"],
-    bottom: ["wool maxi skirt", "velvet trousers", "corduroy pants", "flared jeans", "suede skirt", "pleated skirt", "riding pants", "wool skirt", "culottes", "tiered skirt"],
-    shoes: ["lace-up boots", "mary janes", "western boots", "clogs", "riding boots", "horsebit loafers", "platform boots", "kitten heels", "penny loafers", "slingbacks"],
-    bag: ["tapestry bag", "frame bag", "saddle bag", "structured handbag", "bucket bag", "vintage handbag", "wicker bag", "doctor bag", "canvas tote", "box bag"],
-    accessory: ["headscarf", "pearl earrings", "pearl necklace", "tinted sunglasses", "wide brim hat", "silk scarf", "cameo", "gold hoops", "leather belt", "bangle stack"],
-  },
-  sport_modern: {
-    outer: ["3-layer shell", "windbreaker", "puffer", "fleece", "anorak", "track jacket", "cropped puffer", "coach jacket", "softshell", "rain jacket"],
-    top: ["performance tee", "compression top", "mock neck", "half-zip", "graphic tee", "sports bra", "soccer jersey", "training top", "rugby shirt", "mesh top"],
-    bottom: ["cargo pants", "joggers", "hiking shorts", "leggings", "track pants", "biker shorts", "running shorts", "yoga pants", "nylon pants", "tennis skirt"],
-    shoes: ["trail runners", "running shoes", "hiking boots", "training shoes", "slides", "chunky sneakers", "high-tops", "sock sneakers", "terrace sneakers", "platform sneakers"],
-    bag: ["sacoche", "backpack", "chest rig", "gym bag", "sling", "belt bag", "duffle", "hydration pack", "crossbody", "drawstring bag"],
-    accessory: ["bucket hat", "sunglasses", "beanie", "cap", "headband", "visor", "sweatband", "fitness tracker", "carabiner", "utility belt"],
-  },
-  creative_layered: {
-    outer: ["leather biker", "denim jacket", "leopard coat", "vinyl trench", "patchwork jacket", "faux fur coat", "military jacket", "fleece", "tapestry coat", "field jacket"],
-    top: ["corset", "band tee", "mesh bodysuit", "fishnet top", "graphic tee", "lace blouse", "crochet top", "floral shirt", "hawaiian shirt", "animal print top"],
-    bottom: ["ripped jeans", "cargo mini", "plaid skirt", "leather pants", "tulle skirt", "checkered pants", "patchwork jeans", "velvet skirt", "colored denim", "floral skirt"],
-    shoes: ["combat boots", "mary janes", "creepers", "platform boots", "cowboy boots", "studded boots", "high-tops", "sneakers", "chelsea boots", "loafers"],
-    bag: ["backpack", "chain bag", "studded bag", "guitar strap bag", "tapestry bag", "patchwork bag", "novelty bag", "fringe bag", "beaded bag", "sequin bag"],
-    accessory: ["choker", "safety pins", "beret", "brooch", "bandana", "chain necklace", "hair clips", "arm warmer", "tights", "wide belt"],
-  },
-};
-
 const GENDER_SUB_EXCLUDE: Record<string, string[]> = {
   MALE:   ["clutch", "baguette", "wristlet", "kitten_heel", "slingback", "ballet_flat", "mary_jane", "camisole", "crop_top", "halter_top", "pearl_necklace", "anklet", "hair_clip", "tiered_skirt", "tennis_skirt"],
   FEMALE: ["necktie", "bow_tie", "suspenders"],
-};
-
-const VIBE_SUB_EXCLUDE: Record<string, string[]> = {
-  elevated_cool: [
-    "jogger", "hoodie", "sweatshirt", "cap", "duffle", "cargo",
-    "espadrille", "moccasin", "boat_shoe", "straw_bag", "woven_bag",
-    "peasant_blouse", "western_shirt", "overalls", "bandana", "wide_brim_hat",
-  ],
-  effortless_natural: [
-    "puffer", "biker_jacket", "track_jacket", "necktie", "bomber",
-    "combat_boot", "platform", "high_top", "chest_rig", "sacoche",
-    "compression_top", "performance_tee", "biker_shorts", "track_pants",
-    "chain_necklace", "industrial_belt", "visor",
-  ],
-  artistic_minimal: [
-    "puffer", "hoodie", "sweatshirt", "jogger", "cargo", "cap", "duffle",
-    "varsity_jacket", "coach_jacket", "bomber", "denim_jacket",
-    "rugby_shirt", "graphic_tee", "band_tee", "western_shirt",
-    "sneaker", "runner", "trail_runner", "training_shoe",
-    "gym_bag", "backpack", "bandana", "visor",
-  ],
-  retro_luxe: [
-    "jogger", "hoodie", "sweatshirt", "puffer", "cargo",
-    "track_jacket", "anorak", "windbreaker", "coach_jacket",
-    "compression_top", "performance_tee", "mesh_top", "sports_bra",
-    "biker_shorts", "leggings", "track_pants", "parachute_pants",
-    "sneaker", "runner", "trail_runner", "training_shoe", "high_top",
-    "gym_bag", "sacoche", "chest_rig", "visor", "sweatband",
-  ],
-  sport_modern: [
-    "blazer", "trench", "coat", "peacoat", "tweed_jacket",
-    "slacks", "necktie", "bow_tie", "suspenders", "derby", "loafer",
-    "oxford", "brogue", "monk_strap", "kitten_heel", "slingback",
-    "briefcase", "baguette", "frame_bag", "doctor_bag",
-    "silk_blouse", "peasant_blouse", "lace_top", "embroidered_blouse",
-    "pencil_skirt", "wrap_skirt", "silk_scarf", "pearl_necklace", "beret",
-  ],
-  creative_layered: [
-    "necktie", "derby", "oxford", "monk_strap",
-    "briefcase", "portfolio", "sacoche",
-    "compression_top", "performance_tee",
-  ],
 };
 
 const SEASON_SUB_EXCLUDE: Record<string, string[]> = {
@@ -237,6 +334,32 @@ const SEASON_CATEGORY_EXCLUDE: Record<string, string[]> = {
   summer: ["outer", "mid"],
 };
 
+function buildFormalityFilteredSubs(vibeKey: string, subCategories: string[]): string[] {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return subCategories;
+
+  const formalityExclude: Record<string, [number, number]> = {
+    jogger: [0, 3], sweatpants: [0, 2], hoodie: [0, 3], sweatshirt: [0, 3],
+    track_pants: [0, 3], biker_shorts: [0, 2], yoga_pants: [0, 2],
+    leggings: [0, 3], sports_bra: [0, 1], compression_top: [0, 2],
+    performance_tee: [0, 2], training_shoe: [0, 3], trail_runner: [0, 3],
+    gym_bag: [0, 2], slide: [0, 2], flip_flop: [0, 1],
+    tuxedo_jacket: [8, 10], monk_strap: [6, 9], bow_tie: [7, 10],
+    necktie: [6, 9], briefcase: [6, 9], pencil_skirt: [5, 8],
+    blazer: [4, 8], slacks: [4, 8], derby: [4, 8], oxford: [5, 8],
+    brogue: [5, 8], loafer: [3, 7],
+  };
+
+  const [low, high] = dna.formality_range;
+
+  return subCategories.filter(sub => {
+    const fRange = formalityExclude[sub];
+    if (!fRange) return true;
+    const [subLow, subHigh] = fRange;
+    return subLow <= high && subHigh >= low;
+  });
+}
+
 type CategoryDef = { key: string; label: string; subCategories: string[] };
 
 function buildFilteredCategories(
@@ -246,7 +369,6 @@ function buildFilteredCategories(
 ): CategoryDef[] {
   const excludedCategories = new Set(SEASON_CATEGORY_EXCLUDE[seasonLabel] || []);
   const genderExclude = new Set(GENDER_SUB_EXCLUDE[gender] || []);
-  const vibeExclude = new Set(VIBE_SUB_EXCLUDE[vibeKey] || []);
   const seasonExclude = new Set(SEASON_SUB_EXCLUDE[seasonLabel] || []);
 
   const result: CategoryDef[] = [];
@@ -254,9 +376,11 @@ function buildFilteredCategories(
   for (const cat of CATEGORY_DEFS) {
     if (excludedCategories.has(cat.key)) continue;
 
-    const filtered = cat.subCategories.filter(sub =>
-      !genderExclude.has(sub) && !vibeExclude.has(sub) && !seasonExclude.has(sub)
+    let filtered = cat.subCategories.filter(sub =>
+      !genderExclude.has(sub) && !seasonExclude.has(sub)
     );
+
+    filtered = buildFormalityFilteredSubs(vibeKey, filtered);
 
     if (filtered.length > 0) {
       result.push({ key: cat.key, label: cat.label, subCategories: filtered });
@@ -267,7 +391,7 @@ function buildFilteredCategories(
 }
 
 function getVibeItemPoolSection(vibeKey: string): string {
-  const pool = VIBE_ITEM_POOL[vibeKey];
+  const pool = VIBE_LOOK_ITEMS[vibeKey];
   if (!pool) return "";
 
   const lines: string[] = [];
@@ -275,6 +399,61 @@ function getVibeItemPoolSection(vibeKey: string): string {
     lines.push(`  ${cat}: ${items.join(", ")}`);
   }
   return lines.join("\n");
+}
+
+function getVibeMaterialSection(vibeKey: string, seasonLabel: string): string {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return "";
+
+  const seasonMod = SEASON_MODIFIERS[seasonLabel];
+  const seasonFabrics = new Set(seasonMod?.fabric || []);
+
+  const vibeMaterials: string[] = [];
+  for (const pref of dna.material_preferences) {
+    const mats = MATERIAL_PREF_MAP[pref] || [];
+    vibeMaterials.push(...mats);
+  }
+
+  const uniqueMats = [...new Set(vibeMaterials)];
+  const seasonalMats = uniqueMats.filter(m => {
+    if (seasonFabrics.size === 0) return true;
+    return seasonFabrics.has(m) || !['wool', 'cashmere', 'fleece', 'thermal', 'down', 'linen', 'mesh', 'breathable'].includes(m);
+  });
+
+  return seasonalMats.slice(0, 12).join(", ");
+}
+
+function getColorPaletteSection(vibeKey: string): string {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return "";
+
+  const p = dna.color_palette;
+  return `Primary colors (use most): ${p.primary.join(", ")}
+  Secondary colors (complement): ${p.secondary.join(", ")}
+  Accent colors (use sparingly, max ${Math.round(p.max_accent_ratio * 100)}%): ${p.accent.join(", ")}`;
+}
+
+function getSilhouetteCrossover(vibeKey: string, bodyType: string): string {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return "";
+
+  const lines: string[] = [];
+  for (const sil of dna.silhouette_preference) {
+    const guidance = SILHOUETTE_BODY_CROSSOVER[sil]?.[bodyType];
+    if (guidance) {
+      lines.push(`  ${sil}-silhouette for ${bodyType}: ${guidance}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function getTonalStrategySection(vibeKey: string): string {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return "";
+
+  return dna.preferred_tonal_strategy
+    .map(s => `  - ${s}: ${TONAL_STRATEGY_GUIDANCE[s] || ''}`)
+    .join("\n");
 }
 
 Deno.serve(async (req: Request) => {
@@ -315,6 +494,7 @@ Deno.serve(async (req: Request) => {
     const bodyFit = BODY_TYPE_SILHOUETTE[body_type] || BODY_TYPE_SILHOUETTE["regular"];
     const vibeAdjs = VIBE_ADJECTIVES[vibeKey] || [vibeLabel];
     const seasonMod = SEASON_MODIFIERS[seasonLabel] || { fabric: [], keywords: [] };
+    const dna = VIBE_DNA[vibeKey];
 
     if (!GEMINI_API_KEY) {
       return new Response(
@@ -329,6 +509,10 @@ Deno.serve(async (req: Request) => {
     const seasonFabrics = seasonMod.fabric.join(", ") || "any";
     const seasonKws = seasonMod.keywords.join(", ") || seasonLabel;
     const vibeItemPool = getVibeItemPoolSection(vibeKey);
+    const vibeMaterials = getVibeMaterialSection(vibeKey, seasonLabel);
+    const colorPalette = getColorPaletteSection(vibeKey);
+    const silhouetteCross = getSilhouetteCrossover(vibeKey, body_type || "regular");
+    const tonalStrategy = getTonalStrategySection(vibeKey);
 
     const prompt = `You are a creative fashion stylist who shops on Amazon daily. Generate Amazon search keywords that a real person would type.
 
@@ -337,9 +521,23 @@ STYLING PROFILE:
 - Body type: ${body_type || "regular"} — ${bodyFit.rationale}
   Recommended fits: tops(${bodyFit.topFit}), bottoms(${bodyFit.bottomFit}), outerwear(${bodyFit.outerFit})
 - Style vibe: "${vibeLabel}" — mood words: ${vibeAdjStr}
+  Era/mood tags: ${dna?.era_mood_tags.join(", ") || vibeLabel}
 - Season: ${seasonLabel} — fabrics: ${seasonFabrics} — seasonal cues: ${seasonKws}
+- Formality range: ${dna ? `${dna.formality_range[0]}-${dna.formality_range[1]} out of 10` : "moderate"}
 
-VIBE-SPECIFIC ITEM REFERENCE (use these as inspiration for the "${vibeLabel}" aesthetic):
+VIBE DNA COLOR PALETTE (use these colors to guide keyword color terms):
+  ${colorPalette}
+
+VIBE DNA MATERIAL PREFERENCES (season-filtered):
+  ${vibeMaterials}
+
+VIBE DNA SILHOUETTE × BODY TYPE:
+${silhouetteCross}
+
+TONAL STRATEGY (how to combine colors in keywords):
+${tonalStrategy}
+
+VIBE-SPECIFIC ITEM REFERENCE (~20 items per slot from all 3 Look variants):
 ${vibeItemPool}
 
 INSTRUCTIONS:
@@ -347,10 +545,14 @@ Generate one Amazon search keyword per sub-category. Each keyword should:
 1. Always start with "${genderLabel}" or "${genderLabel}'s"
 2. Reflect the style vibe ("${vibeLabel}") through descriptive words, trend terms, aesthetic references, or specific style names — NOT by repeating the same adjective in every keyword
 3. Reference the VIBE-SPECIFIC ITEM REFERENCE above — use specific garment names, details, and vocabulary from the item pool to make keywords more targeted
-4. Consider the season (${seasonLabel}) — use season-appropriate fabrics, weights, or styling cues naturally where relevant
-5. For tops/bottoms/outerwear, incorporate a fit word that suits the ${body_type || "regular"} body type — but vary which fit word you pick from the recommended list
-6. Be 3-6 words long
-7. Sound like something a real shopper would search — natural, specific, and varied
+4. Use colors from the VIBE DNA COLOR PALETTE — prefer primary/secondary colors, use accent colors sparingly
+5. Use materials from VIBE DNA MATERIAL PREFERENCES where relevant
+6. Consider the SILHOUETTE × BODY TYPE guidance for fit terms
+7. Follow the TONAL STRATEGY when combining color descriptors
+8. Consider the season (${seasonLabel}) — use season-appropriate fabrics, weights, or styling cues naturally where relevant
+9. For tops/bottoms/outerwear, incorporate a fit word that suits the ${body_type || "regular"} body type — but vary which fit word you pick from the recommended list
+10. Be 3-6 words long
+11. Sound like something a real shopper would search — natural, specific, and varied
 
 DIVERSITY RULES (critical):
 - Do NOT use the same adjective or descriptor more than twice across all keywords
@@ -358,16 +560,6 @@ DIVERSITY RULES (critical):
 - Use specific fashion vocabulary: texture names, garment details, style subcultures, color tones
 - Think about what makes each sub-category item unique within the "${vibeLabel}" aesthetic
 - Avoid formulaic patterns — each keyword should feel like a different person searching
-
-GOOD examples for "elevated cool" + winter + slim:
-- "men oversized wool mock neck sweater"
-- "men dark structured puffer jacket"
-- "men slim tapered black cargo pants"
-- "men minimalist leather chelsea boot"
-- "men monochrome knit beanie"
-
-BAD examples (too repetitive / formulaic):
-- "men oversized wool edgy tshirt" / "men oversized wool edgy polo" / "men oversized wool edgy tank"
 
 OUTPUT: Return ONLY a valid JSON object with this exact structure:
 ${JSON.stringify(

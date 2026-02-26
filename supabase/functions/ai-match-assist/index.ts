@@ -8,6 +8,124 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const VIBE_DNA: Record<string, {
+  formality_range: [number, number];
+  preferred_tonal_strategy: string[];
+  silhouette_preference: string[];
+  texture_rules: { required_variety: number; preferred_textures: string[]; forbidden_textures?: string[]; sheen_tolerance: number };
+  color_palette: { primary: string[]; secondary: string[]; accent: string[]; max_accent_ratio: number };
+  proportion_style: string;
+  mixing_tolerance: number;
+  material_preferences: string[];
+  era_mood_tags: string[];
+}> = {
+  ELEVATED_COOL: {
+    formality_range: [5, 9],
+    preferred_tonal_strategy: ['tone-on-tone', 'contrast'],
+    silhouette_preference: ['I', 'V'],
+    texture_rules: { required_variety: 2, preferred_textures: ['structured', 'matte', 'sheen'], sheen_tolerance: 0.8 },
+    color_palette: { primary: ['black', 'charcoal', 'navy', 'white'], secondary: ['grey', 'cream', 'camel'], accent: ['burgundy', 'metallic', 'wine'], max_accent_ratio: 0.10 },
+    proportion_style: 'column',
+    mixing_tolerance: 0.3,
+    material_preferences: ['structured', 'luxe', 'classic'],
+    era_mood_tags: ['minimalist', 'architectural', 'city-noir'],
+  },
+  EFFORTLESS_NATURAL: {
+    formality_range: [2, 6],
+    preferred_tonal_strategy: ['tone-in-tone', 'tone-on-tone'],
+    silhouette_preference: ['A', 'H', 'I'],
+    texture_rules: { required_variety: 2, preferred_textures: ['matte', 'rough', 'smooth'], forbidden_textures: ['sheen'], sheen_tolerance: 0.2 },
+    color_palette: { primary: ['beige', 'cream', 'ivory', 'white'], secondary: ['olive', 'khaki', 'tan', 'sage', 'brown'], accent: ['rust', 'mustard', 'burgundy'], max_accent_ratio: 0.15 },
+    proportion_style: 'relaxed',
+    mixing_tolerance: 0.5,
+    material_preferences: ['classic', 'eco', 'knit'],
+    era_mood_tags: ['japandi', 'french-casual', 'organic', 'wabi-sabi'],
+  },
+  ARTISTIC_MINIMAL: {
+    formality_range: [3, 8],
+    preferred_tonal_strategy: ['tone-on-tone', 'contrast'],
+    silhouette_preference: ['I', 'A', 'Y'],
+    texture_rules: { required_variety: 3, preferred_textures: ['structured', 'matte', 'rough'], sheen_tolerance: 0.4 },
+    color_palette: { primary: ['black', 'white', 'grey', 'charcoal'], secondary: ['cream', 'beige', 'navy'], accent: ['rust', 'olive', 'burgundy'], max_accent_ratio: 0.10 },
+    proportion_style: 'column',
+    mixing_tolerance: 0.4,
+    material_preferences: ['classic', 'structured', 'eco', 'knit'],
+    era_mood_tags: ['avant-garde', 'gallery', 'architectural', 'deconstructed'],
+  },
+  RETRO_LUXE: {
+    formality_range: [3, 8],
+    preferred_tonal_strategy: ['tone-in-tone', 'contrast'],
+    silhouette_preference: ['A', 'X', 'I'],
+    texture_rules: { required_variety: 2, preferred_textures: ['smooth', 'sheen', 'rough'], sheen_tolerance: 0.7 },
+    color_palette: { primary: ['burgundy', 'navy', 'brown', 'cream'], secondary: ['camel', 'olive', 'wine', 'beige'], accent: ['rust', 'mustard', 'teal', 'gold'], max_accent_ratio: 0.20 },
+    proportion_style: 'balanced',
+    mixing_tolerance: 0.5,
+    material_preferences: ['luxe', 'structured', 'classic', 'knit'],
+    era_mood_tags: ['70s', 'heritage', 'cinematic', 'old-money'],
+  },
+  SPORT_MODERN: {
+    formality_range: [0, 4],
+    preferred_tonal_strategy: ['contrast', 'tone-on-tone'],
+    silhouette_preference: ['I', 'V'],
+    texture_rules: { required_variety: 2, preferred_textures: ['smooth', 'matte', 'structured'], sheen_tolerance: 0.5 },
+    color_palette: { primary: ['black', 'grey', 'white', 'navy'], secondary: ['olive', 'khaki', 'charcoal'], accent: ['orange', 'teal', 'red', 'green'], max_accent_ratio: 0.15 },
+    proportion_style: 'balanced',
+    mixing_tolerance: 0.4,
+    material_preferences: ['technical', 'casual', 'blend'],
+    era_mood_tags: ['gorpcore', 'athleisure', 'tech-wear', 'sport'],
+  },
+  CREATIVE_LAYERED: {
+    formality_range: [0, 5],
+    preferred_tonal_strategy: ['contrast', 'tone-in-tone'],
+    silhouette_preference: ['V', 'A', 'Y'],
+    texture_rules: { required_variety: 3, preferred_textures: ['rough', 'matte', 'sheen'], sheen_tolerance: 0.7 },
+    color_palette: { primary: ['black', 'grey', 'white', 'denim'], secondary: ['burgundy', 'brown', 'olive', 'navy'], accent: ['red', 'purple', 'orange', 'pink', 'yellow'], max_accent_ratio: 0.25 },
+    proportion_style: 'top-heavy',
+    mixing_tolerance: 0.9,
+    material_preferences: ['structured', 'casual', 'classic', 'sheer'],
+    era_mood_tags: ['grunge', 'punk', 'DIY', 'eclectic', 'vintage'],
+  },
+};
+
+function buildVibeDNASection(vibeKey: string): string {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return '';
+  const palette = dna.color_palette;
+  return `
+VIBE DNA RULES FOR ${vibeKey}:
+- Formality range: ${dna.formality_range[0]}-${dna.formality_range[1]} (0=ultra casual, 10=black-tie)
+- Tonal strategy: ${dna.preferred_tonal_strategy.join(', ')}
+  ${dna.preferred_tonal_strategy.includes('tone-on-tone') ? '(tone-on-tone: same color in different shades)' : ''}
+  ${dna.preferred_tonal_strategy.includes('tone-in-tone') ? '(tone-in-tone: neighboring colors from same family)' : ''}
+  ${dna.preferred_tonal_strategy.includes('contrast') ? '(contrast: deliberate light/dark or complementary pairings)' : ''}
+- Silhouette targets: ${dna.silhouette_preference.join(', ')}
+- Proportion style: ${dna.proportion_style}
+  ${dna.proportion_style === 'column' ? '(prefer uniform width top-to-bottom)' : ''}
+  ${dna.proportion_style === 'top-heavy' ? '(oversized top, slim bottom)' : ''}
+  ${dna.proportion_style === 'relaxed' ? '(loose and flowy overall)' : ''}
+  ${dna.proportion_style === 'balanced' ? '(equal visual weight top and bottom)' : ''}
+- Color palette:
+  Primary (60-70% of outfit): ${palette.primary.join(', ')}
+  Secondary (20-30%): ${palette.secondary.join(', ')}
+  Accent (max ${palette.max_accent_ratio * 100}%): ${palette.accent.join(', ')}
+  PENALIZE outfits using accent colors beyond ${palette.max_accent_ratio * 100}% of items
+- Texture rules:
+  Minimum texture variety: ${dna.texture_rules.required_variety} different textures
+  Preferred: ${dna.texture_rules.preferred_textures.join(', ')}
+  ${dna.texture_rules.forbidden_textures ? `Avoid: ${dna.texture_rules.forbidden_textures.join(', ')}` : ''}
+  Sheen tolerance: ${dna.texture_rules.sheen_tolerance} (0=no sheen, 1=lots of sheen ok)
+- Mixing tolerance: ${dna.mixing_tolerance} (0=strict match, 1=eclectic mix ok)
+- Material preferences: ${dna.material_preferences.join(', ')}
+- Era/mood: ${dna.era_mood_tags.join(', ')}
+
+USE THESE RULES to evaluate each outfit. Specifically:
+- Check if item formality values stay within the ${dna.formality_range[0]}-${dna.formality_range[1]} range
+- Verify color selections follow the palette hierarchy
+- Ensure silhouette combinations create the "${dna.proportion_style}" proportion
+- Confirm texture mix meets the ${dna.texture_rules.required_variety}-texture minimum
+`;
+}
+
 interface OutfitItemSummary {
   slot_type: string;
   name: string;
@@ -61,11 +179,13 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // #11: trend_cache split by season+vibe key
+    const cacheKey = `${context.season || 'all'}_${context.vibe || 'all'}`;
     let trendContext = "";
     const { data: cachedTrend } = await supabase
       .from("trend_cache")
       .select("trend_data, updated_at")
-      .eq("season", context.season || "all")
+      .eq("season", cacheKey)
       .maybeSingle();
 
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -73,12 +193,12 @@ Deno.serve(async (req: Request) => {
     if (cachedTrend && cachedTrend.updated_at > oneDayAgo) {
       trendContext = cachedTrend.trend_data;
     } else {
-      trendContext = await fetchTrendContext(geminiKey, context.season);
+      trendContext = await fetchTrendContext(geminiKey, context.season, context.vibe);
       await supabase
         .from("trend_cache")
         .upsert(
           {
-            season: context.season || "all",
+            season: cacheKey,
             trend_data: trendContext,
             updated_at: new Date().toISOString(),
           },
@@ -86,17 +206,20 @@ Deno.serve(async (req: Request) => {
         );
     }
 
+    // #10: Build VibeDNA rules section for the prompt
+    const vibeDNASection = buildVibeDNASection(context.vibe);
+
     const candidateSummaries = candidates.map((c) => {
       const itemList = c.items
         .map(
           (item) =>
-            `  [${item.slot_type}] ${item.brand} ${item.name} (${item.color_family}, ${item.material}, ${item.sub_category}, sil:${item.silhouette})`
+            `  [${item.slot_type}] ${item.brand} ${item.name} (${item.color_family}, ${item.material}, ${item.sub_category}, sil:${item.silhouette}, formality:${item.formality ?? '?'}, warmth:${item.warmth ?? '?'})`
         )
         .join("\n");
       return `Outfit #${c.index} (rule score: ${c.ruleScore}):\n${itemList}`;
     });
 
-    const prompt = `You are a professional fashion stylist AI. Evaluate these outfit candidates and select the best ${topN} outfits.
+    const prompt = `You are a professional fashion stylist AI with deep knowledge of VibeDNA matching rules. Evaluate these outfit candidates and select the best ${topN} outfits.
 
 CONTEXT:
 - Gender: ${context.gender}
@@ -104,22 +227,29 @@ CONTEXT:
 - Style Preference: ${context.vibe}
 - Season: ${context.season || "all-season"}
 - Warmth Target: ${context.warmth || "not specified"}
-
+${vibeDNASection}
 CURRENT TREND CONTEXT:
 ${trendContext}
 
 CANDIDATE OUTFITS:
 ${candidateSummaries.join("\n\n")}
 
-EVALUATION CRITERIA:
-1. Color harmony and visual balance (avoid monotone all-black unless intentional)
-2. Silhouette balance (top vs bottom proportions)
-3. Material texture mix (complementary textures)
-4. Style coherence across items
-5. Season and warmth appropriateness
-6. Trend alignment (bonus for trendy combinations)
-7. Sub-category pairing logic (e.g. blazer+slacks, hoodie+sneaker)
-8. Overall styling creativity and appeal
+EVALUATION CRITERIA (weighted by importance):
+1. [30%] COLOR HARMONY: Check against the VibeDNA color palette hierarchy.
+   - Outfits using primarily palette.primary colors score highest
+   - Accent colors beyond max_accent_ratio should be penalized
+   - Tonal strategy should match the vibe's preferred approach
+2. [25%] FORMALITY COHERENCE: All items should be within the vibe's formality range.
+   - Wide spread between item formality values = penalty
+   - Items outside the DNA's range = heavy penalty
+3. [20%] SILHOUETTE & PROPORTION: Top+bottom should create the target proportion style.
+   - Check if silhouette combination matches the DNA's proportion_style
+4. [15%] TEXTURE & MATERIAL MIX: Verify texture variety meets minimum.
+   - Items should use DNA-preferred materials
+   - Forbidden textures = penalty
+5. [10%] TREND & CREATIVITY: Season-appropriate, modern combinations.
+   - Sub-category pairing logic (blazer+slacks, hoodie+sneaker)
+   - Era/mood alignment with the vibe
 
 Return a JSON object with this exact structure:
 {
@@ -150,7 +280,6 @@ Select exactly ${topN} outfits. Return ONLY valid JSON, no markdown or explanati
     );
 
     if (!response.ok) {
-      const errText = await response.text();
       return new Response(
         JSON.stringify({ error: `Gemini API error: ${response.status}`, fallback: true }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -188,10 +317,20 @@ Select exactly ${topN} outfits. Return ONLY valid JSON, no markdown or explanati
 
 async function fetchTrendContext(
   geminiKey: string,
-  season?: string
+  season?: string,
+  vibe?: string
 ): Promise<string> {
   const currentYear = new Date().getFullYear();
   const seasonLabel = season || "all-season";
+  const vibeDna = vibe ? VIBE_DNA[vibe] : null;
+
+  let vibeContext = '';
+  if (vibeDna && vibe) {
+    vibeContext = `
+Focus specifically on trends relevant to the "${vibe}" style aesthetic (${vibeDna.era_mood_tags.join(', ')}).
+Include trends for these color families: ${vibeDna.color_palette.primary.join(', ')}, ${vibeDna.color_palette.secondary.join(', ')}.
+Include trends for these materials: ${vibeDna.material_preferences.join(', ')}.`;
+  }
 
   const prompt = `Provide a brief summary (max 150 words) of current ${currentYear} ${seasonLabel} menswear and womenswear fashion trends. Include:
 1. Key color palettes trending now
@@ -199,7 +338,7 @@ async function fetchTrendContext(
 3. Material/fabric trends
 4. Key styling combinations
 5. Sub-category items gaining popularity
-
+${vibeContext}
 Be specific with color names, silhouette types, and material names. Return plain text, no markdown.`;
 
   const response = await fetch(

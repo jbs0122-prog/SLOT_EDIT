@@ -7,6 +7,214 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const VIBE_DNA: Record<string, {
+  formality_range: [number, number];
+  color_palette: { primary: string[]; secondary: string[]; accent: string[] };
+  material_preferences: string[];
+  silhouette_preference: string[];
+  proportion_style: string;
+}> = {
+  ELEVATED_COOL: {
+    formality_range: [5, 9],
+    color_palette: {
+      primary: ['black', 'charcoal', 'navy', 'white'],
+      secondary: ['grey', 'cream', 'camel'],
+      accent: ['burgundy', 'metallic', 'wine'],
+    },
+    material_preferences: ['structured', 'luxe', 'classic'],
+    silhouette_preference: ['I', 'V'],
+    proportion_style: 'column',
+  },
+  EFFORTLESS_NATURAL: {
+    formality_range: [2, 6],
+    color_palette: {
+      primary: ['beige', 'cream', 'ivory', 'white'],
+      secondary: ['olive', 'khaki', 'tan', 'sage', 'brown'],
+      accent: ['rust', 'mustard', 'burgundy'],
+    },
+    material_preferences: ['classic', 'eco', 'knit'],
+    silhouette_preference: ['A', 'H', 'I'],
+    proportion_style: 'relaxed',
+  },
+  ARTISTIC_MINIMAL: {
+    formality_range: [3, 8],
+    color_palette: {
+      primary: ['black', 'white', 'grey', 'charcoal'],
+      secondary: ['cream', 'beige', 'navy'],
+      accent: ['rust', 'olive', 'burgundy'],
+    },
+    material_preferences: ['classic', 'structured', 'eco', 'knit'],
+    silhouette_preference: ['I', 'A', 'Y'],
+    proportion_style: 'column',
+  },
+  RETRO_LUXE: {
+    formality_range: [3, 8],
+    color_palette: {
+      primary: ['burgundy', 'navy', 'brown', 'cream'],
+      secondary: ['camel', 'olive', 'wine', 'beige'],
+      accent: ['rust', 'mustard', 'teal', 'gold'],
+    },
+    material_preferences: ['luxe', 'structured', 'classic', 'knit'],
+    silhouette_preference: ['A', 'X', 'I'],
+    proportion_style: 'balanced',
+  },
+  SPORT_MODERN: {
+    formality_range: [0, 4],
+    color_palette: {
+      primary: ['black', 'grey', 'white', 'navy'],
+      secondary: ['olive', 'khaki', 'charcoal'],
+      accent: ['orange', 'teal', 'red', 'green'],
+    },
+    material_preferences: ['technical', 'casual', 'blend'],
+    silhouette_preference: ['I', 'V'],
+    proportion_style: 'balanced',
+  },
+  CREATIVE_LAYERED: {
+    formality_range: [0, 5],
+    color_palette: {
+      primary: ['black', 'grey', 'white', 'denim'],
+      secondary: ['burgundy', 'brown', 'olive', 'navy'],
+      accent: ['red', 'purple', 'orange', 'pink', 'yellow'],
+    },
+    material_preferences: ['structured', 'casual', 'classic', 'sheer'],
+    silhouette_preference: ['V', 'A', 'Y'],
+    proportion_style: 'top-heavy',
+  },
+};
+
+const VIBE_ITEM_POOLS: Record<string, Record<string, string[]>> = {
+  ELEVATED_COOL: {
+    outer: ['oversized wool coat', 'structured trench', 'leather blazer', 'varsity jacket', 'cropped bomber', 'puffer vest', 'technical bomber', 'biker jacket', 'tuxedo jacket'],
+    top: ['high-neck knit', 'crisp poplin shirt', 'silk button-down', 'cable vest', 'polo shirt', 'cashmere hoodie', 'boxy tee', 'mock-neck sweat'],
+    bottom: ['wide-leg wool trousers', 'leather pants', 'cigarette pants', 'chinos', 'raw denim', 'cargo sweats', 'parachute pants'],
+    shoes: ['square-toe boots', 'chunky loafers', 'architectural heels', 'loafers with socks', 'retro sneakers', 'high-top sneakers', 'combat boots'],
+    bag: ['geometric tote', 'metal clutch', 'box bag', 'satchel', 'canvas tote', 'mini leather bag', 'sling bag'],
+    accessory: ['silver chain', 'metal sunglasses', 'leather gloves', 'skinny tie', 'baseball cap', 'beanie', 'silver rings'],
+  },
+  EFFORTLESS_NATURAL: {
+    outer: ['collarless liner', 'soft blazer', 'kimono cardigan', 'trench coat', 'wool blazer', 'quilted liner', 'field jacket'],
+    top: ['linen tunic', 'waffle henley', 'organic tee', 'breton stripe tee', 'cashmere crew', 'chambray shirt', 'fair isle knit'],
+    bottom: ['wide linen trousers', 'drawstring pants', 'maxi skirt', 'vintage denim', 'silk skirt', 'fatigue pants', 'wide chinos'],
+    shoes: ['suede mules', 'leather slides', 'tabi flats', 'ballet flats', 'minimal sneakers', 'desert boots', 'work boots'],
+    bag: ['soft hobo', 'canvas bucket', 'knot bag', 'straw basket', 'canvas tote', 'helmet bag', 'backpack'],
+    accessory: ['ceramic jewelry', 'cotton scarf', 'bucket hat', 'silk scarf', 'gold hoops', 'beanie', 'bandana'],
+  },
+  ARTISTIC_MINIMAL: {
+    outer: ['collarless coat', 'kimono jacket', 'longline blazer', 'boucle coat', 'cape', 'draped cardigan', 'asymmetric jacket'],
+    top: ['tunic shirt', 'asymmetric knit', 'stiff mock neck', 'sheer mesh top', 'mohair knit', 'cowl neck', 'uneven hem shirt'],
+    bottom: ['culottes', 'wide cropped trousers', 'pleated skirt', 'satin pants', 'leather skirt', 'balloon pants', 'sarouel pants'],
+    shoes: ['tabi boots', 'architectural mules', 'derby', 'velvet slippers', 'pony-hair boots', 'leather sandals', 'soft boots'],
+    bag: ['pleated tote', 'geometric bag', 'oversized clutch', 'fur bag', 'wrinkled pouch', 'slouchy sack', 'knot bag'],
+    accessory: ['sculptural bangle', 'bold eyewear', 'single earring', 'pearl necklace', 'velvet choker', 'long necklace', 'layered bangles'],
+  },
+  RETRO_LUXE: {
+    outer: ['shearling coat', 'velvet blazer', 'cape', 'suede jacket', 'faux fur', 'tweed jacket', 'quilted jacket'],
+    top: ['embroidered blouse', 'lace top', 'crochet vest', 'printed shirt', 'turtleneck', 'cable sweater', 'pussy-bow blouse'],
+    bottom: ['wool maxi skirt', 'velvet trousers', 'corduroy pants', 'flared jeans', 'corduroy skirt', 'white jeans', 'riding pants'],
+    shoes: ['lace-up boots', 'mary janes', 'clogs', 'platform boots', 'suede boots', 'riding boots', 'horsebit loafers'],
+    bag: ['tapestry bag', 'frame bag', 'beaded pouch', 'saddle bag', 'suede hobo', 'structured handbag', 'canvas tote'],
+    accessory: ['headscarf', 'pearl earrings', 'beads', 'tinted sunglasses', 'wide brim hat', 'pearl necklace', 'headband'],
+  },
+  SPORT_MODERN: {
+    outer: ['3-layer shell', 'tech trench', 'windbreaker', 'cropped puffer', 'track jacket', 'hoodie', 'coach jacket'],
+    top: ['merino base', 'tech-fleece', 'performance tee', 'sports bra', 'compression tee', 'soccer jersey', 'ringer tee'],
+    bottom: ['cargo pants', 'waterproof trousers', 'leggings', 'joggers', 'biker shorts', 'track pants', 'jorts'],
+    shoes: ['gore-tex sneakers', 'trail runners', 'running shoes', 'slides', 'terrace sneakers', 'retro runners', 'chunky sneakers'],
+    bag: ['sacoche', 'backpack', 'chest rig', 'gym bag', 'belt bag', 'crossbody', 'duffle'],
+    accessory: ['bucket hat', 'sunglasses', 'carabiner', 'cap', 'headphones', 'scarf', 'beanie'],
+  },
+  CREATIVE_LAYERED: {
+    outer: ['leather biker', 'denim jacket', 'fleece', 'windbreaker', 'field jacket', 'fur coat', 'patchwork jacket'],
+    top: ['corset', 'lace blouse', 'band tee', 'knit', 'floral shirt', 'lace blouse', 'crochet top'],
+    bottom: ['tulle skirt', 'ripped jeans', 'cargo mini', 'checkered pants', 'striped skirt', 'velvet skirt', 'corduroy pants'],
+    shoes: ['combat boots', 'loafers', 'mary janes', 'sneakers', 'boots', 'cowboy boots', 'platforms'],
+    bag: ['backpack', 'chain bag', 'heart bag', 'beaded bag', 'tote', 'tapestry bag', 'frame bag'],
+    accessory: ['choker', 'necklaces', 'safety pins', 'earrings', 'beads', 'brooch', 'chain'],
+  },
+};
+
+const COLOR_TO_FAMILY: Record<string, string[]> = {
+  black: ['black'],
+  charcoal: ['charcoal', 'grey'],
+  navy: ['navy'],
+  white: ['white', 'ivory'],
+  grey: ['grey', 'charcoal'],
+  cream: ['cream', 'ivory', 'beige'],
+  camel: ['camel', 'tan', 'brown'],
+  beige: ['beige', 'cream', 'tan'],
+  ivory: ['ivory', 'cream', 'white'],
+  olive: ['olive', 'sage', 'green'],
+  khaki: ['khaki', 'tan', 'beige'],
+  tan: ['tan', 'camel', 'brown'],
+  sage: ['sage', 'olive', 'green'],
+  brown: ['brown', 'camel', 'tan'],
+  burgundy: ['burgundy', 'wine'],
+  wine: ['wine', 'burgundy'],
+  metallic: ['metallic', 'gold', 'silver'],
+  rust: ['rust', 'orange', 'brown'],
+  mustard: ['mustard', 'yellow'],
+  teal: ['teal'],
+  gold: ['gold', 'metallic'],
+  denim: ['denim', 'blue'],
+  orange: ['orange', 'rust'],
+  red: ['red'],
+  purple: ['purple', 'lavender'],
+  pink: ['pink', 'coral'],
+  yellow: ['yellow', 'mustard'],
+  green: ['green', 'olive', 'sage'],
+  blue: ['blue', 'navy', 'denim', 'sky_blue'],
+};
+
+function getVibeColorFamilies(vibeKey: string): Set<string> {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return new Set();
+  const allColors = [...dna.color_palette.primary, ...dna.color_palette.secondary, ...dna.color_palette.accent];
+  const families = new Set<string>();
+  for (const color of allColors) {
+    const mapped = COLOR_TO_FAMILY[color];
+    if (mapped) mapped.forEach(f => families.add(f));
+    families.add(color);
+  }
+  return families;
+}
+
+function validateVibeTag(vibeTag: string, category: string, subCategory: string): boolean {
+  const pool = VIBE_ITEM_POOLS[vibeTag];
+  if (!pool) return true;
+  const items = pool[category];
+  if (!items || items.length === 0) return true;
+  const lcSub = (subCategory || '').toLowerCase().replace(/_/g, ' ');
+  return items.some(item => {
+    const lcItem = item.toLowerCase();
+    return lcItem.includes(lcSub) || lcSub.includes(lcItem.split(' ')[0]);
+  });
+}
+
+function validateColorForVibe(colorFamily: string, vibeKey: string): { valid: boolean; tier: 'primary' | 'secondary' | 'accent' | 'outside' } {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return { valid: true, tier: 'primary' };
+  const lc = (colorFamily || '').toLowerCase();
+  const palette = dna.color_palette;
+  const matchesTier = (colors: string[]) =>
+    colors.some(c => {
+      const mapped = COLOR_TO_FAMILY[c] || [c];
+      return mapped.includes(lc) || lc === c;
+    });
+  if (matchesTier(palette.primary)) return { valid: true, tier: 'primary' };
+  if (matchesTier(palette.secondary)) return { valid: true, tier: 'secondary' };
+  if (matchesTier(palette.accent)) return { valid: true, tier: 'accent' };
+  return { valid: false, tier: 'outside' };
+}
+
+function clampFormality(formality: number, vibeKey: string): number {
+  const dna = VIBE_DNA[vibeKey];
+  if (!dna) return formality;
+  const [min, max] = dna.formality_range;
+  const scaledMin = Math.ceil(min / 2);
+  const scaledMax = Math.ceil(max / 2);
+  return Math.min(scaledMax, Math.max(scaledMin, formality));
+}
+
 const upgradeImageResolution = (url: string): string => {
   if (!url) return url;
   return url
@@ -50,6 +258,26 @@ Deno.serve(async (req: Request) => {
     };
     const bodyDesc = bodyTypeMap[body_type] || "regular";
 
+    const vibeDna = VIBE_DNA[vibe];
+    let vibeGuidanceSection = "";
+    if (vibeDna) {
+      const palette = vibeDna.color_palette;
+      vibeGuidanceSection = `
+VIBE DNA GUIDANCE (${vibe}):
+- Formality range: ${vibeDna.formality_range[0]}-${vibeDna.formality_range[1]} (on 0-10 scale; map to 1-5 for output)
+- Color palette:
+  Primary (preferred): ${palette.primary.join(', ')}
+  Secondary (good): ${palette.secondary.join(', ')}
+  Accent (sparingly): ${palette.accent.join(', ')}
+- Material preferences: ${vibeDna.material_preferences.join(', ')}
+- Silhouette preference: ${vibeDna.silhouette_preference.join(', ')}
+- Proportion style: ${vibeDna.proportion_style}
+
+Use this DNA to guide your analysis. Ensure the vibe tags you assign actually match the product's aesthetic.
+If a product has a very casual silhouette but vibe is ELEVATED_COOL, add other matching vibes too.
+`;
+    }
+
     const prompt = `You are a fashion product data specialist. Analyze this Amazon product and return structured metadata.
 
 Product:
@@ -57,7 +285,7 @@ Product:
 - Brand: ${product.brand || "unknown"}
 - Price: ${product.price ? `$${product.price}` : "unknown"}
 - Search context — Gender: ${gender}, Body type: ${bodyDesc}, Vibe: ${vibe}, Season: ${season || "all"}
-
+${vibeGuidanceSection}
 IMPORTANT: The body type is "${body_type}". The silhouette MUST match:
 - slim → use "slim" or "fitted"
 - regular → use "regular" or "straight"
@@ -221,22 +449,61 @@ Rules:
     };
     const VALID_COLOR_TONES = new Set(["warm", "cool", "neutral"]);
 
+    const normalizedCategory = VALID_CATEGORIES.has(analyzed.category) ? analyzed.category : "top";
+    const normalizedColorFamily = normalizeColorFamily(analyzed.color_family);
+
+    let vibeArray: string[] = Array.isArray(analyzed.vibe) ? analyzed.vibe : [vibe];
+
+    // #7: Cross-validate vibe tags against VIBE_ITEM_DATABASE pools
+    const VALID_VIBES = new Set(Object.keys(VIBE_DNA));
+    vibeArray = vibeArray.filter(v => VALID_VIBES.has(v));
+    if (vibeArray.length === 0) vibeArray = [vibe || 'EFFORTLESS_NATURAL'];
+
+    const validatedVibes: string[] = [];
+    for (const v of vibeArray) {
+      const isValid = validateVibeTag(v, normalizedCategory, analyzed.sub_category || '');
+      if (isValid) {
+        validatedVibes.push(v);
+      }
+    }
+    if (validatedVibes.length === 0) {
+      validatedVibes.push(vibe || vibeArray[0]);
+    }
+
+    // #8: Validate color_family against vibe color palette
+    const primaryVibe = validatedVibes[0];
+    const colorValidation = validateColorForVibe(normalizedColorFamily, primaryVibe);
+    if (!colorValidation.valid) {
+      const vibeColorFamilies = getVibeColorFamilies(primaryVibe);
+      const allVibeColors = Array.from(vibeColorFamilies);
+      const closestColor = allVibeColors.find(c =>
+        normalizedColorFamily.includes(c) || c.includes(normalizedColorFamily)
+      );
+      if (closestColor && VALID_COLOR_FAMILIES.has(closestColor)) {
+        // intentionally not overriding — we keep original but flag it
+      }
+    }
+
+    // #9: Clamp formality to vibe's range
+    let formality = typeof analyzed.formality === "number" ? Math.min(5, Math.max(1, analyzed.formality)) : 3;
+    formality = clampFormality(formality, primaryVibe);
+
     const result = {
       brand: analyzed.brand || product.brand || "",
       name: analyzed.name || product.title,
-      category: VALID_CATEGORIES.has(analyzed.category) ? analyzed.category : "top",
+      category: normalizedCategory,
       sub_category: analyzed.sub_category || "",
       gender: ["MALE", "FEMALE", "UNISEX"].includes(analyzed.gender) ? analyzed.gender : (gender || "UNISEX"),
       color: analyzed.color || "",
-      color_family: normalizeColorFamily(analyzed.color_family),
+      color_family: normalizedColorFamily,
       color_tone: VALID_COLOR_TONES.has(analyzed.color_tone) ? analyzed.color_tone : "neutral",
       silhouette: VALID_SILHOUETTES.has(analyzed.silhouette) ? analyzed.silhouette : "regular",
       material: analyzed.material || "",
       pattern: normalizePattern(analyzed.pattern),
-      vibe: Array.isArray(analyzed.vibe) ? analyzed.vibe : [vibe],
+      vibe: validatedVibes,
       body_type: Array.isArray(analyzed.body_type) ? analyzed.body_type : [body_type || "regular"],
       season: Array.isArray(analyzed.season) ? analyzed.season : [season || "all"],
-      formality: typeof analyzed.formality === "number" ? Math.min(5, Math.max(1, analyzed.formality)) : 3,
+      formality,
       warmth: typeof analyzed.warmth === "number" ? Math.min(5, Math.max(1, analyzed.warmth)) : 3,
       stock_status: "in_stock",
       image_url: upgradeImageResolution(product.image || ""),
@@ -259,7 +526,15 @@ Rules:
     }
 
     return new Response(
-      JSON.stringify({ result }),
+      JSON.stringify({
+        result,
+        vibe_validation: {
+          original_vibes: Array.isArray(analyzed.vibe) ? analyzed.vibe : [vibe],
+          validated_vibes: validatedVibes,
+          color_tier: colorValidation.tier,
+          formality_clamped: formality !== analyzed.formality,
+        },
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
