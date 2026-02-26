@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Outfit, Product, OutfitItem } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader, Download, ArrowUpDown, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader, Download, ArrowUpDown, CheckCircle2, AlertTriangle, Info, Sparkles, ChevronDown, ChevronUp, Zap, PackagePlus } from 'lucide-react';
 import { reviseModelPhoto } from '../utils/modelPhotoGenerator';
 import { downloadHighQualityImage } from '../utils/imageCompression';
 import FlatlayRenderer from './FlatlayRenderer';
@@ -13,6 +13,13 @@ import {
   COLOR_TIER_LABELS,
   type VibeCompatScore,
 } from '../utils/vibeCompatibility';
+import {
+  getSlotRecommendations,
+  type SlotRecommendations,
+  type RegisteredRecommendation,
+  type UnregisteredRecommendation,
+  COLOR_CHIP_MAP,
+} from '../utils/slotRecommender';
 
 interface OutfitProductLinkerProps {
   outfit: Outfit;
@@ -44,6 +51,166 @@ const PRODUCT_CATEGORIES = [
 function ScoreBadge({ score }: { score: number }) {
   const color = score >= 80 ? 'text-emerald-600 bg-emerald-50' : score >= 60 ? 'text-blue-600 bg-blue-50' : score >= 40 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50';
   return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>{score}</span>;
+}
+
+interface SlotRecommendationPanelProps {
+  slotValue: string;
+  recommendations?: SlotRecommendations;
+  expanded: boolean;
+  onToggle: () => void;
+  onQuickLink: (product: Product) => void;
+  saving: boolean;
+}
+
+function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggle, onQuickLink, saving }: SlotRecommendationPanelProps) {
+  const hasRegistered = recommendations && recommendations.registered.length > 0;
+  const hasUnregistered = recommendations && recommendations.unregistered.length > 0;
+  const hasAny = hasRegistered || hasUnregistered;
+
+  if (!hasAny) {
+    return (
+      <div className="text-center py-4 text-gray-400 text-sm">
+        <Plus size={24} className="mx-auto mb-1 opacity-50" />
+        제품을 드래그하여 연결
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between py-2 px-1 text-sm group"
+      >
+        <div className="flex items-center gap-2 text-blue-600">
+          <Sparkles size={14} />
+          <span className="font-medium">
+            추천 아이템
+            {hasRegistered && (
+              <span className="text-[10px] ml-1 text-blue-400">
+                등록 {recommendations!.registered.length}
+              </span>
+            )}
+            {hasUnregistered && (
+              <span className="text-[10px] ml-1 text-amber-500">
+                미등록 {recommendations!.unregistered.length}
+              </span>
+            )}
+          </span>
+        </div>
+        {expanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-1 space-y-3">
+          {hasRegistered && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Zap size={12} className="text-emerald-500" />
+                <span className="text-[11px] font-semibold text-gray-700">등록된 추천 아이템</span>
+              </div>
+              <div className="space-y-1.5">
+                {recommendations!.registered.map(rec => (
+                  <RegisteredRecCard
+                    key={rec.product.id}
+                    rec={rec}
+                    onQuickLink={() => onQuickLink(rec.product)}
+                    saving={saving}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {hasUnregistered && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <PackagePlus size={12} className="text-amber-500" />
+                <span className="text-[11px] font-semibold text-gray-700">미등록 추천 아이템</span>
+              </div>
+              <div className="space-y-1.5">
+                {recommendations!.unregistered.map((rec, idx) => (
+                  <UnregisteredRecCard key={idx} rec={rec} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecommendation; onQuickLink: () => void; saving: boolean }) {
+  return (
+    <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-2 hover:border-blue-300 hover:shadow-sm transition-all group/card">
+      <img
+        src={rec.product.image_url}
+        alt={rec.product.name}
+        className="w-11 h-11 object-cover rounded shrink-0"
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-medium text-gray-900 truncate">{rec.product.brand}</p>
+        <p className="text-[10px] text-gray-500 truncate">{rec.product.name}</p>
+        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+          <ScoreBadge score={rec.score} />
+          {rec.vibeScore.colorTier !== 'outside' && (
+            <span className={`text-[8px] px-1 py-0.5 rounded border ${COLOR_TIER_STYLES[rec.vibeScore.colorTier]}`}>
+              {COLOR_TIER_LABELS[rec.vibeScore.colorTier]}
+            </span>
+          )}
+          {rec.reasons.slice(0, 2).map((r, i) => (
+            <span key={i} className="text-[8px] px-1 py-0.5 bg-gray-100 text-gray-500 rounded">{r}</span>
+          ))}
+        </div>
+      </div>
+      <button
+        onClick={onQuickLink}
+        disabled={saving}
+        className="shrink-0 p-1.5 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors disabled:opacity-50 opacity-0 group-hover/card:opacity-100"
+        title="바로 연결"
+      >
+        <Plus size={14} />
+      </button>
+    </div>
+  );
+}
+
+function UnregisteredRecCard({ rec }: { rec: UnregisteredRecommendation }) {
+  return (
+    <div className="bg-amber-50/60 rounded-lg border border-amber-200/60 p-2.5">
+      <p className="text-[11px] font-semibold text-gray-800 capitalize mb-1.5">{rec.itemName}</p>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-gray-400">컬러</span>
+          <div className="flex gap-0.5">
+            {rec.suggestedColors.map((color, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-0.5"
+                title={color}
+              >
+                <span
+                  className="w-3 h-3 rounded-full border border-gray-300 shrink-0"
+                  style={{ backgroundColor: COLOR_CHIP_MAP[color] || '#ccc' }}
+                />
+                <span className="text-[8px] text-gray-500">{color}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-gray-400">소재</span>
+          <div className="flex gap-0.5 flex-wrap">
+            {rec.suggestedMaterials.slice(0, 3).map((mat, i) => (
+              <span key={i} className="text-[8px] px-1 py-0.5 bg-white/80 text-amber-700 border border-amber-200 rounded">{mat}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <p className="text-[8px] text-gray-400 mt-1">Look: {rec.lookName}</p>
+    </div>
+  );
 }
 
 export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }: OutfitProductLinkerProps) {
@@ -249,6 +416,58 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     return analyzeOutfitCompleteness(itemsForAnalysis, outfit.vibe || '');
   }, [linkedItems, outfit.vibe]);
 
+  const slotRecommendationsMap = useMemo(() => {
+    const map = new Map<string, SlotRecommendations>();
+    const filledSlots = new Set(linkedItems.map(item => item.slot_type));
+    const outfitSeason = outfit.season && outfit.season.length > 0 ? outfit.season[0] : undefined;
+
+    for (const slot of SLOT_TYPES) {
+      if (!filledSlots.has(slot.value)) {
+        const recs = getSlotRecommendations(
+          slot.value,
+          availableProducts,
+          linkedItems,
+          outfit.vibe || '',
+          outfit.gender,
+          outfit.body_type,
+          outfitSeason
+        );
+        map.set(slot.value, recs);
+      }
+    }
+    return map;
+  }, [availableProducts, linkedItems, outfit.vibe, outfit.gender, outfit.body_type, outfit.season]);
+
+  const [expandedRecSlots, setExpandedRecSlots] = useState<Set<string>>(new Set());
+
+  const toggleRecSlot = (slotValue: string) => {
+    setExpandedRecSlots(prev => {
+      const next = new Set(prev);
+      if (next.has(slotValue)) next.delete(slotValue);
+      else next.add(slotValue);
+      return next;
+    });
+  };
+
+  const handleQuickLink = async (slotType: string, product: Product) => {
+    setSaving(true);
+    try {
+      const existingItem = linkedItems.find(item => item.slot_type === slotType);
+      if (existingItem) {
+        await supabase.from('outfit_items').delete().eq('id', existingItem.id);
+      }
+      const { error } = await supabase.from('outfit_items').insert([{ outfit_id: outfit.id, product_id: product.id, slot_type: slotType }]);
+      if (error) throw error;
+      await loadData();
+      onLinksUpdated();
+    } catch (error) {
+      console.error('Quick link error:', error);
+      alert('연결 실패: ' + (error as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -421,10 +640,14 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                           </div>
                         </div>
                       ) : (
-                        <div className="text-center py-4 text-gray-400 text-sm">
-                          <Plus size={24} className="mx-auto mb-1 opacity-50" />
-                          제품을 드래그하여 연결
-                        </div>
+                        <SlotRecommendationPanel
+                          slotValue={slot.value}
+                          recommendations={slotRecommendationsMap.get(slot.value)}
+                          expanded={expandedRecSlots.has(slot.value)}
+                          onToggle={() => toggleRecSlot(slot.value)}
+                          onQuickLink={(product) => handleQuickLink(slot.value, product)}
+                          saving={saving}
+                        />
                       )}
                     </div>
                   );
