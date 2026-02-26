@@ -134,7 +134,7 @@ export function getSlotRecommendations(
 
   const candidates = allProducts.filter(p => {
     if (linkedProductIds.has(p.id)) return false;
-    if (p.gender !== outfitGender) return false;
+    if (p.gender !== outfitGender && p.gender !== 'UNISEX') return false;
     if (p.category !== category) return false;
     return true;
   });

@@ -80,7 +80,10 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
       setLoadingProducts(true);
       setAnchorProductId('');
       const slot = SLOT_OPTIONS.find(s => s.value === anchorSlot);
-      if (!slot) return;
+      if (!slot) {
+        setLoadingProducts(false);
+        return;
+      }
 
       const { data, error: err } = await supabase
         .from('products')
