@@ -1,7 +1,8 @@
 import { supabase } from './supabase';
-import { Product } from '../data/outfits';
+import { Product, OutfitItem } from '../data/outfits';
 import { findBestOutfits, OutfitCandidate, AnchorItem, MatchScore } from './matchingEngine';
 import { removeBackground } from './backgroundRemoval';
+import { getSlotRecommendations } from './slotRecommender';
 
 export interface GenerateOutfitsParams {
   gender: string;
@@ -21,6 +22,7 @@ export interface GeneratedOutfit {
     product_id: string;
   }[];
   matchScore: number;
+  autoFilledSlots?: string[];
 }
 
 export const MAX_OUTFIT_USAGE = 3;
@@ -184,10 +186,18 @@ export async function generateOutfitsAutomatically(
       if (itemsError) throw itemsError;
     }
 
+    const autoFilledSlots = await fillEmptySlots(
+      newOutfit.id,
+      items,
+      productList,
+      { gender, bodyType, vibe, targetSeason }
+    );
+
     generatedOutfits.push({
       outfitId: newOutfit.id,
       items,
       matchScore: matchScore.score,
+      autoFilledSlots,
     });
   }
 
@@ -324,6 +334,75 @@ async function generateInsightsForOutfits(
       }
     })
   );
+}
+
+const OPTIONAL_SLOT_FILL_ORDER = ['bag', 'accessory', 'outer', 'mid', 'accessory_2'];
+
+async function fillEmptySlots(
+  outfitId: string,
+  existingItems: { slot_type: string; product_id: string }[],
+  allProducts: Product[],
+  context: { gender: string; bodyType: string; vibe: string; targetSeason?: string }
+): Promise<string[]> {
+  const filledSlotTypes = new Set(existingItems.map(i => i.slot_type));
+  const emptyOptionalSlots = OPTIONAL_SLOT_FILL_ORDER.filter(slot => !filledSlotTypes.has(slot));
+
+  if (emptyOptionalSlots.length === 0) return [];
+
+  const usedProductIds = new Set(existingItems.map(i => i.product_id));
+
+  const linkedItems: OutfitItem[] = existingItems.map(item => {
+    const product = allProducts.find(p => p.id === item.product_id);
+    return {
+      id: item.product_id,
+      outfit_id: outfitId,
+      product_id: item.product_id,
+      slot_type: item.slot_type,
+      product,
+    } as OutfitItem;
+  });
+
+  const newItems: { outfit_id: string; product_id: string; slot_type: string }[] = [];
+  const filledSlots: string[] = [];
+
+  for (const slot of emptyOptionalSlots) {
+    const availableProducts = allProducts.filter(p => !usedProductIds.has(p.id));
+    const recs = getSlotRecommendations(
+      slot,
+      availableProducts,
+      linkedItems,
+      context.vibe,
+      context.gender,
+      context.bodyType,
+      context.targetSeason,
+      1,
+      0
+    );
+
+    const top = recs.registered[0];
+    if (!top || top.score < 50) continue;
+
+    newItems.push({ outfit_id: outfitId, product_id: top.product.id, slot_type: slot });
+    usedProductIds.add(top.product.id);
+    linkedItems.push({
+      id: top.product.id,
+      outfit_id: outfitId,
+      product_id: top.product.id,
+      slot_type: slot,
+      product: top.product,
+    } as OutfitItem);
+    filledSlots.push(slot);
+  }
+
+  if (newItems.length > 0) {
+    const { error } = await supabase.from('outfit_items').insert(newItems);
+    if (error) {
+      console.error('Auto-fill slot insertion failed:', error);
+      return [];
+    }
+  }
+
+  return filledSlots;
 }
 
 function getOutfitProductIds(outfit: OutfitCandidate): string[] {

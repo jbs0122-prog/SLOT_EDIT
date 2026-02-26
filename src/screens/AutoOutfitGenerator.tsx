@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Sparkles, AlertCircle, Anchor, Search, Check } from 'lucide-react';
+import { X, Sparkles, AlertCircle, Anchor, Search, Check, Wand2 } from 'lucide-react';
 import { generateOutfitsAutomatically, GeneratedOutfit } from '../utils/outfitGenerator';
 import { supabase } from '../utils/supabase';
 import { Product } from '../data/outfits';
@@ -435,6 +435,7 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                       <li>컬러 조화, 톤 일치, 패턴 밸런스, 격식 수준, 보온성, 계절 적합성</li>
                       <li>코디 사용 3회 이상인 제품은 자동으로 제외됩니다</li>
                       <li>생성된 코디는 "pending_render" 상태로 저장됩니다</li>
+                      <li>비어있는 선택 슬롯(가방·액세서리 등)은 추천 엔진이 자동 보완합니다</li>
                       {anchorEnabled && anchorProductId && (
                         <li>앵커 아이템은 사용 한도와 관계없이 모든 코디에 포함됩니다</li>
                       )}
@@ -509,41 +510,67 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <p className="text-sm font-medium text-gray-700 mb-2">생성된 코디 목록</p>
-                {results.map((result, idx) => (
-                  <div
-                    key={result.outfitId}
-                    className="bg-white rounded-lg p-3 border border-gray-200"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          코디 #{idx + 1}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {result.items.length}개 아이템 · 매칭 점수: {result.matchScore}점
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {result.items.map(item => (
-                          <span
-                            key={item.slot_type}
-                            className={`px-2 py-1 rounded text-xs ${
-                              anchorEnabled && item.slot_type === anchorSlot && item.product_id === anchorProductId
-                                ? 'bg-blue-100 text-blue-700 font-medium'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {item.slot_type}
-                            {anchorEnabled && item.slot_type === anchorSlot && item.product_id === anchorProductId && (
-                              <Anchor size={10} className="inline ml-0.5" />
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-700">생성된 코디 목록</p>
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
+                      앵커
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                      자동 보완
+                    </span>
+                  </div>
+                </div>
+                {results.map((result, idx) => {
+                  const autoFilledSet = new Set(result.autoFilledSlots || []);
+                  const totalSlots = result.items.length + (result.autoFilledSlots?.length ?? 0);
+                  return (
+                    <div
+                      key={result.outfitId}
+                      className="bg-white rounded-lg p-3 border border-gray-200"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900">
+                            코디 #{idx + 1}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {totalSlots}개 아이템 · 매칭 점수: {result.matchScore}점
+                            {autoFilledSet.size > 0 && (
+                              <span className="ml-1.5 text-emerald-600 font-medium">
+                                +{autoFilledSet.size}개 보완
+                              </span>
                             )}
-                          </span>
-                        ))}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                          {result.items.map(item => {
+                            const isAnchor = anchorEnabled && item.slot_type === anchorSlot && item.product_id === anchorProductId;
+                            const isAutoFilled = autoFilledSet.has(item.slot_type);
+                            return (
+                              <span
+                                key={item.slot_type}
+                                className={`px-2 py-0.5 rounded text-xs flex items-center gap-0.5 ${
+                                  isAnchor
+                                    ? 'bg-blue-100 text-blue-700 font-medium'
+                                    : isAutoFilled
+                                    ? 'bg-emerald-100 text-emerald-700 font-medium'
+                                    : 'bg-gray-100 text-gray-600'
+                                }`}
+                              >
+                                {item.slot_type}
+                                {isAnchor && <Anchor size={9} className="ml-0.5" />}
+                                {isAutoFilled && <Wand2 size={9} className="ml-0.5" />}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="flex gap-3">
