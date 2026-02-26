@@ -14,7 +14,7 @@ const VIBE_COLOR_VOCABULARY: Record<string, { primary: string[]; secondary: stri
   ELEVATED_COOL: {
     primary: ['black', 'charcoal', 'navy', 'white'],
     secondary: ['grey', 'cream', 'camel'],
-    accent: ['burgundy', 'teal', 'metallic'],
+    accent: ['burgundy', 'metallic', 'wine'],
     keywords: ['monochrome', 'tonal', 'dark neutrals', 'high contrast'],
   },
   EFFORTLESS_NATURAL: {
@@ -24,27 +24,27 @@ const VIBE_COLOR_VOCABULARY: Record<string, { primary: string[]; secondary: stri
     keywords: ['earthy', 'warm neutrals', 'muted', 'organic tones'],
   },
   ARTISTIC_MINIMAL: {
-    primary: ['black', 'white', 'grey'],
-    secondary: ['navy', 'charcoal', 'cream'],
-    accent: ['red', 'mustard'],
+    primary: ['black', 'white', 'grey', 'charcoal'],
+    secondary: ['cream', 'beige', 'navy'],
+    accent: ['rust', 'olive', 'burgundy'],
     keywords: ['achromatic', 'stark contrast', 'desaturated', 'sculptural'],
   },
   RETRO_LUXE: {
-    primary: ['brown', 'camel', 'cream', 'burgundy'],
-    secondary: ['gold', 'ivory', 'navy', 'olive'],
-    accent: ['mustard', 'rust', 'teal'],
+    primary: ['burgundy', 'navy', 'brown', 'cream'],
+    secondary: ['camel', 'olive', 'wine', 'beige'],
+    accent: ['rust', 'mustard', 'teal', 'gold'],
     keywords: ['rich', 'vintage tones', 'warm luxe', 'jewel-adjacent'],
   },
   SPORT_MODERN: {
-    primary: ['black', 'white', 'grey', 'navy'],
+    primary: ['black', 'grey', 'white', 'navy'],
     secondary: ['olive', 'khaki', 'charcoal'],
-    accent: ['orange', 'teal', 'red'],
+    accent: ['orange', 'teal', 'red', 'green'],
     keywords: ['technical', 'bold accent', 'high-vis', 'utility neutral'],
   },
   CREATIVE_LAYERED: {
-    primary: ['black', 'denim', 'brown', 'burgundy'],
-    secondary: ['grey', 'olive', 'navy', 'cream'],
-    accent: ['mustard', 'rust', 'red', 'orange'],
+    primary: ['black', 'grey', 'white', 'denim'],
+    secondary: ['burgundy', 'brown', 'olive', 'navy'],
+    accent: ['red', 'purple', 'orange', 'pink', 'yellow'],
     keywords: ['eclectic', 'pattern-rich', 'mixed tones', 'vintage-warm'],
   },
 };
