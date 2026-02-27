@@ -498,7 +498,18 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const body = await req.json();
+    let body: Record<string, unknown> = {};
+    try {
+      const text = await req.text();
+      if (text && text.trim().length > 0) {
+        body = JSON.parse(text);
+      }
+    } catch {
+      return new Response(JSON.stringify({ success: false, error: "Invalid JSON body" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const {
       gender,
       body_type,
@@ -506,7 +517,14 @@ Deno.serve(async (req: Request) => {
       season,
       outfit_count = 3,
       products_per_slot = 5,
-    } = body;
+    } = body as {
+      gender?: string;
+      body_type?: string;
+      vibe?: string;
+      season?: string;
+      outfit_count?: number;
+      products_per_slot?: number;
+    };
 
     if (!gender || !body_type || !vibe) {
       return new Response(JSON.stringify({ error: "gender, body_type, vibe are required" }), {
