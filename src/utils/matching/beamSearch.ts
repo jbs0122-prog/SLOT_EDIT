@@ -8,6 +8,43 @@ import { VibeKey, LookKey, VibeDNA } from '../../data/vibeItems/types';
 
 const MAX_RESULTS = 5000;
 
+const ITEM_WARMTH_LIMITS: Record<string, Record<string, { min: number; max: number }>> = {
+  summer: {
+    top:    { min: 1, max: 2.5 },
+    bottom: { min: 1, max: 3.0 },
+    shoes:  { min: 1, max: 4.0 },
+    bag:    { min: 1, max: 5.0 },
+    accessory: { min: 1, max: 5.0 },
+  },
+  spring: {
+    top:    { min: 1, max: 3.5 },
+    bottom: { min: 1, max: 3.5 },
+    shoes:  { min: 1, max: 4.0 },
+    outer:  { min: 2, max: 4.0 },
+    mid:    { min: 1.5, max: 3.5 },
+    bag:    { min: 1, max: 5.0 },
+    accessory: { min: 1, max: 5.0 },
+  },
+  fall: {
+    top:    { min: 2, max: 4.5 },
+    bottom: { min: 1.5, max: 4.5 },
+    shoes:  { min: 1.5, max: 5.0 },
+    outer:  { min: 2.5, max: 5.0 },
+    mid:    { min: 2, max: 4.5 },
+    bag:    { min: 1, max: 5.0 },
+    accessory: { min: 1, max: 5.0 },
+  },
+  winter: {
+    top:    { min: 2.5, max: 5.0 },
+    bottom: { min: 2, max: 5.0 },
+    shoes:  { min: 2, max: 5.0 },
+    outer:  { min: 3, max: 5.0 },
+    mid:    { min: 2.5, max: 5.0 },
+    bag:    { min: 1, max: 5.0 },
+    accessory: { min: 1, max: 5.0 },
+  },
+};
+
 interface SlotPool {
   slot: SlotName;
   products: Product[];
@@ -154,6 +191,12 @@ function buildSlotPools(
           if (!p.season.some(s => (adjacent[context.targetSeason!] || []).includes(s))) return false;
         }
       }
+
+      if (context.targetSeason && typeof p.warmth === 'number') {
+        const limits = ITEM_WARMTH_LIMITS[context.targetSeason]?.[category];
+        if (limits && (p.warmth < limits.min - 0.5 || p.warmth > limits.max + 0.5)) return false;
+      }
+
       return true;
     });
 
@@ -338,10 +381,10 @@ export async function assembleOutfits(
 }
 
 const SEASON_WARMTH: Record<string, { min: number; max: number; ideal: number }> = {
-  spring: { min: 2, max: 3.5, ideal: 2.5 },
+  spring: { min: 1.5, max: 3.5, ideal: 2.5 },
   summer: { min: 1, max: 2.5, ideal: 1.5 },
   fall: { min: 2.5, max: 4, ideal: 3.2 },
   winter: { min: 3.5, max: 5, ideal: 4.2 },
 };
 
-export { SEASON_WARMTH };
+export { SEASON_WARMTH, ITEM_WARMTH_LIMITS };

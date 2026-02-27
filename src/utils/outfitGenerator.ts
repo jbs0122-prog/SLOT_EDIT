@@ -3,6 +3,7 @@ import { Product, OutfitItem } from '../data/outfits';
 import { findBestOutfits, OutfitCandidate, AnchorItem, MatchScore } from './matchingEngine';
 import { removeBackground } from './backgroundRemoval';
 import { getSlotRecommendations } from './slotRecommender';
+import { ITEM_WARMTH_LIMITS } from './matching/beamSearch';
 
 export interface GenerateOutfitsParams {
   gender: string;
@@ -338,6 +339,11 @@ async function generateInsightsForOutfits(
 
 const OPTIONAL_SLOT_FILL_ORDER = ['bag', 'accessory', 'outer', 'mid', 'accessory_2'];
 
+const SEASON_EXCLUDED_SLOTS: Record<string, string[]> = {
+  summer: ['outer', 'mid'],
+  spring: ['mid'],
+};
+
 async function fillEmptySlots(
   outfitId: string,
   existingItems: { slot_type: string; product_id: string }[],
@@ -345,7 +351,11 @@ async function fillEmptySlots(
   context: { gender: string; bodyType: string; vibe: string; targetSeason?: string }
 ): Promise<string[]> {
   const filledSlotTypes = new Set(existingItems.map(i => i.slot_type));
-  const emptyOptionalSlots = OPTIONAL_SLOT_FILL_ORDER.filter(slot => !filledSlotTypes.has(slot));
+  const seasonExcluded = new Set(context.targetSeason ? (SEASON_EXCLUDED_SLOTS[context.targetSeason] || []) : []);
+
+  const emptyOptionalSlots = OPTIONAL_SLOT_FILL_ORDER.filter(slot =>
+    !filledSlotTypes.has(slot) && !seasonExcluded.has(slot)
+  );
 
   if (emptyOptionalSlots.length === 0) return [];
 
@@ -366,7 +376,18 @@ async function fillEmptySlots(
   const filledSlots: string[] = [];
 
   for (const slot of emptyOptionalSlots) {
-    const availableProducts = allProducts.filter(p => !usedProductIds.has(p.id));
+    const slotWarmthLimits = context.targetSeason
+      ? ITEM_WARMTH_LIMITS[context.targetSeason]?.[slot]
+      : undefined;
+
+    const availableProducts = allProducts.filter(p => {
+      if (usedProductIds.has(p.id)) return false;
+      if (slotWarmthLimits && typeof p.warmth === 'number') {
+        if (p.warmth < slotWarmthLimits.min - 0.5 || p.warmth > slotWarmthLimits.max + 0.5) return false;
+      }
+      return true;
+    });
+
     const recs = getSlotRecommendations(
       slot,
       availableProducts,
