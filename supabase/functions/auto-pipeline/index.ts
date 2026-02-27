@@ -552,28 +552,41 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── STEP 2: Amazon search per slot ────────────────────────────────────────
+    // ── STEP 2: Amazon search per slot (parallel) ────────────────────────────
     events.push(makeEvent("search", "start", "Searching Amazon for products per slot..."));
-    const allCandidates: Array<{ product: any; slot: string; keyword: string }> = [];
 
-    const PRIORITY_SLOTS = ["top", "bottom", "shoes", "bag", "accessory", "outer", "mid"];
-    for (const slot of PRIORITY_SLOTS) {
-      const keywords = categories[slot] || [];
-      if (keywords.length === 0) continue;
-      const kwToSearch = keywords.slice(0, Math.min(keywords.length, Math.ceil(products_per_slot / 2)));
-      const seenAsins = new Set<string>();
+    const PRIORITY_SLOTS = ["top", "bottom", "shoes", "outer", "bag", "accessory", "mid"];
+    const MAX_KW_PER_SLOT = 1;
+    const MAX_RESULTS_PER_KW = 3;
 
-      for (const kw of kwToSearch) {
-        const results = await searchAmazon(kw, SUPABASE_URL, SUPABASE_ANON_KEY);
-        for (const r of results.slice(0, 4)) {
-          if (r.asin && !seenAsins.has(r.asin)) {
-            seenAsins.add(r.asin);
-            allCandidates.push({ product: r, slot, keyword: kw });
-          }
+    const slotSearchResults = await Promise.all(
+      PRIORITY_SLOTS.map(async (slot) => {
+        const keywords = categories[slot] || [];
+        if (keywords.length === 0) return { slot, candidates: [] };
+        const kwToSearch = keywords.slice(0, MAX_KW_PER_SLOT);
+        const seenAsins = new Set<string>();
+        const candidates: Array<{ product: any; slot: string; keyword: string }> = [];
+        for (const kw of kwToSearch) {
+          try {
+            const results = await searchAmazon(kw, SUPABASE_URL, SUPABASE_ANON_KEY);
+            for (const r of results.slice(0, MAX_RESULTS_PER_KW)) {
+              if (r.asin && !seenAsins.has(r.asin)) {
+                seenAsins.add(r.asin);
+                candidates.push({ product: r, slot, keyword: kw });
+              }
+            }
+          } catch { /* skip failed searches */ }
         }
-        await delay(200);
+        return { slot, candidates };
+      })
+    );
+
+    const allCandidates: Array<{ product: any; slot: string; keyword: string }> = [];
+    for (const { slot, candidates } of slotSearchResults) {
+      allCandidates.push(...candidates);
+      if (candidates.length > 0) {
+        events.push(makeEvent("search", "progress", `[${slot}] Found ${candidates.length} candidates`, { slot, count: candidates.length }));
       }
-      events.push(makeEvent("search", "progress", `[${slot}] Found ${seenAsins.size} candidates`, { slot, count: seenAsins.size }));
     }
 
     events.push(makeEvent("search", "success", `Total ${allCandidates.length} candidates found`));
@@ -609,40 +622,36 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── STEP 4: Analyze & register products ──────────────────────────────────
+    // ── STEP 4: Analyze & register products (parallel per slot) ─────────────
     events.push(makeEvent("register", "start", "Analyzing and registering products with AI..."));
+
+    const registerResults = await Promise.all(
+      PRIORITY_SLOTS.map(async (slot) => {
+        const candidates = bySlotCandidates[slot] || [];
+        const registered: string[] = [];
+        for (const { product } of candidates) {
+          const asin = product.asin;
+          if (asin && existingAsins.has(asin)) continue;
+          const result = await analyzeAndRegisterProduct(
+            product, gender!, body_type!, vibe!, season!, batchId, GEMINI_API_KEY, adminClient
+          );
+          if (result.success && result.productId) {
+            registered.push(result.productId);
+            if (asin) existingAsins.add(asin);
+          }
+        }
+        return { slot, registered };
+      })
+    );
+
     let registeredCount = 0;
     const registeredProductIds: string[] = [];
-
-    for (const slot of PRIORITY_SLOTS) {
-      const candidates = bySlotCandidates[slot] || [];
-      if (candidates.length === 0) continue;
-
-      let slotRegistered = 0;
-      for (const { product } of candidates) {
-        // Skip if ASIN already in DB
-        const asin = product.asin;
-        if (asin && existingAsins.has(asin)) {
-          events.push(makeEvent("register", "skip", `[${slot}] Skipped duplicate: ${product.title?.slice(0, 40)}`));
-          continue;
-        }
-
-        const result = await analyzeAndRegisterProduct(
-          product, gender, body_type, vibe, season, batchId, GEMINI_API_KEY, adminClient
-        );
-
-        if (result.success && result.productId) {
-          registeredCount++;
-          slotRegistered++;
-          registeredProductIds.push(result.productId);
-          if (asin) existingAsins.add(asin);
-          events.push(makeEvent("register", "progress", `[${slot}] Registered: ${result.name?.slice(0, 50)}`, { slot, productId: result.productId }));
-        }
-
-        await delay(300);
+    for (const { slot, registered } of registerResults) {
+      registeredCount += registered.length;
+      registeredProductIds.push(...registered);
+      if (registered.length > 0) {
+        events.push(makeEvent("register", "progress", `[${slot}] Registered ${registered.length} products`, { slot }));
       }
-
-      events.push(makeEvent("register", "progress", `[${slot}] Registered ${slotRegistered}/${candidates.length} products`));
     }
 
     events.push(makeEvent("register", "success", `Registered ${registeredCount} products total`));
