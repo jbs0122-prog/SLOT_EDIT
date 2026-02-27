@@ -66,6 +66,26 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [anchorViewMode, setAnchorViewMode] = useState<'recommended' | 'all'>('recommended');
 
+  const SEASON_EXCLUDED_ANCHOR_SLOTS: Record<string, string[]> = {
+    summer: ['outer', 'mid'],
+    spring: ['mid'],
+  };
+
+  const availableAnchorSlots = useMemo(() => {
+    const excluded = season ? (SEASON_EXCLUDED_ANCHOR_SLOTS[season] || []) : [];
+    return SLOT_OPTIONS.filter(s => !excluded.includes(s.value));
+  }, [season]);
+
+  useEffect(() => {
+    if (anchorSlot && season) {
+      const excluded = SEASON_EXCLUDED_ANCHOR_SLOTS[season] || [];
+      if (excluded.includes(anchorSlot)) {
+        setAnchorSlot('');
+        setAnchorProductId('');
+      }
+    }
+  }, [season]);
+
   useEffect(() => {
     if (!anchorEnabled || !anchorSlot) {
       setAnchorProducts([]);
@@ -85,11 +105,16 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
         return;
       }
 
-      const { data, error: err } = await supabase
+      let query = supabase
         .from('products')
         .select('*')
-        .eq('category', slot.category)
-        .order('created_at', { ascending: false });
+        .eq('category', slot.category);
+
+      if (season) {
+        query = query.contains('season', [season]);
+      }
+
+      const { data, error: err } = await query.order('created_at', { ascending: false });
 
       if (!err && data) {
         setAnchorProducts(data.map(p => ({
@@ -123,7 +148,7 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
     };
 
     loadProducts();
-  }, [anchorEnabled, anchorSlot]);
+  }, [anchorEnabled, anchorSlot, season]);
 
   const filteredAnchorProducts = anchorProducts.filter(p => {
     if (!anchorSearchQuery) return true;
@@ -359,7 +384,7 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1.5">슬롯 선택</label>
                       <div className="flex flex-wrap gap-2">
-                        {SLOT_OPTIONS.map(slot => (
+                        {availableAnchorSlots.map(slot => (
                           <button
                             key={slot.value}
                             onClick={() => setAnchorSlot(slot.value)}

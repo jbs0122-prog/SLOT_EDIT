@@ -6,6 +6,7 @@ import { scoreProductForVibe, type VibeCompatScore } from './vibeCompatibility';
 import { resolveColorFamily, getColorHarmonyScore, getColorDNA, type ColorDNA } from './matching/colorDna';
 import { getVibeItemAffinity } from './matching/vibeAffinity';
 import { inferMaterialGroup, getMaterialCompatScore, MATERIAL_GROUPS } from './matching/itemDna';
+import { ITEM_WARMTH_LIMITS } from './matching/beamSearch';
 
 export interface RegisteredRecommendation {
   product: Product;
@@ -163,10 +164,26 @@ export function getSlotRecommendations(
   const existingColorFamilies = getFilledColorFamilies(linkedItems);
   const linkedProductIds = new Set(linkedItems.map(item => item.product_id));
 
+  const adjacentSeasons: Record<string, string[]> = {
+    spring: ['fall'], summer: ['spring'], fall: ['spring', 'winter'], winter: ['fall'],
+  };
+
   const candidates = allProducts.filter(p => {
     if (linkedProductIds.has(p.id)) return false;
     if (p.gender !== outfitGender && p.gender !== 'UNISEX') return false;
     if (p.category !== category) return false;
+
+    if (outfitSeason && p.season?.length) {
+      if (!p.season.includes(outfitSeason)) {
+        if (!p.season.some(s => (adjacentSeasons[outfitSeason] || []).includes(s))) return false;
+      }
+    }
+
+    if (outfitSeason && typeof p.warmth === 'number') {
+      const limits = ITEM_WARMTH_LIMITS[outfitSeason]?.[category];
+      if (limits && (p.warmth < limits.min - 0.5 || p.warmth > limits.max + 0.5)) return false;
+    }
+
     return true;
   });
 
