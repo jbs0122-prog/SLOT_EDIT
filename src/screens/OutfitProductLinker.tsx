@@ -180,39 +180,87 @@ function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecomm
   );
 }
 
+const SILHOUETTE_LABEL: Record<string, string> = {
+  oversized: '오버사이즈',
+  fitted: '피티드',
+  regular: '레귤러',
+  flared: '플레어',
+  layered: '레이어드',
+};
+
+const TONAL_LABEL: Record<string, string> = {
+  'tone-on-tone': '톤온톤',
+  'tone-in-tone': '톤인톤',
+  'contrast': '대비',
+  'warm tone-on-tone': '웜톤 톤온톤',
+  'cool tone-on-tone': '쿨톤 톤온톤',
+};
+
 function UnregisteredRecCard({ rec }: { rec: UnregisteredRecommendation }) {
+  const affinityPct = Math.round(rec.vibeAffinity * 100);
+  const affinityColor = affinityPct >= 80 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' :
+    affinityPct >= 60 ? 'text-blue-600 bg-blue-50 border-blue-200' :
+    'text-gray-500 bg-gray-50 border-gray-200';
+
   return (
-    <div className="bg-amber-50/60 rounded-lg border border-amber-200/60 p-2.5">
-      <p className="text-[11px] font-semibold text-gray-800 capitalize mb-1.5">{rec.itemName}</p>
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1">
-          <span className="text-[9px] text-gray-400">컬러</span>
-          <div className="flex gap-0.5">
-            {rec.suggestedColors.map((color, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center gap-0.5"
-                title={color}
-              >
-                <span
-                  className="w-3 h-3 rounded-full border border-gray-300 shrink-0"
-                  style={{ backgroundColor: COLOR_CHIP_MAP[color] || '#ccc' }}
-                />
-                <span className="text-[8px] text-gray-500">{color}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[9px] text-gray-400">소재</span>
-          <div className="flex gap-0.5 flex-wrap">
-            {rec.suggestedMaterials.slice(0, 3).map((mat, i) => (
-              <span key={i} className="text-[8px] px-1 py-0.5 bg-white/80 text-amber-700 border border-amber-200 rounded">{mat}</span>
-            ))}
-          </div>
-        </div>
+    <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/40 rounded-lg border border-amber-200/60 p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-semibold text-gray-800 capitalize leading-tight">{rec.itemName}</p>
+        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${affinityColor}`}>
+          {affinityPct}%
+        </span>
       </div>
-      <p className="text-[8px] text-gray-400 mt-1">Look: {rec.lookName}</p>
+
+      <div className="flex flex-wrap gap-1.5">
+        {rec.suggestedColors.map((color, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-white/90 rounded-full border border-gray-200"
+            title={color}
+          >
+            <span
+              className="w-2.5 h-2.5 rounded-full border border-gray-300 shrink-0"
+              style={{ backgroundColor: COLOR_CHIP_MAP[color] || '#ccc' }}
+            />
+            <span className="text-[9px] text-gray-600 font-medium">{color}</span>
+          </span>
+        ))}
+        {rec.colorHarmonyNote && (
+          <span className="text-[8px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 font-medium">
+            {rec.colorHarmonyNote}
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {rec.suggestedMaterials.slice(0, 4).map((mat, i) => (
+          <span key={i} className="text-[9px] px-1.5 py-0.5 bg-white/80 text-amber-700 border border-amber-200 rounded font-medium">{mat}</span>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {rec.suggestedSilhouettes.map((sil, i) => (
+          <span key={i} className="text-[8px] px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-full">
+            {SILHOUETTE_LABEL[sil] || sil}
+          </span>
+        ))}
+        <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${
+          rec.formalityHint.level >= 6
+            ? 'bg-slate-100 text-slate-700 border-slate-200'
+            : rec.formalityHint.level >= 4
+            ? 'bg-gray-50 text-gray-600 border-gray-200'
+            : 'bg-stone-50 text-stone-600 border-stone-200'
+        }`}>
+          {rec.formalityHint.label}
+        </span>
+        {rec.tonalHint && (
+          <span className="text-[8px] px-1.5 py-0.5 bg-violet-50 text-violet-600 border border-violet-100 rounded-full">
+            {TONAL_LABEL[rec.tonalHint] || rec.tonalHint}
+          </span>
+        )}
+      </div>
+
+      <p className="text-[8px] text-gray-400">Look: {rec.lookName}</p>
     </div>
   );
 }
