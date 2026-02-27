@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { LogOut, Package, MapPin, Users, ShoppingBag, Key, GripVertical, Camera, Link as LinkIcon } from 'lucide-react';
+import { LogOut, Package, MapPin, Users, ShoppingBag, Key, GripVertical, Camera, Link as LinkIcon, Zap } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { Session } from '@supabase/supabase-js';
 import AdminLogin from './AdminLogin';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage?: 'pins' | 'products' | 'outfit-linker' | 'users' | 'amazon-search' | 'smart-search' | 'api-test';
+  currentPage?: 'pins' | 'products' | 'outfit-linker' | 'users' | 'amazon-search' | 'smart-search' | 'api-test' | 'auto-pipeline';
 }
 
 const DEFAULT_MENU = [
+  { id: 'auto-pipeline' as const, label: 'Auto Pipeline', icon: 'Zap', href: '#admin-auto-pipeline' },
   { id: 'pins' as const, label: 'Pins', icon: 'MapPin', href: '#admin' },
   { id: 'products' as const, label: 'Products', icon: 'Package', href: '#admin-products' },
   { id: 'outfit-linker' as const, label: '코디 연결', icon: 'LinkIcon', href: '#admin-outfit-linker' },
@@ -27,6 +28,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Camera,
   Users,
   Key,
+  Zap,
 };
 
 const STORAGE_KEY = 'admin_menu_order';
@@ -161,6 +163,8 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all select-none ${
                       isActive
                         ? 'bg-white text-black font-medium'
+                        : item.id === 'auto-pipeline'
+                        ? 'text-white hover:bg-white/10 bg-white/5 border border-white/10'
                         : 'text-white/60 hover:text-white hover:bg-white/10'
                     }`}
                   >
@@ -169,8 +173,13 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
                         isActive ? 'text-black' : 'text-white'
                       }`}
                     />
-                    <Icon className="w-5 h-5 shrink-0" />
-                    <span>{item.label}</span>
+                    <Icon className={`w-5 h-5 shrink-0 ${item.id === 'auto-pipeline' && !isActive ? 'text-white' : ''}`} />
+                    <span className="flex-1">{item.label}</span>
+                    {item.id === 'auto-pipeline' && !isActive && (
+                      <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full border border-emerald-500/30">
+                        NEW
+                      </span>
+                    )}
                   </a>
                 </li>
               );
