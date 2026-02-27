@@ -2,9 +2,12 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ShoppingBag, Search, Sparkles, Check, Star, ExternalLink,
   ChevronLeft, ChevronRight, Loader2, AlertCircle, Tag,
-  RefreshCw, Filter, Zap, Square, Play, Pause, X, Plus
+  RefreshCw, Filter, Zap, Square, Play, Pause, X, Plus,
+  Palette, Layers, Ruler, Info
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { scoreProductForVibe } from '../utils/vibeCompatibility';
+import type { Product } from '../data/outfits';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -16,6 +19,58 @@ interface OutfitContext {
   existing_materials?: string[];
   target_slot?: string;
 }
+
+interface ColorHints {
+  primary: string[];
+  secondary: string[];
+  accent: string[];
+  tonalStrategy: string[];
+}
+
+interface MaterialHints {
+  preferenceGroups: string[];
+  resolvedMaterials: string[];
+  lookMaterials: string[];
+  seasonFabrics: string[];
+}
+
+interface FitHints {
+  silhouettePreference: string[];
+  formalityRange: [number, number];
+  proportionStyle: string;
+  bodyTypeFit: { top: string; bottom: string; outer: string } | null;
+  eraMoodTags: string[];
+}
+
+interface KeywordMeta {
+  category: string;
+  subCategory: string;
+  colorHint: string | null;
+  materialHint: string | null;
+  fitHint: string | null;
+}
+
+const COLOR_CHIP_MAP: Record<string, string> = {
+  black: '#1a1a1a', white: '#fafafa', grey: '#9ca3af', charcoal: '#374151',
+  navy: '#1e3a5f', beige: '#d4c5a9', cream: '#f5f0e1', ivory: '#faf8f0',
+  brown: '#6b4226', tan: '#c19a6b', camel: '#c19a6b', olive: '#6b7c3e',
+  khaki: '#b5a67d', sage: '#87a96b', rust: '#b7410e', mustard: '#d4a017',
+  burgundy: '#6c1d45', wine: '#722f37', red: '#dc2626', blue: '#3b82f6',
+  green: '#22c55e', orange: '#f97316', denim: '#4a6fa5',
+  metallic: '#a8a29e', gold: '#d4a017', silver: '#9ca3af',
+};
+
+const SILHOUETTE_LABEL: Record<string, string> = {
+  I: 'Slim', V: 'Wide', X: 'Hourglass', A: 'Flare', Y: 'Top-heavy', H: 'Column',
+};
+
+const FORMALITY_LABEL = (range: [number, number]) => {
+  const mid = (range[0] + range[1]) / 2;
+  if (mid >= 7) return 'Formal';
+  if (mid >= 5) return 'Smart Casual';
+  if (mid >= 3) return 'Casual';
+  return 'Very Casual';
+};
 
 interface AmazonProduct {
   asin: string;
@@ -55,6 +110,7 @@ interface AnalyzedProduct extends AmazonProduct {
   };
   analyzing?: boolean;
   analyzeError?: string;
+  vibeScore?: number;
 }
 
 type Step = 'filter' | 'results';
@@ -133,6 +189,11 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
   const [keywordCategories, setKeywordCategories] = useState<Record<string, string[]>>(saved?.keywordCategories || {});
   const [activeKeywordCategory, setActiveKeywordCategory] = useState<string>(saved?.activeKeywordCategory || 'all');
   const [keywordsSource, setKeywordsSource] = useState<'gemini' | 'fallback' | ''>(saved?.keywordsSource || '');
+  const [colorHints, setColorHints] = useState<ColorHints | null>(saved?.colorHints || null);
+  const [materialHints, setMaterialHints] = useState<MaterialHints | null>(saved?.materialHints || null);
+  const [fitHints, setFitHints] = useState<FitHints | null>(saved?.fitHints || null);
+  const [keywordMeta, setKeywordMeta] = useState<Record<string, KeywordMeta>>(saved?.keywordMeta || {});
+  const [showDnaPanel, setShowDnaPanel] = useState(false);
   const [generatingKeywords, setGeneratingKeywords] = useState(false);
   const [keywordsError, setKeywordsError] = useState('');
 
@@ -208,6 +269,11 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
     setKeywordCategories({});
     setActiveKeywordCategory('all');
     setKeywordsSource('');
+    setColorHints(null);
+    setMaterialHints(null);
+    setFitHints(null);
+    setKeywordMeta({});
+    setShowDnaPanel(false);
     setProducts([]);
     setSelected(new Set());
     setActiveKeyword('');
@@ -234,6 +300,10 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
       setKeywords(data.keywords || []);
       setKeywordCategories(data.categories || {});
       setKeywordsSource(data.source || 'fallback');
+      setColorHints(data.colorHints || null);
+      setMaterialHints(data.materialHints || null);
+      setFitHints(data.fitHints || null);
+      setKeywordMeta(data.keywordMeta || {});
     } catch (err) {
       setKeywordsError((err as Error).message);
     } finally {
@@ -327,8 +397,19 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
 
         const analyzed = data.result;
 
+        let vibeScore: number | undefined;
+        if (vibe && analyzed) {
+          const fakeProduct: Partial<Product> = {
+            color: analyzed.color, color_family: analyzed.color_family,
+            material: analyzed.material, vibe: analyzed.vibe || [],
+            formality: analyzed.formality, silhouette: analyzed.silhouette,
+            season: analyzed.season, body_type: analyzed.body_type,
+          };
+          vibeScore = scoreProductForVibe(fakeProduct as Product, vibe).total;
+        }
+
         setProducts(prev =>
-          prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed } : p)
+          prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed, vibeScore } : p)
         );
         setSavedAsins(prev => new Set([...prev, product.asin]));
         setSelected(prev => { const next = new Set(prev); next.delete(product.asin); return next; });
@@ -396,13 +477,24 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
             if (!analyzeData) throw new Error('Empty response from server');
             if (analyzeData.error) throw new Error(typeof analyzeData.error === 'string' ? analyzeData.error : JSON.stringify(analyzeData.error));
 
+            const autoAnalyzed = analyzeData.result;
+            let autoVibeScore: number | undefined;
+            if (vibe && autoAnalyzed) {
+              const fp: Partial<Product> = {
+                color: autoAnalyzed.color, color_family: autoAnalyzed.color_family,
+                material: autoAnalyzed.material, vibe: autoAnalyzed.vibe || [],
+                formality: autoAnalyzed.formality, silhouette: autoAnalyzed.silhouette,
+                season: autoAnalyzed.season, body_type: autoAnalyzed.body_type,
+              };
+              autoVibeScore = scoreProductForVibe(fp as Product, vibe).total;
+            }
             setProducts(prev =>
-              prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed: analyzeData.result } : p)
+              prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed: autoAnalyzed, vibeScore: autoVibeScore } : p)
             );
             setSavedAsins(prev => new Set([...prev, product.asin]));
             totalSaved++;
             setAutoSavedCount(totalSaved);
-            setAutoLog(prev => [...prev, `  ✓ 저장: ${analyzeData.result.name.slice(0, 40)}...`]);
+            setAutoLog(prev => [...prev, `  ✓ 저장: ${autoAnalyzed.name.slice(0, 40)}... (Vibe ${autoVibeScore ?? '-'})`]);
           } catch (err) {
             setProducts(prev =>
               prev.map(p => p.asin === product.asin
@@ -700,6 +792,19 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                           기본 키워드
                         </span>
                       )}
+                      {(colorHints || materialHints || fitHints) && (
+                        <button
+                          onClick={() => setShowDnaPanel(v => !v)}
+                          className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                            showDnaPanel
+                              ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                              : 'bg-white/5 text-white/30 border-white/10 hover:text-white/60'
+                          }`}
+                        >
+                          <Info className="w-2.5 h-2.5" />
+                          DNA 분석
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       {userKeyword && (
@@ -716,6 +821,95 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                       )}
                     </div>
                   </div>
+
+                  {/* DNA Panel */}
+                  {showDnaPanel && (colorHints || materialHints || fitHints) && (
+                    <div className="mx-6 mb-2 bg-white/3 border border-white/8 rounded-xl p-4 grid grid-cols-3 gap-4">
+                      {colorHints && (
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <Palette className="w-3 h-3 text-amber-400" />
+                            <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider">컬러 팔레트</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex flex-wrap gap-1">
+                              {colorHints.primary.map(c => (
+                                <span key={c} className="inline-flex items-center gap-1 bg-white/8 px-1.5 py-0.5 rounded-full">
+                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLOR_CHIP_MAP[c] || '#888' }} />
+                                  <span className="text-[9px] text-white/60">{c}</span>
+                                </span>
+                              ))}
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {colorHints.secondary.map(c => (
+                                <span key={c} className="inline-flex items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded-full">
+                                  <span className="w-2 h-2 rounded-full border border-white/20" style={{ backgroundColor: COLOR_CHIP_MAP[c] || '#888' }} />
+                                  <span className="text-[9px] text-white/40">{c}</span>
+                                </span>
+                              ))}
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {colorHints.tonalStrategy.map(s => (
+                                <span key={s} className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 text-amber-400/70 rounded border border-amber-500/15">{s}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {materialHints && (
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <Layers className="w-3 h-3 text-blue-400" />
+                            <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider">소재 힌트</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex flex-wrap gap-1">
+                              {materialHints.preferenceGroups.map(g => (
+                                <span key={g} className="text-[9px] px-1.5 py-0.5 bg-blue-500/15 text-blue-400 rounded border border-blue-500/20 font-medium">{g}</span>
+                              ))}
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {materialHints.resolvedMaterials.slice(0, 8).map(m => (
+                                <span key={m} className="text-[9px] px-1.5 py-0.5 bg-white/5 text-white/40 rounded">{m}</span>
+                              ))}
+                            </div>
+                            {materialHints.seasonFabrics.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {materialHints.seasonFabrics.map(f => (
+                                  <span key={f} className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400/70 rounded border border-emerald-500/15">{f}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {fitHints && (
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <Ruler className="w-3 h-3 text-sky-400" />
+                            <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider">핏 힌트</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex flex-wrap gap-1">
+                              {fitHints.silhouettePreference.map(s => (
+                                <span key={s} className="text-[9px] px-1.5 py-0.5 bg-sky-500/15 text-sky-400 rounded border border-sky-500/20 font-medium">
+                                  {s} · {SILHOUETTE_LABEL[s] || s}
+                                </span>
+                              ))}
+                            </div>
+                            <span className="inline-block text-[9px] px-1.5 py-0.5 bg-white/5 text-white/40 rounded">
+                              {FORMALITY_LABEL(fitHints.formalityRange)} ({fitHints.formalityRange[0]}–{fitHints.formalityRange[1]})
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {fitHints.eraMoodTags.map(t => (
+                                <span key={t} className="text-[9px] px-1.5 py-0.5 bg-white/5 text-white/30 rounded italic">{t}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Category tabs for keywords */}
                   {Object.keys(keywordCategories).length > 0 && (
@@ -809,23 +1003,44 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                     {(activeKeywordCategory === 'all'
                       ? keywords
                       : (keywordCategories[activeKeywordCategory] || [])
-                    ).map(kw => (
-                      <button
-                        key={kw}
-                        onClick={() => !autoRunning && searchByKeyword(kw, 1)}
-                        disabled={autoRunning}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all disabled:cursor-default ${
-                          activeKeyword === kw
-                            ? 'bg-amber-500 text-black'
-                            : 'bg-white/8 text-white/60 hover:bg-white/15 hover:text-white'
-                        }`}
-                      >
-                        {kw}
-                        {activeKeyword === kw && userKeyword && (
-                          <span className="ml-1 text-amber-800">+{userKeyword}</span>
-                        )}
-                      </button>
-                    ))}
+                    ).map(kw => {
+                      const meta = keywordMeta[kw];
+                      const isActive = activeKeyword === kw;
+                      return (
+                        <button
+                          key={kw}
+                          onClick={() => !autoRunning && searchByKeyword(kw, 1)}
+                          disabled={autoRunning}
+                          className={`group flex flex-col items-start px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all disabled:cursor-default border ${
+                            isActive
+                              ? 'bg-amber-500 text-black border-amber-400'
+                              : 'bg-white/5 text-white/60 hover:bg-white/12 hover:text-white border-white/8 hover:border-white/15'
+                          }`}
+                        >
+                          <span className="leading-tight">{kw}{isActive && userKeyword && <span className={`ml-1 ${isActive ? 'text-amber-800' : 'text-white/30'}`}>+{userKeyword}</span>}</span>
+                          {meta && (meta.colorHint || meta.materialHint || meta.fitHint) && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {meta.colorHint && (
+                                <span className={`inline-flex items-center gap-0.5 text-[8px] px-1 py-0 rounded-full ${isActive ? 'bg-black/20 text-black/70' : 'bg-white/8 text-white/30'}`}>
+                                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLOR_CHIP_MAP[meta.colorHint] || '#888' }} />
+                                  {meta.colorHint}
+                                </span>
+                              )}
+                              {meta.materialHint && (
+                                <span className={`text-[8px] px-1 py-0 rounded-full ${isActive ? 'bg-black/20 text-black/70' : 'bg-white/8 text-white/30'}`}>
+                                  {meta.materialHint}
+                                </span>
+                              )}
+                              {meta.fitHint && (
+                                <span className={`text-[8px] px-1 py-0 rounded-full ${isActive ? 'bg-black/20 text-black/70' : 'bg-white/8 text-white/30'}`}>
+                                  {meta.fitHint}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
@@ -1090,6 +1305,19 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                                 {product.analyzed.color_family && (
                                   <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded">
                                     {product.analyzed.color_family}
+                                  </span>
+                                )}
+                                {product.vibeScore != null && (
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                                    product.vibeScore >= 85
+                                      ? 'bg-emerald-500/20 text-emerald-400'
+                                      : product.vibeScore >= 70
+                                      ? 'bg-amber-500/20 text-amber-400'
+                                      : product.vibeScore >= 55
+                                      ? 'bg-orange-500/20 text-orange-400'
+                                      : 'bg-red-500/15 text-red-400'
+                                  }`}>
+                                    Vibe {product.vibeScore}
                                   </span>
                                 )}
                               </div>

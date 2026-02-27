@@ -751,8 +751,76 @@ Fill every empty string with a keyword. Return only JSON, nothing else.`;
       allKeywords.push(...kws);
     }
 
+    const effectiveDna = dna;
+    const colorHints = effectiveDna ? {
+      primary: effectiveDna.color_palette.primary,
+      secondary: effectiveDna.color_palette.secondary,
+      accent: effectiveDna.color_palette.accent,
+      tonalStrategy: effectiveDna.preferred_tonal_strategy,
+    } : null;
+
+    const materialHints = effectiveDna ? {
+      preferenceGroups: effectiveDna.material_preferences,
+      resolvedMaterials: effectiveDna.material_preferences.flatMap(g => (MATERIAL_PREF_MAP[g] || []).slice(0, 3)),
+      lookMaterials: getLookMaterials(vibeKey).slice(0, 12),
+      seasonFabrics: seasonMod.fabric,
+    } : null;
+
+    const fitHints = effectiveDna ? {
+      silhouettePreference: effectiveDna.silhouette_preference,
+      formalityRange: effectiveDna.formality_range,
+      proportionStyle: effectiveDna.proportion_style,
+      bodyTypeFit: bodyFit ? { top: bodyFit.topFit, bottom: bodyFit.bottomFit, outer: bodyFit.outerFit } : null,
+      eraMoodTags: effectiveDna.era_mood_tags,
+    } : null;
+
+    const keywordMeta: Record<string, {
+      category: string;
+      subCategory: string;
+      colorHint: string | null;
+      materialHint: string | null;
+      fitHint: string | null;
+    }> = {};
+
+    for (const cat of filteredCategoryDefs) {
+      const catData = parsed[cat.key];
+      if (!catData || Array.isArray(catData)) continue;
+      for (const sub of cat.subCategories) {
+        const kw = (catData as Record<string, string>)[sub];
+        if (!kw) continue;
+
+        const colorMatch = effectiveDna?.color_palette.primary.find(c => kw.toLowerCase().includes(c)) ||
+          effectiveDna?.color_palette.secondary.find(c => kw.toLowerCase().includes(c)) || null;
+
+        const matMatch = MATERIAL_PREF_MAP[effectiveDna?.material_preferences[0] || '']?.find(m => kw.toLowerCase().includes(m)) || null;
+
+        const fitMatch = BODY_TYPE_SILHOUETTE[body_type]
+          ? [bodyFit.topFit, bodyFit.bottomFit, bodyFit.outerFit]
+              .join(' ').split(',').map(f => f.trim())
+              .find(f => kw.toLowerCase().includes(f)) || null
+          : null;
+
+        keywordMeta[kw] = {
+          category: cat.key,
+          subCategory: sub,
+          colorHint: colorMatch,
+          materialHint: matMatch,
+          fitHint: fitMatch,
+        };
+      }
+    }
+
     return new Response(
-      JSON.stringify({ keywords: allKeywords, categories, source: "gemini" }),
+      JSON.stringify({
+        keywords: allKeywords,
+        categories,
+        source: "gemini",
+        vibeKey,
+        colorHints,
+        materialHints,
+        fitHints,
+        keywordMeta,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
