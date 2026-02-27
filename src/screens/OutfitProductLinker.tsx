@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Outfit, Product, OutfitItem } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader, Download, ArrowUpDown, CheckCircle2, AlertTriangle, Info, Sparkles, ChevronDown, ChevronUp, Zap, PackagePlus } from 'lucide-react';
+import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader, Download, ArrowUpDown, CheckCircle2, AlertTriangle, Info, Sparkles, ChevronDown, ChevronUp, Zap, PackagePlus, Palette, Layers, Ruler, Search, Copy } from 'lucide-react';
 import { reviseModelPhoto } from '../utils/modelPhotoGenerator';
 import { downloadHighQualityImage } from '../utils/imageCompression';
 import FlatlayRenderer from './FlatlayRenderer';
@@ -18,6 +18,9 @@ import {
   type SlotRecommendations,
   type RegisteredRecommendation,
   type UnregisteredRecommendation,
+  type ColorKeyword,
+  type MaterialKeyword,
+  type FitKeyword,
   COLOR_CHIP_MAP,
 } from '../utils/slotRecommender';
 
@@ -180,87 +183,167 @@ function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecomm
   );
 }
 
-const SILHOUETTE_LABEL: Record<string, string> = {
-  oversized: '오버사이즈',
-  fitted: '피티드',
-  regular: '레귤러',
-  flared: '플레어',
-  layered: '레이어드',
-};
-
 const TONAL_LABEL: Record<string, string> = {
   'tone-on-tone': '톤온톤',
   'tone-in-tone': '톤인톤',
   'contrast': '대비',
-  'warm tone-on-tone': '웜톤 톤온톤',
-  'cool tone-on-tone': '쿨톤 톤온톤',
+  'warm tone-on-tone': '웜 톤온톤',
+  'cool tone-on-tone': '쿨 톤온톤',
+};
+
+const MATERIAL_REASON_LABEL: Record<MaterialKeyword['reason'], { label: string; className: string }> = {
+  vibe_preferred: { label: 'Vibe', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+  slot_fit: { label: '슬롯 적합', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  harmony_with_existing: { label: '기존 조화', className: 'bg-gray-50 text-gray-600 border-gray-200' },
+  texture_contrast: { label: '텍스처 대비', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+};
+
+const COLOR_TIER_CHIP: Record<ColorKeyword['tier'], string> = {
+  primary: 'ring-2 ring-amber-400',
+  secondary: 'ring-1 ring-blue-300',
+  accent: 'ring-1 ring-gray-300',
 };
 
 function UnregisteredRecCard({ rec }: { rec: UnregisteredRecommendation }) {
+  const [copied, setCopied] = useState(false);
   const affinityPct = Math.round(rec.vibeAffinity * 100);
-  const affinityColor = affinityPct >= 80 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' :
-    affinityPct >= 60 ? 'text-blue-600 bg-blue-50 border-blue-200' :
-    'text-gray-500 bg-gray-50 border-gray-200';
+  const affinityColor = affinityPct >= 80
+    ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+    : affinityPct >= 60
+    ? 'text-blue-700 bg-blue-50 border-blue-200'
+    : 'text-gray-500 bg-gray-50 border-gray-200';
+
+  const handleCopyKeyword = () => {
+    navigator.clipboard.writeText(rec.searchKeyword).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
-    <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/40 rounded-lg border border-amber-200/60 p-3 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold text-gray-800 capitalize leading-tight">{rec.itemName}</p>
-        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${affinityColor}`}>
-          {affinityPct}%
-        </span>
+    <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2 flex items-center justify-between gap-2 border-b border-amber-100">
+        <p className="text-[11px] font-bold text-gray-800 capitalize leading-tight flex-1 min-w-0 truncate">{rec.itemName}</p>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[9px] text-gray-400">{rec.lookName}</span>
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${affinityColor}`}>
+            {affinityPct}%
+          </span>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {rec.suggestedColors.map((color, i) => (
-          <span
-            key={i}
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-white/90 rounded-full border border-gray-200"
-            title={color}
-          >
-            <span
-              className="w-2.5 h-2.5 rounded-full border border-gray-300 shrink-0"
-              style={{ backgroundColor: COLOR_CHIP_MAP[color] || '#ccc' }}
-            />
-            <span className="text-[9px] text-gray-600 font-medium">{color}</span>
-          </span>
-        ))}
-        {rec.colorHarmonyNote && (
-          <span className="text-[8px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 font-medium">
-            {rec.colorHarmonyNote}
-          </span>
-        )}
-      </div>
+      <div className="p-3 space-y-2.5">
+        <div>
+          <div className="flex items-center gap-1 mb-1.5">
+            <Palette size={10} className="text-amber-500" />
+            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">색상 키워드</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {rec.colorKeywords.slice(0, 5).map((ck, i) => (
+              <span
+                key={i}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 bg-white rounded-full border border-gray-200 ${COLOR_TIER_CHIP[ck.tier]}`}
+                title={`${ck.harmonyLabel} (${ck.harmonyScore})`}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: COLOR_CHIP_MAP[ck.color] || '#ccc' }}
+                />
+                <span className="text-[9px] text-gray-700 font-medium">{ck.color}</span>
+                <span className={`text-[7px] font-semibold ${
+                  ck.harmonyScore >= 80 ? 'text-emerald-600' :
+                  ck.harmonyScore >= 65 ? 'text-blue-600' : 'text-gray-400'
+                }`}>{ck.harmonyScore}</span>
+              </span>
+            ))}
+            {rec.colorHarmonyNote && (
+              <span className="text-[8px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 font-medium self-center">
+                {rec.colorHarmonyNote}
+              </span>
+            )}
+          </div>
+        </div>
 
-      <div className="flex flex-wrap gap-1">
-        {rec.suggestedMaterials.slice(0, 4).map((mat, i) => (
-          <span key={i} className="text-[9px] px-1.5 py-0.5 bg-white/80 text-amber-700 border border-amber-200 rounded font-medium">{mat}</span>
-        ))}
-      </div>
+        <div>
+          <div className="flex items-center gap-1 mb-1.5">
+            <Layers size={10} className="text-blue-500" />
+            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">소재 키워드</span>
+            {rec.textureHint && (
+              <span className="ml-auto text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200">
+                {rec.textureHint}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {rec.materialKeywords.slice(0, 5).map((mk, i) => {
+              const style = MATERIAL_REASON_LABEL[mk.reason];
+              return (
+                <span
+                  key={i}
+                  className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border font-medium ${style.className}`}
+                  title={`${style.label} · 호환도 ${mk.compatScore}`}
+                >
+                  {mk.material}
+                  <span className="opacity-50 text-[7px]">{mk.compatScore}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {rec.suggestedSilhouettes.map((sil, i) => (
-          <span key={i} className="text-[8px] px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-full">
-            {SILHOUETTE_LABEL[sil] || sil}
-          </span>
-        ))}
-        <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${
-          rec.formalityHint.level >= 6
-            ? 'bg-slate-100 text-slate-700 border-slate-200'
-            : rec.formalityHint.level >= 4
-            ? 'bg-gray-50 text-gray-600 border-gray-200'
-            : 'bg-stone-50 text-stone-600 border-stone-200'
-        }`}>
-          {rec.formalityHint.label}
-        </span>
-        {rec.tonalHint && (
-          <span className="text-[8px] px-1.5 py-0.5 bg-violet-50 text-violet-600 border border-violet-100 rounded-full">
-            {TONAL_LABEL[rec.tonalHint] || rec.tonalHint}
-          </span>
-        )}
-      </div>
+        <div>
+          <div className="flex items-center gap-1 mb-1.5">
+            <Ruler size={10} className="text-sky-500" />
+            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">핏 키워드</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {rec.fitKeywords.map((fk, i) => (
+              <span
+                key={i}
+                className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${
+                  fk.dnaMatch
+                    ? 'bg-sky-50 text-sky-700 border-sky-200'
+                    : 'bg-gray-50 text-gray-500 border-gray-200'
+                }`}
+              >
+                {fk.label}
+                {fk.dnaMatch && <span className="ml-0.5 text-sky-400">✓</span>}
+              </span>
+            ))}
+            <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ml-auto ${
+              rec.formalityHint.level >= 6
+                ? 'bg-slate-100 text-slate-700 border-slate-200'
+                : rec.formalityHint.level >= 4
+                ? 'bg-gray-50 text-gray-600 border-gray-200'
+                : 'bg-stone-50 text-stone-600 border-stone-200'
+            }`}>
+              {rec.formalityHint.label}
+            </span>
+            {rec.tonalHint && (
+              <span className="text-[8px] px-1.5 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-full">
+                {TONAL_LABEL[rec.tonalHint] || rec.tonalHint}
+              </span>
+            )}
+          </div>
+        </div>
 
-      <p className="text-[8px] text-gray-400">Look: {rec.lookName}</p>
+        <div className="pt-1 border-t border-gray-100">
+          <div className="flex items-center gap-1 mb-1">
+            <Search size={10} className="text-gray-400" />
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">검색 키워드</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2 py-1.5 border border-gray-200">
+            <code className="text-[10px] text-gray-700 font-mono flex-1 min-w-0 truncate">{rec.searchKeyword}</code>
+            <button
+              onClick={handleCopyKeyword}
+              className="shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
+              title="키워드 복사"
+            >
+              {copied ? <CheckCircle2 size={11} className="text-emerald-500" /> : <Copy size={11} />}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

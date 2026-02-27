@@ -5,6 +5,7 @@ import { LookKey } from '../data/vibeItems/types';
 import { scoreProductForVibe, type VibeCompatScore } from './vibeCompatibility';
 import { resolveColorFamily, getColorHarmonyScore, getColorDNA, type ColorDNA } from './matching/colorDna';
 import { getVibeItemAffinity } from './matching/vibeAffinity';
+import { inferMaterialGroup, getMaterialCompatScore, MATERIAL_GROUPS } from './matching/itemDna';
 
 export interface RegisteredRecommendation {
   product: Product;
@@ -12,6 +13,26 @@ export interface RegisteredRecommendation {
   vibeScore: VibeCompatScore;
   colorHarmonyAvg: number;
   reasons: string[];
+}
+
+export interface MaterialKeyword {
+  material: string;
+  group: string;
+  compatScore: number;
+  reason: 'vibe_preferred' | 'slot_fit' | 'harmony_with_existing' | 'texture_contrast';
+}
+
+export interface ColorKeyword {
+  color: string;
+  tier: 'primary' | 'secondary' | 'accent';
+  harmonyScore: number;
+  harmonyLabel: string;
+}
+
+export interface FitKeyword {
+  silhouette: string;
+  label: string;
+  dnaMatch: boolean;
 }
 
 export interface UnregisteredRecommendation {
@@ -25,6 +46,11 @@ export interface UnregisteredRecommendation {
   colorHarmonyNote: string;
   lookName: string;
   vibeAffinity: number;
+  colorKeywords: ColorKeyword[];
+  materialKeywords: MaterialKeyword[];
+  fitKeywords: FitKeyword[];
+  textureHint: string;
+  searchKeyword: string;
 }
 
 export interface SlotRecommendations {
@@ -409,9 +435,15 @@ function getUnregisteredRecommendations(
 
     const lookMats = lookMaterials.get(item.lookName) || [];
     const suggestedMaterials = getSlotSpecificMaterials(lookMats, slotCategory, item.name);
-
     const silhouettes = inferSilhouettesFromName(item.name);
     const formality = inferFormalityFromName(item.name);
+
+    const colorKeywords = buildColorKeywords(lookDna.color_palette, existingColorFamilies, slotCategory);
+    const materialKeywords = buildMaterialKeywords(lookMats, dna.material_preferences, slotCategory, linkedItems, item.name);
+    const fitKeywords = buildFitKeywords(item.name, lookDna.silhouette_preference);
+    const textureHint = buildTextureHint(dna.material_preferences, linkedItems, item.name);
+    const formalityHint = { level: formality, label: getFormalityLabel(formality) };
+    const searchKeyword = buildSearchKeyword(item.name, colorKeywords, materialKeywords, fitKeywords, formalityHint);
 
     return {
       itemName: item.name,
@@ -419,11 +451,16 @@ function getUnregisteredRecommendations(
       suggestedColors,
       suggestedMaterials,
       suggestedSilhouettes: silhouettes,
-      formalityHint: { level: formality, label: getFormalityLabel(formality) },
+      formalityHint,
       tonalHint,
       colorHarmonyNote: computeColorHarmonyNote(suggestedColors, existingColorFamilies),
       lookName: item.lookName,
       vibeAffinity: Math.round(item.affinity * 100) / 100,
+      colorKeywords,
+      materialKeywords,
+      fitKeywords,
+      textureHint,
+      searchKeyword,
     };
   });
 }
@@ -464,6 +501,244 @@ function getSlotSpecificMaterials(
 
   if (matched.length >= 2) return matched.slice(0, 4);
   return [...matched, ...lookMaterials.filter(m => !matched.includes(m))].slice(0, 4);
+}
+
+const SILHOUETTE_KOREAN: Record<string, string> = {
+  oversized: '오버사이즈',
+  fitted: '피티드',
+  regular: '레귤러',
+  flared: '플레어',
+  layered: '레이어드',
+};
+
+const DNA_SILHOUETTE_TO_LABEL: Record<string, string> = {
+  I: '슬림/스트레이트',
+  V: '오버사이즈/와이드',
+  X: '아워글래스',
+  A: '플레어/와이드레그',
+  Y: '탑헤비',
+  O: '볼드/라운드',
+};
+
+const TEXTURE_GROUP_LABEL: Record<string, string> = {
+  smooth: '매끄러운 소재',
+  structured: '구조감 있는 소재',
+  matte: '무광 매트 소재',
+  soft: '부드러운 소재',
+  textured: '텍스처 소재',
+  sheer: '시스루 소재',
+  puffy: '볼륨감 있는 소재',
+};
+
+function buildColorKeywords(
+  palette: { primary: string[]; secondary: string[]; accent: string[] },
+  existingColors: string[],
+  slotCategory: SlotCategory
+): ColorKeyword[] {
+  const isCore = ['top', 'bottom', 'outer'].includes(slotCategory);
+  const result: ColorKeyword[] = [];
+  const seen = new Set<string>();
+
+  const addColor = (color: string, tier: 'primary' | 'secondary' | 'accent') => {
+    if (seen.has(color)) return;
+    seen.add(color);
+    const scores = existingColors.length > 0
+      ? existingColors.map(ec => getColorHarmonyScore(color, ec))
+      : [75];
+    const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
+    let label = '';
+    if (avg >= 90) label = '최상 조화';
+    else if (avg >= 80) label = '우수 조화';
+    else if (avg >= 70) label = '양호 조화';
+    else if (avg >= 55) label = '보통';
+    else label = '대비 강조';
+    result.push({ color, tier, harmonyScore: Math.round(avg), harmonyLabel: label });
+  };
+
+  for (const c of palette.primary) addColor(c, 'primary');
+  for (const c of palette.secondary) addColor(c, 'secondary');
+  if (!isCore) {
+    for (const c of palette.accent) addColor(c, 'accent');
+  }
+
+  result.sort((a, b) => b.harmonyScore - a.harmonyScore);
+  return result.slice(0, 5);
+}
+
+function buildMaterialKeywords(
+  lookMaterials: string[],
+  vibeMaterialPrefs: string[],
+  slotCategory: SlotCategory,
+  existingItems: OutfitItem[],
+  itemName: string
+): MaterialKeyword[] {
+  const result: MaterialKeyword[] = [];
+  const seen = new Set<string>();
+
+  const existingGroups = existingItems
+    .filter(i => i.product)
+    .map(i => inferMaterialGroup(i.product!.material || '', i.product!.name));
+
+  const SLOT_MATERIAL_AFFINITY: Record<string, string[]> = {
+    outer: ['wool', 'leather', 'cashmere', 'tweed', 'suede', 'nylon'],
+    top: ['cotton', 'silk', 'linen', 'cashmere', 'jersey'],
+    bottom: ['wool', 'cotton', 'denim', 'leather', 'linen'],
+    shoes: ['leather', 'suede', 'canvas', 'rubber'],
+    bag: ['leather', 'canvas', 'nylon', 'suede'],
+    accessory: ['metal', 'leather', 'silk'],
+  };
+  const slotFit = SLOT_MATERIAL_AFFINITY[slotCategory] || [];
+
+  const addMaterial = (mat: string, reason: MaterialKeyword['reason']) => {
+    const lower = mat.toLowerCase();
+    if (seen.has(lower)) return;
+    seen.add(lower);
+    const group = inferMaterialGroup(lower, itemName);
+    let compatScore = 80;
+    if (existingGroups.length > 0) {
+      const scores = existingGroups.map(eg => getMaterialCompatScore(group, eg) * 100);
+      compatScore = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length);
+    }
+    result.push({ material: lower, group, compatScore, reason });
+  };
+
+  const lower = itemName.toLowerCase();
+  const matKw = ['leather', 'suede', 'wool', 'cotton', 'silk', 'linen', 'denim', 'knit',
+    'nylon', 'velvet', 'cashmere', 'canvas', 'corduroy', 'tweed', 'satin', 'mesh',
+    'fleece', 'jersey', 'rubber', 'waxed', 'quilted'];
+  for (const kw of matKw) {
+    if (lower.includes(kw)) addMaterial(kw, 'slot_fit');
+  }
+
+  for (const prefGroup of vibeMaterialPrefs) {
+    const groupMats = MATERIAL_GROUPS[prefGroup] || [];
+    for (const mat of groupMats.slice(0, 2)) {
+      if (!mat.match(/[가-힣]/)) {
+        addMaterial(mat, 'vibe_preferred');
+      }
+    }
+  }
+
+  for (const lm of lookMaterials) {
+    const lmLower = lm.toLowerCase();
+    if (slotFit.some(sf => lmLower.includes(sf))) {
+      addMaterial(lm, 'slot_fit');
+    } else {
+      addMaterial(lm, 'harmony_with_existing');
+    }
+  }
+
+  if (existingGroups.length > 0) {
+    const dominantGroup = existingGroups[0];
+    const contrastedGroups: Record<string, string[]> = {
+      structured: ['knit', 'classic'],
+      luxe: ['casual', 'classic'],
+      classic: ['structured', 'luxe'],
+      casual: ['structured', 'luxe'],
+      knit: ['structured', 'classic'],
+      technical: ['classic', 'luxe'],
+    };
+    const contrastTargets = contrastedGroups[dominantGroup] || [];
+    for (const target of contrastTargets) {
+      const mats = MATERIAL_GROUPS[target] || [];
+      for (const m of mats.slice(0, 1)) {
+        if (!m.match(/[가-힣]/)) addMaterial(m, 'texture_contrast');
+      }
+    }
+  }
+
+  result.sort((a, b) => {
+    const priorityOrder: MaterialKeyword['reason'][] = ['vibe_preferred', 'slot_fit', 'harmony_with_existing', 'texture_contrast'];
+    const ap = priorityOrder.indexOf(a.reason);
+    const bp = priorityOrder.indexOf(b.reason);
+    if (ap !== bp) return ap - bp;
+    return b.compatScore - a.compatScore;
+  });
+
+  return result.slice(0, 6);
+}
+
+function buildFitKeywords(
+  itemName: string,
+  dnaSilhouettes: string[]
+): FitKeyword[] {
+  const inferredSilhouettes = inferSilhouettesFromName(itemName);
+  const result: FitKeyword[] = [];
+
+  for (const sil of inferredSilhouettes) {
+    const dnaMatch = (sil === 'oversized' && dnaSilhouettes.includes('V')) ||
+      (sil === 'fitted' && (dnaSilhouettes.includes('I') || dnaSilhouettes.includes('X'))) ||
+      (sil === 'flared' && dnaSilhouettes.includes('A')) ||
+      sil === 'regular';
+    result.push({ silhouette: sil, label: SILHOUETTE_KOREAN[sil] || sil, dnaMatch });
+  }
+
+  for (const dnaSil of dnaSilhouettes.slice(0, 2)) {
+    const label = DNA_SILHOUETTE_TO_LABEL[dnaSil] || dnaSil;
+    const alreadyHas = result.some(r => {
+      if (dnaSil === 'V' && r.silhouette === 'oversized') return true;
+      if ((dnaSil === 'I' || dnaSil === 'X') && r.silhouette === 'fitted') return true;
+      if (dnaSil === 'A' && r.silhouette === 'flared') return true;
+      return false;
+    });
+    if (!alreadyHas) {
+      result.push({ silhouette: dnaSil, label, dnaMatch: true });
+    }
+  }
+
+  return result.slice(0, 3);
+}
+
+function buildTextureHint(
+  vibePreferredMaterials: string[],
+  existingItems: OutfitItem[],
+  itemName: string
+): string {
+  const existingGroups = existingItems
+    .filter(i => i.product)
+    .map(i => inferMaterialGroup(i.product!.material || '', i.product!.name));
+
+  if (existingGroups.length === 0) {
+    const prefGroup = vibePreferredMaterials[0] || 'classic';
+    const TEXTURE_GROUP_LABEL_MAP: Record<string, string> = {
+      luxe: 'smooth', structured: 'structured', classic: 'matte',
+      casual: 'soft', knit: 'textured', technical: 'smooth',
+    };
+    const tl = TEXTURE_GROUP_LABEL_MAP[prefGroup] || 'matte';
+    return TEXTURE_GROUP_LABEL[tl] || tl;
+  }
+
+  const dominantGroup = existingGroups[0];
+  const CONTRAST_SUGGESTION: Record<string, string> = {
+    structured: 'soft', luxe: 'matte', casual: 'structured',
+    knit: 'smooth', classic: 'textured', technical: 'matte',
+  };
+  const suggested = CONTRAST_SUGGESTION[dominantGroup] || 'matte';
+  return TEXTURE_GROUP_LABEL[suggested] || suggested;
+}
+
+function buildSearchKeyword(
+  itemName: string,
+  colorKeywords: ColorKeyword[],
+  materialKeywords: MaterialKeyword[],
+  fitKeywords: FitKeyword[],
+  formalityHint: { level: number; label: string }
+): string {
+  const parts: string[] = [itemName];
+
+  const topColor = colorKeywords.find(c => c.tier === 'primary' && c.harmonyScore >= 75);
+  if (topColor) parts.push(topColor.color);
+
+  const topMat = materialKeywords.find(m => m.reason === 'vibe_preferred' || m.reason === 'slot_fit');
+  if (topMat) parts.push(topMat.material);
+
+  const topFit = fitKeywords.find(f => f.dnaMatch);
+  if (topFit && topFit.silhouette !== 'regular') parts.push(topFit.silhouette);
+
+  if (formalityHint.level >= 6) parts.push('formal');
+  else if (formalityHint.level <= 2) parts.push('casual');
+
+  return parts.slice(0, 4).join(' ');
 }
 
 function getSuggestedColorsForSlot(
