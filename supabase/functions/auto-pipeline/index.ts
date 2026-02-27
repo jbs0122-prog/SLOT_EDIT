@@ -297,11 +297,11 @@ async function triggerBgRemoval(
   productId: string,
   imageUrl: string,
   supabaseUrl: string,
-  anonKey: string
+  serviceKey: string
 ): Promise<void> {
   await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${anonKey}`, "Content-Type": "application/json" },
+    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ imageUrl, productId }),
   });
 }
@@ -343,10 +343,12 @@ async function generateOutfitsFromBatch(
   }
 
   const essentialSlots = ["top", "bottom", "shoes"];
-  for (const slot of essentialSlots) {
-    if (!bySlot[slot] || bySlot[slot].length === 0) {
-      throw new Error(`Not enough products: missing ${slot} slot`);
-    }
+  const missingSlots = essentialSlots.filter(s => !bySlot[s] || bySlot[s].length === 0);
+  if (missingSlots.length > 0) {
+    const allItems = batchProducts.filter((p: any) => p.category);
+    const categoryCount: Record<string, number> = {};
+    for (const p of allItems) categoryCount[p.category] = (categoryCount[p.category] || 0) + 1;
+    throw new Error(`Missing essential slots: ${missingSlots.join(", ")}. Available categories: ${JSON.stringify(categoryCount)}`);
   }
 
   const outfitIds: string[] = [];
@@ -675,7 +677,7 @@ Deno.serve(async (req: Request) => {
         (async () => {
           for (const p of productsForBg) {
             if (p.image_url) {
-              await triggerBgRemoval(p.id, p.image_url, SUPABASE_URL, SUPABASE_ANON_KEY).catch(() => {});
+              await triggerBgRemoval(p.id, p.image_url, SUPABASE_URL, SUPABASE_SERVICE_KEY).catch(() => {});
               await delay(500);
             }
           }
