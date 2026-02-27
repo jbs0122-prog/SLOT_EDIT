@@ -11,6 +11,12 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const SESSION_KEY = 'adminAmazonSearch_state';
 
+interface OutfitContext {
+  existing_colors?: string[];
+  existing_materials?: string[];
+  target_slot?: string;
+}
+
 interface AmazonProduct {
   asin: string;
   title: string;
@@ -109,7 +115,11 @@ function loadSession() {
   }
 }
 
-export default function AdminAmazonSearch() {
+interface AdminAmazonSearchProps {
+  outfitContext?: OutfitContext;
+}
+
+export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchProps = {}) {
   const saved = loadSession();
 
   const [step, setStep] = useState<Step>(saved?.step || 'filter');
@@ -216,7 +226,7 @@ export default function AdminAmazonSearch() {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ gender, body_type: bodyType, vibe, season }),
+        body: JSON.stringify({ gender, body_type: bodyType, vibe, season, ...(outfitContext ? { outfit_context: outfitContext } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -462,6 +472,21 @@ export default function AdminAmazonSearch() {
           </div>
           <p className="text-white/30 text-xs mt-1">조건 설정 후 AI 키워드를 생성하세요</p>
         </div>
+
+        {outfitContext && (
+          <div className="mx-5 mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+            <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider mb-1.5">코디 컨텍스트 적용</p>
+            {outfitContext.target_slot && (
+              <p className="text-[11px] text-white/50">슬롯: <span className="text-blue-300">{outfitContext.target_slot}</span></p>
+            )}
+            {outfitContext.existing_colors && outfitContext.existing_colors.length > 0 && (
+              <p className="text-[11px] text-white/50">기존 컬러: <span className="text-blue-300">{outfitContext.existing_colors.join(', ')}</span></p>
+            )}
+            {outfitContext.existing_materials && outfitContext.existing_materials.length > 0 && (
+              <p className="text-[11px] text-white/50">기존 소재: <span className="text-blue-300">{outfitContext.existing_materials.join(', ')}</span></p>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {/* Gender */}

@@ -25,6 +25,18 @@ interface VibeDNA {
   era_mood_tags: string[];
 }
 
+interface VibeLook {
+  name: string;
+  materials: string[];
+  dna_overrides?: Partial<VibeDNA>;
+}
+
+interface OutfitContext {
+  existing_colors?: string[];
+  existing_materials?: string[];
+  target_slot?: string;
+}
+
 const VIBE_DNA: Record<string, VibeDNA> = {
   elevated_cool: {
     formality_range: [5, 9],
@@ -117,6 +129,63 @@ const VIBE_DNA: Record<string, VibeDNA> = {
     era_mood_tags: ['grunge', 'punk', 'DIY', 'eclectic', 'vintage'],
   },
 };
+
+const VIBE_LOOKS: Record<string, Record<string, VibeLook>> = {
+  elevated_cool: {
+    A: { name: 'Downtown Tailoring', materials: ['fine wool', 'stiff cotton', 'smooth leather', 'cashmere', 'silk', 'gabardine', 'poplin', 'neoprene', 'satin', 'silver'] },
+    B: { name: 'Neo-Prep Edge', materials: ['tweed', 'corduroy', 'denim', 'cable-knit', 'velvet', 'waxed cotton', 'suede', 'quilted nylon', 'wool', 'leather'], dna_overrides: { formality_range: [3, 7], silhouette_preference: ['I', 'H'], proportion_style: 'balanced', era_mood_tags: ['ivy-league', 'neo-prep', 'dark-academia'] } },
+    C: { name: 'High-End Street', materials: ['nylon', 'leather', 'tech-fleece', 'mesh', 'neoprene', 'denim', 'jersey', 'rubber', 'reflective', 'faux fur'], dna_overrides: { formality_range: [2, 6], silhouette_preference: ['V', 'Y'], proportion_style: 'top-heavy', era_mood_tags: ['streetwear', 'tech', 'urban'] } },
+  },
+  effortless_natural: {
+    A: { name: 'Japandi Flow', materials: ['linen', 'cotton', 'raw silk', 'cashmere', 'gauze', 'hemp', 'wool', 'canvas', 'knit', 'waffle'], dna_overrides: { formality_range: [1, 5], era_mood_tags: ['japandi', 'wabi-sabi', 'zen'] } },
+    B: { name: 'French Casual', materials: ['cotton', 'silk', 'wool', 'cashmere', 'linen', 'denim', 'boucle', 'tweed', 'leather', 'velvet'], dna_overrides: { formality_range: [3, 7], proportion_style: 'balanced', era_mood_tags: ['french-casual', 'parisian', 'effortless-chic'] } },
+    C: { name: 'Soft Amekaji', materials: ['denim', 'flannel', 'canvas', 'waxed cotton', 'wool', 'corduroy', 'heavy cotton', 'leather', 'fleece', 'chambray'], dna_overrides: { formality_range: [1, 5], silhouette_preference: ['H', 'A'], era_mood_tags: ['amekaji', 'workwear', 'heritage'] } },
+  },
+  artistic_minimal: {
+    A: { name: 'Gallery Mono', materials: ['wool', 'cotton', 'linen', 'silk', 'neoprene', 'organza', 'jersey', 'canvas', 'felt', 'rubber'] },
+    B: { name: 'Wabi-Sabi Craft', materials: ['linen', 'hemp', 'raw silk', 'wool', 'cotton', 'gauze', 'paper', 'ceramic', 'stone', 'leather'], dna_overrides: { formality_range: [2, 6], era_mood_tags: ['wabi-sabi', 'craft', 'handmade'] } },
+    C: { name: 'Avant-Garde Edge', materials: ['leather', 'neoprene', 'mesh', 'vinyl', 'silk', 'wool', 'rubber', 'metal', 'denim', 'jersey'], dna_overrides: { formality_range: [3, 8], silhouette_preference: ['V', 'Y'], era_mood_tags: ['avant-garde', 'deconstructed', 'experimental'] } },
+  },
+  retro_luxe: {
+    A: { name: '70s Bohemian', materials: ['suede', 'velvet', 'crochet', 'silk', 'leather', 'denim', 'cotton', 'macrame', 'lace', 'embroidery'] },
+    B: { name: 'Heritage Classic', materials: ['tweed', 'wool', 'cashmere', 'leather', 'silk', 'corduroy', 'denim', 'flannel', 'cotton', 'linen'], dna_overrides: { formality_range: [4, 8], era_mood_tags: ['heritage', 'old-money', 'ivy-league'] } },
+    C: { name: 'Cinematic Glam', materials: ['satin', 'velvet', 'silk', 'leather', 'brocade', 'sequin', 'fur', 'cashmere', 'organza', 'gold'], dna_overrides: { formality_range: [5, 9], silhouette_preference: ['X', 'A'], era_mood_tags: ['cinematic', 'glamour', 'hollywood'] } },
+  },
+  sport_modern: {
+    A: { name: 'Gorpcore', materials: ['gore-tex', 'ripstop', 'fleece', 'nylon', 'cordura', 'mesh', 'rubber', 'softshell', 'recycled polyester', 'merino'] },
+    B: { name: 'Athleisure Minimal', materials: ['jersey', 'cotton', 'nylon', 'spandex', 'mesh', 'fleece', 'modal', 'tencel', 'bamboo', 'silk'], dna_overrides: { formality_range: [1, 5], era_mood_tags: ['athleisure', 'minimal-sport', 'clean'] } },
+    C: { name: 'Tech Urban', materials: ['nylon', 'gore-tex', 'leather', 'mesh', 'rubber', 'reflective', 'cordura', 'kevlar', 'carbon', 'titanium'], dna_overrides: { formality_range: [1, 5], silhouette_preference: ['V', 'I'], era_mood_tags: ['techwear', 'cyberpunk', 'urban-utility'] } },
+  },
+  creative_layered: {
+    A: { name: 'Grunge Revival', materials: ['denim', 'flannel', 'leather', 'jersey', 'mesh', 'lace', 'velvet', 'cotton', 'plaid', 'studs'] },
+    B: { name: 'Vintage Eclectic', materials: ['velvet', 'silk', 'crochet', 'denim', 'corduroy', 'leather', 'brocade', 'tapestry', 'lace', 'embroidery'], dna_overrides: { formality_range: [1, 6], era_mood_tags: ['vintage', 'eclectic', 'boho-mix'] } },
+    C: { name: 'Art Punk', materials: ['leather', 'vinyl', 'mesh', 'rubber', 'denim', 'metal', 'canvas', 'nylon', 'fishnet', 'chain'], dna_overrides: { formality_range: [0, 4], silhouette_preference: ['V', 'I'], era_mood_tags: ['punk', 'DIY', 'anti-fashion'] } },
+  },
+};
+
+function getLookDNA(vibeKey: string, lookKey: string): VibeDNA {
+  const baseDna = VIBE_DNA[vibeKey];
+  if (!baseDna) return baseDna;
+  const look = VIBE_LOOKS[vibeKey]?.[lookKey];
+  if (!look?.dna_overrides) return baseDna;
+  return {
+    ...baseDna,
+    ...look.dna_overrides,
+    color_palette: look.dna_overrides.color_palette
+      ? { ...baseDna.color_palette, ...look.dna_overrides.color_palette }
+      : baseDna.color_palette,
+  };
+}
+
+function getLookMaterials(vibeKey: string): string[] {
+  const looks = VIBE_LOOKS[vibeKey];
+  if (!looks) return [];
+  const allMats = new Set<string>();
+  for (const look of Object.values(looks)) {
+    for (const mat of look.materials) allMats.add(mat);
+  }
+  return [...allMats];
+}
 
 const VIBE_LOOK_ITEMS: Record<string, Record<string, string[]>> = {
   elevated_cool: {
@@ -408,11 +477,14 @@ function getVibeMaterialSection(vibeKey: string, seasonLabel: string): string {
   const seasonMod = SEASON_MODIFIERS[seasonLabel];
   const seasonFabrics = new Set(seasonMod?.fabric || []);
 
+  const lookMats = getLookMaterials(vibeKey);
+
   const vibeMaterials: string[] = [];
   for (const pref of dna.material_preferences) {
     const mats = MATERIAL_PREF_MAP[pref] || [];
     vibeMaterials.push(...mats);
   }
+  vibeMaterials.push(...lookMats);
 
   const uniqueMats = [...new Set(vibeMaterials)];
   const seasonalMats = uniqueMats.filter(m => {
@@ -420,7 +492,43 @@ function getVibeMaterialSection(vibeKey: string, seasonLabel: string): string {
     return seasonFabrics.has(m) || !['wool', 'cashmere', 'fleece', 'thermal', 'down', 'linen', 'mesh', 'breathable'].includes(m);
   });
 
-  return seasonalMats.slice(0, 12).join(", ");
+  return seasonalMats.slice(0, 18).join(", ");
+}
+
+function getLookVariantsSection(vibeKey: string): string {
+  const looks = VIBE_LOOKS[vibeKey];
+  if (!looks) return "";
+
+  const lines: string[] = [];
+  for (const [key, look] of Object.entries(looks)) {
+    const overrides = look.dna_overrides;
+    let desc = `  Look ${key} "${look.name}": materials=[${look.materials.slice(0, 6).join(", ")}]`;
+    if (overrides?.formality_range) desc += ` formality=${overrides.formality_range[0]}-${overrides.formality_range[1]}`;
+    if (overrides?.silhouette_preference) desc += ` silhouettes=[${overrides.silhouette_preference.join(",")}]`;
+    if (overrides?.era_mood_tags) desc += ` mood=[${overrides.era_mood_tags.join(", ")}]`;
+    lines.push(desc);
+  }
+  return lines.join("\n");
+}
+
+function getOutfitContextSection(ctx: OutfitContext | undefined): string {
+  if (!ctx) return "";
+
+  const lines: string[] = [];
+  if (ctx.existing_colors && ctx.existing_colors.length > 0) {
+    lines.push(`  Existing colors in outfit: ${ctx.existing_colors.join(", ")}`);
+    lines.push(`  -> Generate keywords with colors that HARMONIZE with these existing colors (tone-on-tone or complementary).`);
+    lines.push(`  -> AVOID repeating the exact same colors unless it creates a deliberate tonal effect.`);
+  }
+  if (ctx.existing_materials && ctx.existing_materials.length > 0) {
+    lines.push(`  Existing materials in outfit: ${ctx.existing_materials.join(", ")}`);
+    lines.push(`  -> Choose materials that create interesting TEXTURE CONTRAST with the existing materials.`);
+  }
+  if (ctx.target_slot) {
+    lines.push(`  Target slot: ${ctx.target_slot}`);
+    lines.push(`  -> Focus keywords on items appropriate for the "${ctx.target_slot}" category.`);
+  }
+  return lines.length > 0 ? lines.join("\n") : "";
 }
 
 function getColorPaletteSection(vibeKey: string): string {
@@ -463,6 +571,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     let gender: string, body_type: string, vibe: string, season: string;
+    let outfit_context: OutfitContext | undefined;
     try {
       const rawText = await req.text();
       const cleaned = rawText.trim();
@@ -472,6 +581,7 @@ Deno.serve(async (req: Request) => {
       body_type = body.body_type;
       vibe = body.vibe;
       season = body.season;
+      outfit_context = body.outfit_context;
     } catch (parseErr) {
       return new Response(JSON.stringify({ error: "Invalid or empty request body", detail: (parseErr as Error).message }), {
         status: 400,
@@ -513,6 +623,8 @@ Deno.serve(async (req: Request) => {
     const colorPalette = getColorPaletteSection(vibeKey);
     const silhouetteCross = getSilhouetteCrossover(vibeKey, body_type || "regular");
     const tonalStrategy = getTonalStrategySection(vibeKey);
+    const lookVariants = getLookVariantsSection(vibeKey);
+    const outfitCtxSection = getOutfitContextSection(outfit_context);
 
     const prompt = `You are a creative fashion stylist who shops on Amazon daily. Generate Amazon search keywords that a real person would type.
 
@@ -528,15 +640,18 @@ STYLING PROFILE:
 VIBE DNA COLOR PALETTE (use these colors to guide keyword color terms):
   ${colorPalette}
 
-VIBE DNA MATERIAL PREFERENCES (season-filtered):
+VIBE DNA MATERIAL PREFERENCES (season-filtered, includes Look-specific materials):
   ${vibeMaterials}
+
+LOOK VARIANTS (each Look has different mood, formality, and material emphasis — distribute keywords across all 3 Looks):
+${lookVariants}
 
 VIBE DNA SILHOUETTE × BODY TYPE:
 ${silhouetteCross}
 
 TONAL STRATEGY (how to combine colors in keywords):
 ${tonalStrategy}
-
+${outfitCtxSection ? `\nOUTFIT CONTEXT (existing items already in the outfit — use this to generate COMPLEMENTARY keywords):\n${outfitCtxSection}\n` : ""}
 VIBE-SPECIFIC ITEM REFERENCE (~20 items per slot from all 3 Look variants):
 ${vibeItemPool}
 
@@ -546,13 +661,15 @@ Generate one Amazon search keyword per sub-category. Each keyword should:
 2. Reflect the style vibe ("${vibeLabel}") through descriptive words, trend terms, aesthetic references, or specific style names — NOT by repeating the same adjective in every keyword
 3. Reference the VIBE-SPECIFIC ITEM REFERENCE above — use specific garment names, details, and vocabulary from the item pool to make keywords more targeted
 4. Use colors from the VIBE DNA COLOR PALETTE — prefer primary/secondary colors, use accent colors sparingly
-5. Use materials from VIBE DNA MATERIAL PREFERENCES where relevant
+5. Use materials from VIBE DNA MATERIAL PREFERENCES where relevant — also use Look-specific materials (e.g., Look A might prefer "fine wool, gabardine" while Look C prefers "nylon, mesh")
 6. Consider the SILHOUETTE × BODY TYPE guidance for fit terms
 7. Follow the TONAL STRATEGY when combining color descriptors
 8. Consider the season (${seasonLabel}) — use season-appropriate fabrics, weights, or styling cues naturally where relevant
 9. For tops/bottoms/outerwear, incorporate a fit word that suits the ${body_type || "regular"} body type — but vary which fit word you pick from the recommended list
 10. Be 3-6 words long
 11. Sound like something a real shopper would search — natural, specific, and varied
+12. DISTRIBUTE keywords across all 3 Look variants — roughly 1/3 per Look mood${outfit_context ? `
+13. OUTFIT HARMONY: The outfit already contains items with specific colors/materials. Generate keywords for items that would COMPLEMENT the existing outfit — harmonize colors and create texture contrast` : ""}
 
 DIVERSITY RULES (critical):
 - Do NOT use the same adjective or descriptor more than twice across all keywords
@@ -560,6 +677,7 @@ DIVERSITY RULES (critical):
 - Use specific fashion vocabulary: texture names, garment details, style subcultures, color tones
 - Think about what makes each sub-category item unique within the "${vibeLabel}" aesthetic
 - Avoid formulaic patterns — each keyword should feel like a different person searching
+- Distribute materials across the 3 Look variants (e.g., Look A's "cashmere, silk" vs Look C's "nylon, mesh")
 
 OUTPUT: Return ONLY a valid JSON object with this exact structure:
 ${JSON.stringify(
