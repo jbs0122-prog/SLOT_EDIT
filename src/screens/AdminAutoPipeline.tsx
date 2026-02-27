@@ -180,14 +180,27 @@ export default function AdminAutoPipeline() {
     setShowAllLogs(false);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auto-pipeline`;
+      if (!supabaseUrl || !anonKey) {
+        throw new Error('Supabase environment variables not configured');
+      }
+
+      let authHeader = `Bearer ${anonKey}`;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          authHeader = `Bearer ${session.access_token}`;
+        }
+      } catch { /* use anon key */ }
+
+      const apiUrl = `${supabaseUrl}/functions/v1/auto-pipeline`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': authHeader,
+          'apikey': anonKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -199,6 +212,11 @@ export default function AdminAutoPipeline() {
           products_per_slot: productsPerSlot,
         }),
       });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Pipeline request failed (${res.status}): ${errText.slice(0, 200)}`);
+      }
 
       const data: PipelineResult = await res.json();
       setResult(data);
