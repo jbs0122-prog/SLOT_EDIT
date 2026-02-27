@@ -352,6 +352,7 @@ async function generateOutfitsFromBatch(
   }
 
   const outfitIds: string[] = [];
+  const outfitCandidates: Array<{ outfitId: string; items: Array<{ slot: string; productId: string; name: string; imageUrl: string; price?: number }> }> = [];
   const usedProductIds = new Set<string>();
 
   for (let i = 0; i < outfitCount; i++) {
@@ -374,7 +375,7 @@ async function generateOutfitsFromBatch(
         body_type: bodyType,
         vibe,
         season: targetSeason || null,
-        status: "pending_render",
+        status: "draft",
         tpo: "",
         "AI insight": `Auto-pipeline batch: ${batchId} | Score: ${Math.round(70 + Math.random() * 20)}`,
         image_url_flatlay: "",
@@ -394,6 +395,12 @@ async function generateOutfitsFromBatch(
       { outfit_id: newOutfit.id, product_id: shoes.id, slot_type: "shoes" },
     ];
 
+    const candidateItems: Array<{ slot: string; productId: string; name: string; imageUrl: string; price?: number }> = [
+      { slot: "top", productId: top.id, name: top.name, imageUrl: top.nobg_image_url || top.image_url, price: top.price },
+      { slot: "bottom", productId: bottom.id, name: bottom.name, imageUrl: bottom.nobg_image_url || bottom.image_url, price: bottom.price },
+      { slot: "shoes", productId: shoes.id, name: shoes.name, imageUrl: shoes.nobg_image_url || shoes.image_url, price: shoes.price },
+    ];
+
     usedProductIds.add(top.id);
     usedProductIds.add(bottom.id);
     usedProductIds.add(shoes.id);
@@ -405,6 +412,7 @@ async function generateOutfitsFromBatch(
       const pick = pickBest(bySlot[slot] || []);
       if (pick) {
         itemsToInsert.push({ outfit_id: newOutfit.id, product_id: pick.id, slot_type: slot });
+        candidateItems.push({ slot, productId: pick.id, name: pick.name, imageUrl: pick.nobg_image_url || pick.image_url, price: pick.price });
         usedProductIds.add(pick.id);
       }
     }
@@ -412,17 +420,14 @@ async function generateOutfitsFromBatch(
     await adminClient.from("outfit_items").insert(itemsToInsert);
 
     outfitIds.push(newOutfit.id);
+    outfitCandidates.push({ outfitId: newOutfit.id, items: candidateItems });
   }
 
   if (outfitIds.length === 0) {
     throw new Error("Could not assemble any complete outfits from the registered products");
   }
 
-  EdgeRuntime.waitUntil(
-    triggerAIRefinementAndInsights(outfitIds, { gender, bodyType, vibe, targetSeason }, adminClient, supabaseUrl, anonKey)
-  );
-
-  return { outfitIds, count: outfitIds.length };
+  return { outfitIds, count: outfitIds.length, outfitCandidates };
 }
 
 async function triggerAIRefinementAndInsights(
@@ -686,25 +691,27 @@ Deno.serve(async (req: Request) => {
       events.push(makeEvent("nobg", "success", `Background removal queued for ${productsForBg.length} products (async)`));
     }
 
-    // ── STEP 6: Generate outfits ───────────────────────────────────────────────
-    events.push(makeEvent("outfits", "start", `Generating ${outfit_count} outfits from registered products...`));
+    // ── STEP 6: Generate outfit candidates ────────────────────────────────────
+    events.push(makeEvent("outfits", "start", `Generating ${outfit_count} outfit candidates from registered products...`));
     let outfitIds: string[] = [];
     let outfitCount = 0;
+    let outfitCandidates: Array<{ outfitId: string; items: Array<{ slot: string; productId: string; name: string; imageUrl: string; price?: number }> }> = [];
 
     try {
-      const result = await generateOutfitsFromBatch(
+      const outfitResult = await generateOutfitsFromBatch(
         batchId, gender, body_type, vibe, season, outfit_count,
         adminClient, SUPABASE_URL, SUPABASE_ANON_KEY
       );
-      outfitIds = result.outfitIds;
-      outfitCount = result.count;
-      events.push(makeEvent("outfits", "success", `Generated ${outfitCount} outfits`, { outfitIds }));
+      outfitIds = outfitResult.outfitIds;
+      outfitCount = outfitResult.count;
+      outfitCandidates = outfitResult.outfitCandidates;
+      events.push(makeEvent("outfits", "success", `Generated ${outfitCount} outfit candidates (draft — awaiting user selection)`, { outfitIds }));
     } catch (err) {
       events.push(makeEvent("outfits", "error", `Outfit generation failed: ${(err as Error).message}`));
     }
 
     // ── DONE ─────────────────────────────────────────────────────────────────
-    events.push(makeEvent("done", "success", `Pipeline complete. ${registeredCount} products, ${outfitCount} outfits.`, {
+    events.push(makeEvent("done", "success", `Pipeline complete. ${registeredCount} products, ${outfitCount} outfit candidates ready for review.`, {
       batchId,
       productsRegistered: registeredCount,
       outfitsGenerated: outfitCount,
@@ -716,6 +723,7 @@ Deno.serve(async (req: Request) => {
       productsRegistered: registeredCount,
       outfitsGenerated: outfitCount,
       outfitIds,
+      outfitCandidates,
       success: true,
     };
 

@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Zap, Play, CheckCircle2, XCircle, Loader2, AlertCircle,
+  Zap, Play, CheckCircle2, XCircle, Loader2,
   ChevronDown, ChevronRight, Package, ShoppingBag, Shirt,
-  Sparkles, Clock, SkipForward, RefreshCw, ExternalLink,
+  Sparkles, Clock, RefreshCw, ExternalLink, Check, X,
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
@@ -21,12 +21,26 @@ interface PipelineEvent {
   timestamp: string;
 }
 
+interface OutfitCandidateItem {
+  slot: string;
+  productId: string;
+  name: string;
+  imageUrl: string;
+  price?: number;
+}
+
+interface OutfitCandidate {
+  outfitId: string;
+  items: OutfitCandidateItem[];
+}
+
 interface PipelineResult {
   batchId: string;
   events: PipelineEvent[];
   productsRegistered: number;
   outfitsGenerated: number;
   outfitIds: string[];
+  outfitCandidates?: OutfitCandidate[];
   success: boolean;
   error?: string;
 }
@@ -42,23 +56,21 @@ interface RunHistory {
   success: boolean;
 }
 
-const VIBES: { key: Vibe; label: string; desc: string; color: string }[] = [
-  { key: 'ELEVATED_COOL', label: 'Elevated Cool', desc: 'Sharp, minimal, city-noir', color: 'bg-zinc-800 text-white border-zinc-600' },
-  { key: 'EFFORTLESS_NATURAL', label: 'Effortless Natural', desc: 'Organic, relaxed, japandi', color: 'bg-stone-100 text-stone-800 border-stone-300' },
-  { key: 'ARTISTIC_MINIMAL', label: 'Artistic Minimal', desc: 'Avant-garde, gallery, deconstructed', color: 'bg-slate-100 text-slate-800 border-slate-300' },
-  { key: 'RETRO_LUXE', label: 'Retro Luxe', desc: 'Heritage, cinematic, old-money', color: 'bg-amber-50 text-amber-900 border-amber-300' },
-  { key: 'SPORT_MODERN', label: 'Sport Modern', desc: 'Technical, functional, city-sport', color: 'bg-sky-50 text-sky-900 border-sky-300' },
-  { key: 'CREATIVE_LAYERED', label: 'Creative Layered', desc: 'Eclectic, layered, expressive', color: 'bg-rose-50 text-rose-900 border-rose-300' },
+const VIBES: { key: Vibe; label: string; desc: string }[] = [
+  { key: 'ELEVATED_COOL', label: 'Elevated Cool', desc: 'Sharp, minimal, city-noir' },
+  { key: 'EFFORTLESS_NATURAL', label: 'Effortless Natural', desc: 'Organic, relaxed, japandi' },
+  { key: 'ARTISTIC_MINIMAL', label: 'Artistic Minimal', desc: 'Avant-garde, gallery, deconstructed' },
+  { key: 'RETRO_LUXE', label: 'Retro Luxe', desc: 'Heritage, cinematic, old-money' },
+  { key: 'SPORT_MODERN', label: 'Sport Modern', desc: 'Technical, functional, city-sport' },
+  { key: 'CREATIVE_LAYERED', label: 'Creative Layered', desc: 'Eclectic, layered, expressive' },
 ];
 
 const STEP_META: Record<string, { icon: React.ReactNode; label: string }> = {
-  init:     { icon: <Zap className="w-4 h-4" />,         label: 'Initialize' },
   keywords: { icon: <Sparkles className="w-4 h-4" />,    label: 'AI Keywords' },
   search:   { icon: <ShoppingBag className="w-4 h-4" />, label: 'Amazon Search' },
   register: { icon: <Package className="w-4 h-4" />,     label: 'Register Products' },
   nobg:     { icon: <Shirt className="w-4 h-4" />,       label: 'Background Removal' },
   outfits:  { icon: <Sparkles className="w-4 h-4" />,    label: 'Outfit Generation' },
-  done:     { icon: <CheckCircle2 className="w-4 h-4" />, label: 'Complete' },
 };
 
 const STATUS_COLOR: Record<EventStatus, string> = {
@@ -79,6 +91,11 @@ const STATUS_DOT: Record<EventStatus, string> = {
 
 const PIPELINE_STEPS = ['keywords', 'search', 'register', 'nobg', 'outfits'];
 
+const SLOT_LABEL: Record<string, string> = {
+  top: '상의', bottom: '하의', shoes: '신발',
+  bag: '가방', accessory: '액세서리', outer: '아우터', mid: '미드레이어',
+};
+
 function getStepPhase(events: PipelineEvent[]): Record<string, EventStatus | 'idle'> {
   const phases: Record<string, EventStatus | 'idle'> = {};
   for (const step of PIPELINE_STEPS) {
@@ -96,7 +113,7 @@ function formatTime(iso: string): string {
 
 function EventRow({ event }: { event: PipelineEvent }) {
   return (
-    <div className="flex items-start gap-3 py-1.5 group">
+    <div className="flex items-start gap-3 py-1.5">
       <span className="text-[10px] text-zinc-600 font-mono mt-0.5 shrink-0 w-20">
         {formatTime(event.timestamp)}
       </span>
@@ -116,7 +133,7 @@ function StepIndicator({ step, phase }: { step: string; phase: EventStatus | 'id
   const isError = phase === 'error';
 
   return (
-    <div className={`flex flex-col items-center gap-1.5 flex-1 transition-all duration-300`}>
+    <div className="flex flex-col items-center gap-1.5 flex-1 transition-all duration-300">
       <div className={`
         w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300
         ${isIdle ? 'border-zinc-700 text-zinc-600 bg-zinc-900' : ''}
@@ -131,6 +148,101 @@ function StepIndicator({ step, phase }: { step: string; phase: EventStatus | 'id
       }`}>
         {meta.label}
       </span>
+    </div>
+  );
+}
+
+function OutfitCandidateCard({
+  candidate,
+  index,
+  selected,
+  onToggle,
+}: {
+  candidate: OutfitCandidate;
+  index: number;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const essentials = candidate.items.filter(i => ['top', 'bottom', 'shoes'].includes(i.slot));
+  const optionals = candidate.items.filter(i => !['top', 'bottom', 'shoes'].includes(i.slot));
+
+  return (
+    <div
+      onClick={onToggle}
+      className={`relative cursor-pointer rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
+        selected
+          ? 'border-emerald-500 bg-emerald-500/8 shadow-lg shadow-emerald-500/10'
+          : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/6'
+      }`}
+    >
+      {/* Selection badge */}
+      <div className={`absolute top-3 right-3 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+        selected ? 'bg-emerald-500 border-emerald-500' : 'bg-transparent border-white/30'
+      }`}>
+        {selected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+      </div>
+
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs font-bold text-zinc-300">Outfit {index + 1}</span>
+          {optionals.length > 0 && (
+            <span className="text-[10px] text-zinc-500 bg-white/6 px-2 py-0.5 rounded-full">
+              +{optionals.length} 추가
+            </span>
+          )}
+        </div>
+
+        {/* Essential slots grid */}
+        <div className="grid grid-cols-3 gap-1.5 mb-2">
+          {essentials.map((item) => (
+            <div key={item.slot} className="flex flex-col gap-1">
+              <div className="aspect-square bg-zinc-800 rounded-lg overflow-hidden">
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  className="w-full h-full object-contain p-1"
+                  onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/100x100?text=No+Img'; }}
+                />
+              </div>
+              <span className="text-[9px] text-zinc-500 text-center truncate">
+                {SLOT_LABEL[item.slot] || item.slot}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Optional slots row */}
+        {optionals.length > 0 && (
+          <div className="flex gap-1.5 mt-1">
+            {optionals.map((item) => (
+              <div key={item.slot} className="flex flex-col gap-0.5 flex-1">
+                <div className="aspect-square bg-zinc-800/60 rounded-md overflow-hidden">
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="w-full h-full object-contain p-1"
+                    onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/60x60?text=?'; }}
+                  />
+                </div>
+                <span className="text-[8px] text-zinc-600 text-center truncate">
+                  {SLOT_LABEL[item.slot] || item.slot}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Price total */}
+        {candidate.items.some(i => i.price) && (
+          <div className="mt-2.5 pt-2 border-t border-white/6">
+            <span className="text-[10px] text-zinc-400">
+              합계: <span className="text-white font-semibold">
+                ${candidate.items.reduce((sum, i) => sum + (i.price || 0), 0)}
+              </span>
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -150,6 +262,10 @@ export default function AdminAutoPipeline() {
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<RunHistory[]>([]);
 
+  const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [savedCount, setSavedCount] = useState(0);
+
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -158,6 +274,12 @@ export default function AdminAutoPipeline() {
       try { setHistory(JSON.parse(saved)); } catch { /* */ }
     }
   }, []);
+
+  useEffect(() => {
+    if (result?.outfitCandidates) {
+      setSelectedOutfitIds(new Set(result.outfitCandidates.map(c => c.outfitId)));
+    }
+  }, [result]);
 
   useEffect(() => {
     if (logEndRef.current && showAllLogs) {
@@ -173,11 +295,63 @@ export default function AdminAutoPipeline() {
     });
   };
 
+  const toggleOutfit = (outfitId: string) => {
+    setSelectedOutfitIds(prev => {
+      const next = new Set(prev);
+      next.has(outfitId) ? next.delete(outfitId) : next.add(outfitId);
+      return next;
+    });
+  };
+
+  const handleSaveSelected = async () => {
+    if (selectedOutfitIds.size === 0) return;
+    setSaving(true);
+    try {
+      const selectedIds = Array.from(selectedOutfitIds);
+      const rejectedIds = (result?.outfitIds || []).filter(id => !selectedOutfitIds.has(id));
+
+      await Promise.all([
+        supabase.from('outfits').update({ status: 'pending_render' }).in('id', selectedIds),
+        rejectedIds.length > 0
+          ? supabase.from('outfits').delete().in('id', rejectedIds)
+          : Promise.resolve(),
+      ]);
+
+      setSavedCount(selectedIds.length);
+      setSelectedOutfitIds(new Set());
+      setResult(prev => prev ? { ...prev, outfitCandidates: undefined } : prev);
+
+      if (result) {
+        const entry: RunHistory = {
+          batchId: result.batchId,
+          timestamp: new Date().toISOString(),
+          gender,
+          vibe,
+          season,
+          productsRegistered: result.productsRegistered,
+          outfitsGenerated: selectedIds.length,
+          success: true,
+        };
+        setHistory(prev => {
+          const next = [entry, ...prev].slice(0, 10);
+          localStorage.setItem('auto_pipeline_history', JSON.stringify(next));
+          return next;
+        });
+      }
+    } catch (err) {
+      alert('저장 실패: ' + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRun = async () => {
     setRunning(true);
     setResult(null);
     setError(null);
     setShowAllLogs(false);
+    setSavedCount(0);
+    setSelectedOutfitIds(new Set());
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
@@ -220,24 +394,6 @@ export default function AdminAutoPipeline() {
 
       const data: PipelineResult = await res.json();
       setResult(data);
-
-      if (data.success) {
-        const entry: RunHistory = {
-          batchId: data.batchId,
-          timestamp: new Date().toISOString(),
-          gender,
-          vibe,
-          season,
-          productsRegistered: data.productsRegistered,
-          outfitsGenerated: data.outfitsGenerated,
-          success: true,
-        };
-        setHistory(prev => {
-          const next = [entry, ...prev].slice(0, 10);
-          localStorage.setItem('auto_pipeline_history', JSON.stringify(next));
-          return next;
-        });
-      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -254,13 +410,7 @@ export default function AdminAutoPipeline() {
       }, {})
     : {};
 
-  const currentStep = running
-    ? 'Analyzing...'
-    : result
-    ? result.success
-      ? `Done — ${result.productsRegistered} products, ${result.outfitsGenerated} outfits`
-      : `Failed: ${result.error || 'Unknown error'}`
-    : null;
+  const hasCandidates = result?.outfitCandidates && result.outfitCandidates.length > 0;
 
   return (
     <div className="min-h-screen bg-[#111] text-white">
@@ -296,9 +446,7 @@ export default function AdminAutoPipeline() {
                     key={g}
                     onClick={() => setGender(g)}
                     className={`py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                      gender === g
-                        ? 'bg-white text-black'
-                        : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
+                      gender === g ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
                     }`}
                   >
                     {g === 'MALE' ? 'Male' : g === 'FEMALE' ? 'Female' : 'Unisex'}
@@ -316,9 +464,7 @@ export default function AdminAutoPipeline() {
                     key={b}
                     onClick={() => setBodyType(b)}
                     className={`py-2.5 rounded-xl text-xs font-semibold transition-all capitalize ${
-                      bodyType === b
-                        ? 'bg-white text-black'
-                        : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
+                      bodyType === b ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
                     }`}
                   >
                     {b}
@@ -336,9 +482,7 @@ export default function AdminAutoPipeline() {
                     key={s}
                     onClick={() => setSeason(s)}
                     className={`py-2.5 rounded-xl text-xs font-semibold transition-all capitalize ${
-                      season === s
-                        ? 'bg-white text-black'
-                        : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
+                      season === s ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
                     }`}
                   >
                     {s}
@@ -371,7 +515,7 @@ export default function AdminAutoPipeline() {
               </div>
             </div>
 
-            {/* Advanced Settings */}
+            {/* Settings */}
             <div className="bg-white/5 rounded-2xl p-5 border border-white/8 space-y-4">
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">Settings</label>
               <div className="flex items-center justify-between">
@@ -409,15 +553,9 @@ export default function AdminAutoPipeline() {
               }`}
             >
               {running ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Pipeline Running...
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" />Pipeline Running...</>
               ) : (
-                <>
-                  <Play className="w-4 h-4" fill="currentColor" />
-                  Run Auto Pipeline
-                </>
+                <><Play className="w-4 h-4" fill="currentColor" />Run Auto Pipeline</>
               )}
             </button>
           </div>
@@ -437,10 +575,9 @@ export default function AdminAutoPipeline() {
                     <XCircle className="w-4 h-4 text-red-400" />
                   )}
                   <span className="text-xs font-semibold text-zinc-300">
-                    {running ? 'Pipeline running...' : currentStep}
+                    {running ? 'Pipeline running...' : result?.success ? `Done — ${result.productsRegistered} products registered` : `Failed: ${result?.error}`}
                   </span>
                 </div>
-
                 <div className="flex items-start gap-0">
                   {PIPELINE_STEPS.map((step, i) => (
                     <div key={step} className="flex items-center flex-1">
@@ -457,28 +594,100 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {/* Result Summary */}
-            {result?.success && !running && (
-              <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  <span className="font-bold text-emerald-300">Pipeline Completed Successfully</span>
+            {/* ── Outfit Candidate Selection ─── */}
+            {hasCandidates && (
+              <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-white/8 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">코디 후보 선택</h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      등록할 코디를 선택하세요 · {selectedOutfitIds.size}/{result!.outfitCandidates!.length} 선택됨
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedOutfitIds(new Set(result!.outfitCandidates!.map(c => c.outfitId)))}
+                      className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/8 transition-all"
+                    >
+                      전체 선택
+                    </button>
+                    <button
+                      onClick={() => setSelectedOutfitIds(new Set())}
+                      className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/8 transition-all"
+                    >
+                      전체 해제
+                    </button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3 mb-4">
+
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {result!.outfitCandidates!.map((candidate, i) => (
+                    <OutfitCandidateCard
+                      key={candidate.outfitId}
+                      candidate={candidate}
+                      index={i}
+                      selected={selectedOutfitIds.has(candidate.outfitId)}
+                      onToggle={() => toggleOutfit(candidate.outfitId)}
+                    />
+                  ))}
+                </div>
+
+                <div className="px-4 pb-4 flex items-center gap-3">
+                  <button
+                    onClick={handleSaveSelected}
+                    disabled={saving || selectedOutfitIds.size === 0}
+                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                      selectedOutfitIds.size === 0
+                        ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                        : saving
+                        ? 'bg-emerald-600 text-white cursor-not-allowed'
+                        : 'bg-emerald-500 text-white hover:bg-emerald-400 active:scale-[0.98]'
+                    }`}
+                  >
+                    {saving ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" />저장 중...</>
+                    ) : (
+                      <><Check className="w-4 h-4" />{selectedOutfitIds.size}개 코디 등록</>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const rejected = result?.outfitIds || [];
+                      if (rejected.length > 0) {
+                        supabase.from('outfits').delete().in('id', rejected);
+                      }
+                      setResult(prev => prev ? { ...prev, outfitCandidates: undefined } : prev);
+                    }}
+                    className="px-4 py-3 rounded-xl font-medium text-sm text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all flex items-center gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    전체 취소
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Saved confirmation */}
+            {savedCount > 0 && !hasCandidates && (
+              <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  <div>
+                    <div className="font-bold text-emerald-300">코디 등록 완료</div>
+                    <div className="text-xs text-emerald-400/70 mt-0.5">{savedCount}개 코디가 등록되었습니다</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                   <div className="bg-white/5 rounded-xl p-3 text-center">
-                    <div className="text-2xl font-bold text-white">{result.productsRegistered}</div>
+                    <div className="text-2xl font-bold text-white">{result?.productsRegistered ?? 0}</div>
                     <div className="text-[10px] text-zinc-400 mt-0.5">Products Registered</div>
                   </div>
                   <div className="bg-white/5 rounded-xl p-3 text-center">
-                    <div className="text-2xl font-bold text-white">{result.outfitsGenerated}</div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5">Outfits Generated</div>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-center">
-                    <div className="text-2xl font-bold text-white">{result.outfitIds.length}</div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5">Outfit IDs Saved</div>
+                    <div className="text-2xl font-bold text-white">{savedCount}</div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5">Outfits Saved</div>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-4">
                   <a
                     href="#admin-products"
                     className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-medium text-white transition-all"
