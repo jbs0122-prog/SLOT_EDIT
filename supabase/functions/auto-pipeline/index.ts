@@ -803,23 +803,25 @@ Deno.serve(async (req: Request) => {
       .is("nobg_image_url", null);
 
     if (productsForBg && productsForBg.length > 0) {
+      const PARALLEL = 4;
       const extractionPromise = (async () => {
         let ok = 0;
-        for (const p of productsForBg) {
-          if (!p.image_url) continue;
-          try {
-            await triggerExtractProduct(
+        const validProducts = productsForBg.filter(p => !!p.image_url);
+        for (let i = 0; i < validProducts.length; i += PARALLEL) {
+          const batch = validProducts.slice(i, i + PARALLEL);
+          const results = await Promise.allSettled(
+            batch.map(p => triggerExtractProduct(
               p.id, p.image_url, p.category || "top", p.sub_category || "",
               SUPABASE_URL, SUPABASE_SERVICE_KEY
-            );
-            ok++;
-          } catch { /* continue */ }
-          await delay(500);
+            ))
+          );
+          ok += results.filter(r => r.status === "fulfilled").length;
+          if (i + PARALLEL < validProducts.length) await delay(300);
         }
-        console.log(`Flatlay extraction done: ${ok}/${productsForBg.length}`);
+        console.log(`Flatlay extraction done: ${ok}/${validProducts.length}`);
       })();
       EdgeRuntime.waitUntil(extractionPromise);
-      events.push(makeEvent("nobg", "success", `AI flatlay extraction started for ${productsForBg.length} products (runs in background after response)`));
+      events.push(makeEvent("nobg", "success", `AI flatlay extraction started for ${productsForBg.length} products (4 concurrent)`));
     } else {
       events.push(makeEvent("nobg", "skip", "All products already have flatlay images"));
     }
