@@ -337,7 +337,6 @@ async function triggerExtractProduct(
     const extractData = await extractRes.json();
     if (!extractData.success || !extractData.imageUrl) return;
 
-    const { createClient } = await import("npm:@supabase/supabase-js@2");
     const adminClient = createClient(supabaseUrl, serviceKey);
     await adminClient
       .from("products")
