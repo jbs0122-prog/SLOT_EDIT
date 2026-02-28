@@ -456,7 +456,7 @@ function getUnregisteredRecommendations(
     const formality = inferFormalityFromName(item.name);
 
     const colorKeywords = buildColorKeywords(lookDna.color_palette, existingColorFamilies, slotCategory);
-    const materialKeywords = buildMaterialKeywords(lookMats, dna.material_preferences, slotCategory, linkedItems, item.name);
+    const materialKeywords = buildMaterialKeywords(lookMats, dna.material_preferences, slotCategory, linkedItems, item.name, vk);
     const fitKeywords = buildFitKeywords(item.name, lookDna.silhouette_preference);
     const textureHint = buildTextureHint(dna.material_preferences, linkedItems, item.name);
     const formalityHint = { level: formality, label: getFormalityLabel(formality) };
@@ -582,12 +582,80 @@ function buildColorKeywords(
   return result.slice(0, 5);
 }
 
+const SLOT_MATERIAL_AFFINITY: Record<string, string[]> = {
+  outer:     ['wool', 'leather', 'cashmere', 'tweed', 'suede', 'nylon', 'cotton', 'down', 'shearling', 'corduroy'],
+  mid:       ['wool', 'cashmere', 'knit', 'cotton', 'fleece', 'merino', 'ribbed', 'cable-knit', 'mohair'],
+  top:       ['cotton', 'silk', 'linen', 'cashmere', 'jersey', 'satin', 'chiffon', 'poplin', 'chambray'],
+  bottom:    ['denim', 'cotton', 'wool', 'leather', 'linen', 'corduroy', 'satin', 'velvet', 'tweed'],
+  shoes:     ['leather', 'suede', 'canvas', 'rubber', 'nylon', 'mesh'],
+  bag:       ['leather', 'canvas', 'nylon', 'suede', 'woven', 'straw'],
+  accessory: ['metal', 'leather', 'silk', 'gold', 'silver', 'pearl', 'ceramic', 'resin', 'stone', 'wood'],
+};
+
+const VIBE_MATERIAL_MAP: Record<string, Record<string, string[]>> = {
+  elevated_cool: {
+    outer:     ['fine wool', 'leather', 'cashmere', 'gabardine'],
+    mid:       ['cashmere', 'fine wool', 'ribbed cotton'],
+    top:       ['silk', 'poplin', 'cotton', 'satin'],
+    bottom:    ['gabardine', 'wool', 'leather', 'denim'],
+    shoes:     ['leather', 'suede'],
+    bag:       ['leather', 'suede'],
+    accessory: ['silver', 'metal', 'leather', 'silk'],
+  },
+  effortless_natural: {
+    outer:     ['linen', 'cotton', 'canvas', 'waxed cotton'],
+    mid:       ['cashmere', 'wool', 'cotton knit'],
+    top:       ['linen', 'cotton', 'gauze', 'raw silk'],
+    bottom:    ['linen', 'cotton', 'denim', 'canvas'],
+    shoes:     ['leather', 'canvas', 'suede'],
+    bag:       ['canvas', 'leather', 'woven'],
+    accessory: ['wood', 'ceramic', 'leather', 'cotton'],
+  },
+  artistic_minimal: {
+    outer:     ['wool', 'neoprene', 'cotton', 'leather'],
+    mid:       ['wool', 'cotton', 'ribbed knit'],
+    top:       ['cotton', 'silk', 'linen', 'jersey'],
+    bottom:    ['wool', 'cotton', 'leather', 'denim'],
+    shoes:     ['leather', 'canvas', 'rubber'],
+    bag:       ['leather', 'canvas', 'nylon'],
+    accessory: ['metal', 'stone', 'leather', 'resin'],
+  },
+  retro_luxe: {
+    outer:     ['tweed', 'wool', 'cashmere', 'leather', 'suede'],
+    mid:       ['cashmere', 'wool', 'mohair', 'boucle'],
+    top:       ['silk', 'velvet', 'satin', 'cotton'],
+    bottom:    ['velvet', 'corduroy', 'wool', 'suede'],
+    shoes:     ['leather', 'suede', 'velvet'],
+    bag:       ['leather', 'suede', 'velvet'],
+    accessory: ['gold', 'pearl', 'silk', 'leather'],
+  },
+  sport_modern: {
+    outer:     ['nylon', 'gore-tex', 'fleece', 'mesh'],
+    mid:       ['fleece', 'cotton', 'jersey', 'merino'],
+    top:       ['cotton', 'jersey', 'mesh', 'nylon'],
+    bottom:    ['nylon', 'cotton', 'jersey', 'spandex'],
+    shoes:     ['rubber', 'mesh', 'nylon', 'leather'],
+    bag:       ['nylon', 'canvas', 'mesh'],
+    accessory: ['rubber', 'nylon', 'metal', 'silicone'],
+  },
+  creative_layered: {
+    outer:     ['denim', 'leather', 'flannel', 'velvet'],
+    mid:       ['cotton', 'knit', 'fleece', 'jersey'],
+    top:       ['cotton', 'jersey', 'silk', 'lace'],
+    bottom:    ['denim', 'velvet', 'corduroy', 'leather'],
+    shoes:     ['leather', 'canvas', 'rubber'],
+    bag:       ['leather', 'canvas', 'woven'],
+    accessory: ['metal', 'leather', 'resin', 'chain'],
+  },
+};
+
 function buildMaterialKeywords(
   lookMaterials: string[],
   vibeMaterialPrefs: string[],
   slotCategory: SlotCategory,
   existingItems: OutfitItem[],
-  itemName: string
+  itemName: string,
+  vibeKey?: string,
 ): MaterialKeyword[] {
   const result: MaterialKeyword[] = [];
   const seen = new Set<string>();
@@ -596,19 +664,12 @@ function buildMaterialKeywords(
     .filter(i => i.product)
     .map(i => inferMaterialGroup(i.product!.material || '', i.product!.name));
 
-  const SLOT_MATERIAL_AFFINITY: Record<string, string[]> = {
-    outer: ['wool', 'leather', 'cashmere', 'tweed', 'suede', 'nylon'],
-    top: ['cotton', 'silk', 'linen', 'cashmere', 'jersey'],
-    bottom: ['wool', 'cotton', 'denim', 'leather', 'linen'],
-    shoes: ['leather', 'suede', 'canvas', 'rubber'],
-    bag: ['leather', 'canvas', 'nylon', 'suede'],
-    accessory: ['metal', 'leather', 'silk'],
-  };
   const slotFit = SLOT_MATERIAL_AFFINITY[slotCategory] || [];
 
   const addMaterial = (mat: string, reason: MaterialKeyword['reason']) => {
-    const lower = mat.toLowerCase();
+    const lower = mat.toLowerCase().replace(/\s+/g, ' ').trim();
     if (seen.has(lower)) return;
+    if (lower.match(/[가-힣]/)) return;
     seen.add(lower);
     const group = inferMaterialGroup(lower, itemName);
     let compatScore = 80;
@@ -619,32 +680,46 @@ function buildMaterialKeywords(
     result.push({ material: lower, group, compatScore, reason });
   };
 
-  const lower = itemName.toLowerCase();
+  // 1순위: 아이템명에서 소재 직접 추출
+  const itemLower = itemName.toLowerCase();
   const matKw = ['leather', 'suede', 'wool', 'cotton', 'silk', 'linen', 'denim', 'knit',
     'nylon', 'velvet', 'cashmere', 'canvas', 'corduroy', 'tweed', 'satin', 'mesh',
-    'fleece', 'jersey', 'rubber', 'waxed', 'quilted'];
+    'fleece', 'jersey', 'rubber', 'waxed', 'quilted', 'silver', 'gold', 'metal',
+    'ceramic', 'pearl', 'wood', 'stone', 'resin', 'chain'];
   for (const kw of matKw) {
-    if (lower.includes(kw)) addMaterial(kw, 'slot_fit');
+    if (itemLower.includes(kw)) addMaterial(kw, 'slot_fit');
   }
 
+  // 2순위: vibe×slot 특화 소재 (generate-amazon-keywords의 VIBE_LOOKS 방식과 동일)
+  const vibeSlotMats = (vibeKey && VIBE_MATERIAL_MAP[vibeKey]?.[slotCategory]) || [];
+  for (const mat of vibeSlotMats) {
+    if (slotFit.some(sf => mat.toLowerCase().includes(sf))) {
+      addMaterial(mat, 'slot_fit');
+    } else {
+      addMaterial(mat, 'vibe_preferred');
+    }
+  }
+
+  // 3순위: Look 소재 중 슬롯 affinity 있는 것만
+  for (const lm of lookMaterials) {
+    const lmLower = lm.toLowerCase();
+    if (slotFit.some(sf => lmLower.includes(sf) || lmLower === sf)) {
+      addMaterial(lm, 'slot_fit');
+    }
+  }
+
+  // 4순위: vibe material_preferences 그룹 소재 — 슬롯과 맞는 것만
   for (const prefGroup of vibeMaterialPrefs) {
     const groupMats = MATERIAL_GROUPS[prefGroup] || [];
-    for (const mat of groupMats.slice(0, 2)) {
-      if (!mat.match(/[가-힣]/)) {
+    for (const mat of groupMats) {
+      const matLower = mat.toLowerCase();
+      if (!matLower.match(/[가-힣]/) && slotFit.some(sf => matLower.includes(sf) || matLower === sf)) {
         addMaterial(mat, 'vibe_preferred');
       }
     }
   }
 
-  for (const lm of lookMaterials) {
-    const lmLower = lm.toLowerCase();
-    if (slotFit.some(sf => lmLower.includes(sf))) {
-      addMaterial(lm, 'slot_fit');
-    } else {
-      addMaterial(lm, 'harmony_with_existing');
-    }
-  }
-
+  // 5순위: 기존 아이템과의 텍스처 대비
   if (existingGroups.length > 0) {
     const dominantGroup = existingGroups[0];
     const contrastedGroups: Record<string, string[]> = {
@@ -655,17 +730,21 @@ function buildMaterialKeywords(
       knit: ['structured', 'classic'],
       technical: ['classic', 'luxe'],
     };
-    const contrastTargets = contrastedGroups[dominantGroup] || [];
-    for (const target of contrastTargets) {
+    for (const target of (contrastedGroups[dominantGroup] || [])) {
       const mats = MATERIAL_GROUPS[target] || [];
-      for (const m of mats.slice(0, 1)) {
-        if (!m.match(/[가-힣]/)) addMaterial(m, 'texture_contrast');
+      for (const m of mats) {
+        const mLower = m.toLowerCase();
+        if (!mLower.match(/[가-힣]/) && slotFit.some(sf => mLower.includes(sf) || mLower === sf)) {
+          addMaterial(m, 'texture_contrast');
+          break;
+        }
       }
     }
   }
 
+  // slot_fit → vibe_preferred → harmony_with_existing → texture_contrast 순 정렬
   result.sort((a, b) => {
-    const priorityOrder: MaterialKeyword['reason'][] = ['vibe_preferred', 'slot_fit', 'harmony_with_existing', 'texture_contrast'];
+    const priorityOrder: MaterialKeyword['reason'][] = ['slot_fit', 'vibe_preferred', 'harmony_with_existing', 'texture_contrast'];
     const ap = priorityOrder.indexOf(a.reason);
     const bp = priorityOrder.indexOf(b.reason);
     if (ap !== bp) return ap - bp;
@@ -746,7 +825,9 @@ function buildSearchKeyword(
   const topColor = colorKeywords.find(c => c.tier === 'primary' && c.harmonyScore >= 75);
   if (topColor) parts.push(topColor.color);
 
-  const topMat = materialKeywords.find(m => m.reason === 'vibe_preferred' || m.reason === 'slot_fit');
+  // slot_fit 소재를 우선, 없으면 vibe_preferred 사용
+  const topMat = materialKeywords.find(m => m.reason === 'slot_fit')
+    ?? materialKeywords.find(m => m.reason === 'vibe_preferred');
   if (topMat) parts.push(topMat.material);
 
   const topFit = fitKeywords.find(f => f.dnaMatch);
