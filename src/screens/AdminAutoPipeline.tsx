@@ -408,7 +408,10 @@ export default function AdminAutoPipeline() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
-          authHeader = `Bearer ${session.access_token}`;
+          // Refresh to ensure token is not expired
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          const token = refreshed.session?.access_token ?? session.access_token;
+          authHeader = `Bearer ${token}`;
         }
       } catch { /* use anon key */ }
 
