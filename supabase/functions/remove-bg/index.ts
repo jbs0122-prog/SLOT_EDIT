@@ -30,38 +30,6 @@ function isAllowedUrl(url: string): boolean {
   }
 }
 
-async function verifyAdmin(req: Request) {
-  try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return null;
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) return null;
-
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-    const { data } = await adminClient
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    return data ? user : null;
-  } catch {
-    return null;
-  }
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -71,11 +39,18 @@ Deno.serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get("Authorization") || "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const isServiceKeyCall = authHeader === `Bearer ${serviceKey}`;
+    const isAnonKeyCall = authHeader === `Bearer ${anonKey}`;
 
-    if (!isServiceKeyCall) {
-      const admin = await verifyAdmin(req);
-      if (!admin) {
+    if (!isServiceKeyCall && !isAnonKeyCall) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
         return new Response(
           JSON.stringify({ error: "Forbidden" }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
