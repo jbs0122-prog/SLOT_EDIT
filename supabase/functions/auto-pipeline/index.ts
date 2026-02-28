@@ -794,29 +794,32 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── STEP 5: Flatlay extraction (AI detect → extract, async fire-and-forget) ─
-    events.push(makeEvent("nobg", "start", "Queuing AI flatlay extraction for all products..."));
+    // ── STEP 5: Flatlay extraction (AI detect → extract) ─────────────────────
+    events.push(makeEvent("nobg", "start", "Starting AI flatlay extraction for registered products..."));
     const { data: productsForBg } = await adminClient
       .from("products")
-      .select("id, image_url, category, sub_category")
+      .select("id, image_url, category, sub_category, name")
       .eq("batch_id", batchId)
       .is("nobg_image_url", null);
 
+    let extractedCount = 0;
     if (productsForBg && productsForBg.length > 0) {
-      EdgeRuntime.waitUntil(
-        (async () => {
-          for (const p of productsForBg) {
-            if (p.image_url) {
-              await triggerExtractProduct(
-                p.id, p.image_url, p.category || "top", p.sub_category || "",
-                SUPABASE_URL, SUPABASE_SERVICE_KEY
-              ).catch(() => {});
-              await delay(1500);
-            }
-          }
-        })()
-      );
-      events.push(makeEvent("nobg", "success", `AI flatlay extraction queued for ${productsForBg.length} products (async)`));
+      for (let i = 0; i < productsForBg.length; i++) {
+        const p = productsForBg[i];
+        if (!p.image_url) continue;
+        events.push(makeEvent("nobg", "progress", `[${i + 1}/${productsForBg.length}] Extracting: ${p.name?.substring(0, 40)}...`));
+        try {
+          await triggerExtractProduct(
+            p.id, p.image_url, p.category || "top", p.sub_category || "",
+            SUPABASE_URL, SUPABASE_SERVICE_KEY
+          );
+          extractedCount++;
+        } catch { /* continue to next */ }
+        if (i < productsForBg.length - 1) await delay(500);
+      }
+      events.push(makeEvent("nobg", "success", `Flatlay extraction completed: ${extractedCount}/${productsForBg.length} products`));
+    } else {
+      events.push(makeEvent("nobg", "skip", "All products already have flatlay images"));
     }
 
     // ── STEP 6: Generate outfit candidates ────────────────────────────────────
