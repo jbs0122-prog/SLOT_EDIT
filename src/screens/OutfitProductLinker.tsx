@@ -152,9 +152,9 @@ function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecomm
   return (
     <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-2 hover:border-blue-300 hover:shadow-sm transition-all group/card">
       <img
-        src={rec.product.image_url}
+        src={rec.product.nobg_image_url || rec.product.image_url}
         alt={rec.product.name}
-        className="w-11 h-11 object-cover rounded shrink-0"
+        className="w-11 h-11 object-contain rounded shrink-0"
       />
       <div className="flex-1 min-w-0">
         <p className="text-[11px] font-medium text-gray-900 truncate">{rec.product.brand}</p>
@@ -412,9 +412,10 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       setAvailableProducts(productsResult.data?.map(p => ({
         id: p.id, brand: p.brand, name: p.name, category: p.category, gender: p.gender,
         body_type: p.body_type || [], vibe: p.vibe || [], color: p.color || '', season: p.season || [],
-        silhouette: p.silhouette || '', image_url: p.image_url, product_link: p.product_link || '',
-        affiliate_link: p.affiliate_link || '', price: p.price, stock_status: p.stock_status || 'in_stock',
-        material: p.material || '', color_family: p.color_family || '', color_tone: p.color_tone || '',
+        silhouette: p.silhouette || '', image_url: p.image_url, nobg_image_url: p.nobg_image_url || null,
+        product_link: p.product_link || '', affiliate_link: p.affiliate_link || '', price: p.price,
+        stock_status: p.stock_status || 'in_stock', material: p.material || '',
+        color_family: p.color_family || '', color_tone: p.color_tone || '',
         sub_category: p.sub_category || '', pattern: p.pattern || '', formality: p.formality, warmth: p.warmth,
         created_at: p.created_at, updated_at: p.updated_at,
       } as Product)) || []);
@@ -428,6 +429,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
           body_type: item.product.body_type || [], vibe: item.product.vibe || [],
           color: item.product.color || '', season: item.product.season || [],
           silhouette: item.product.silhouette || '', image_url: item.product.image_url,
+          nobg_image_url: item.product.nobg_image_url || null,
           product_link: item.product.product_link || '', affiliate_link: item.product.affiliate_link || '',
           price: item.product.price, stock_status: item.product.stock_status || 'in_stock',
           material: item.product.material || '', color_family: item.product.color_family || '',
@@ -766,7 +768,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                       </div>
                       {item?.product ? (
                         <div className="flex items-start gap-3 bg-white rounded p-3">
-                          <img src={item.product.image_url} alt={item.product.name} className="w-16 h-16 object-cover rounded" />
+                          <img src={item.product.nobg_image_url || item.product.image_url} alt={item.product.name} className="w-16 h-16 object-contain rounded" />
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-gray-900 text-sm truncate">{item.product.brand}</p>
                             <p className="text-xs text-gray-600 truncate">{item.product.name}</p>
@@ -882,7 +884,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                           draggedProduct?.id === product.id ? 'opacity-50 scale-95' : ''
                         }`}
                       >
-                        <img src={product.image_url} alt={product.name} className="w-20 h-20 object-cover rounded" />
+                        <img src={product.nobg_image_url || product.image_url} alt={product.name} className="w-20 h-20 object-contain rounded" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
