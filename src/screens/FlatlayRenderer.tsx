@@ -36,9 +36,11 @@ interface OutfitItem {
 
 type Phase = 'idle' | 'preparing' | 'editing' | 'rendering' | 'success';
 
+function hasNobgImage(url: string | null | undefined): boolean {
+  return !!url && url.trim().length > 0;
+}
 function isPixianNobgUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  return url.includes('/nobg/') || url.includes('/extracted-') || url.includes('supabase.co/storage');
+  return hasNobgImage(url);
 }
 
 export default function FlatlayRenderer({ outfitId, onClose, onRendered }: FlatlayRendererProps) {
@@ -334,10 +336,10 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       {items.map((item) => (
                         <div key={item.product_id} className="border border-gray-200 rounded-lg p-3">
-                          {item.product?.image_url ? (
+                          {(item.product?.nobg_image_url || item.product?.image_url) ? (
                             <img
-                              src={item.product.image_url}
-                              alt={item.product.name}
+                              src={item.product.nobg_image_url || item.product.image_url}
+                              alt={item.product?.name}
                               className="w-full h-32 object-contain mb-2 bg-gray-50 rounded"
                             />
                           ) : (

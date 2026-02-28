@@ -312,8 +312,9 @@ async function triggerExtractProduct(
   const label = subCategory || category;
 
   let nobgUrl: string | null = null;
+  let isModelShot = false;
 
-  // Step 1: Try Gemini AI detect → extract
+  // Step 1: Gemini AI detect — determines if image contains a model wearing items
   try {
     const detectRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
       method: "POST",
@@ -324,9 +325,11 @@ async function triggerExtractProduct(
     if (detectRes.ok) {
       const detectData = await detectRes.json();
       if (detectData.success && detectData.items?.length) {
+        isModelShot = true;
         const targetItem = detectData.items.find((i: any) => i.slot === slot)
           ?? detectData.items[0];
 
+        // Step 2a: Model shot → Gemini Image Gen to extract flatlay product
         const extractRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
           method: "POST",
           headers,
@@ -346,10 +349,10 @@ async function triggerExtractProduct(
         }
       }
     }
-  } catch { /* fall through to Pixian */ }
+  } catch { /* fall through */ }
 
-  // Step 2: Fallback — Pixian remove-bg (handles solo product images and model shots)
-  if (!nobgUrl) {
+  // Step 2b: Solo product image (no model detected) → Pixian background removal
+  if (!nobgUrl && !isModelShot) {
     try {
       const pixianRes = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
         method: "POST",
@@ -365,7 +368,7 @@ async function triggerExtractProduct(
     } catch { /* silent */ }
   }
 
-  // Step 3: Save nobg URL to DB
+  // Step 3: Save nobg URL to DB (skip data: URLs — storage upload failed)
   if (nobgUrl && !nobgUrl.startsWith("data:")) {
     try {
       await adminClient
@@ -488,13 +491,13 @@ async function generateOutfitsFromBatch(
     bySlot["mid"] = [];
   }
 
-  const essentialSlots = ["top", "bottom", "shoes"];
-  const missingSlots = essentialSlots.filter(s => !bySlot[s] || bySlot[s].length === 0);
-  if (missingSlots.length > 0) {
+  const hardEssentialSlots = ["top", "bottom"];
+  const missingHard = hardEssentialSlots.filter(s => !bySlot[s] || bySlot[s].length === 0);
+  if (missingHard.length > 0) {
     const allItems = batchProducts.filter((p: any) => p.category);
     const categoryCount: Record<string, number> = {};
     for (const p of allItems) categoryCount[p.category] = (categoryCount[p.category] || 0) + 1;
-    throw new Error(`Missing essential slots: ${missingSlots.join(", ")}. Available categories: ${JSON.stringify(categoryCount)}`);
+    throw new Error(`Missing essential slots: ${missingHard.join(", ")}. Available categories: ${JSON.stringify(categoryCount)}`);
   }
 
   const outfitIds: string[] = [];
@@ -502,7 +505,6 @@ async function generateOutfitsFromBatch(
   const usedProductIds = new Set<string>();
 
   for (let i = 0; i < outfitCount; i++) {
-    // Pick best product: prefer unused, fall back to used if necessary
     const pickBest = (slotProducts: any[]): any | null => {
       if (slotProducts.length === 0) return null;
       const unused = slotProducts.filter((p: any) => !usedProductIds.has(p.id));
@@ -513,9 +515,8 @@ async function generateOutfitsFromBatch(
 
     const top = pickBest(bySlot["top"]);
     const bottom = pickBest(bySlot["bottom"]);
-    const shoes = pickBest(bySlot["shoes"]);
 
-    if (!top || !bottom || !shoes) break;
+    if (!top || !bottom) break;
 
     const { data: newOutfit, error: outfitErr } = await adminClient
       .from("outfits")
@@ -541,23 +542,23 @@ async function generateOutfitsFromBatch(
     const itemsToInsert: any[] = [
       { outfit_id: newOutfit.id, product_id: top.id, slot_type: "top" },
       { outfit_id: newOutfit.id, product_id: bottom.id, slot_type: "bottom" },
-      { outfit_id: newOutfit.id, product_id: shoes.id, slot_type: "shoes" },
     ];
 
     const candidateItems: Array<{ slot: string; productId: string; name: string; imageUrl: string; price?: number }> = [
       { slot: "top", productId: top.id, name: top.name, imageUrl: top.nobg_image_url || top.image_url, price: top.price },
       { slot: "bottom", productId: bottom.id, name: bottom.name, imageUrl: bottom.nobg_image_url || bottom.image_url, price: bottom.price },
-      { slot: "shoes", productId: shoes.id, name: shoes.name, imageUrl: shoes.nobg_image_url || shoes.image_url, price: shoes.price },
     ];
 
     usedProductIds.add(top.id);
     usedProductIds.add(bottom.id);
-    usedProductIds.add(shoes.id);
+
+    // shoes is preferred but optional — include if available
+    const shoesSlotOrder = season === "winter" || season === "fall"
+      ? ["outer", "shoes", "bag", "accessory", "mid"]
+      : ["shoes", "bag", "accessory", "outer", "mid"];
 
     // Optional slots: outer is encouraged for fall/winter
-    const optionalSlots = season === "winter" || season === "fall"
-      ? ["outer", "bag", "accessory", "mid"]
-      : ["bag", "accessory", "outer", "mid"];
+    const optionalSlots = shoesSlotOrder;
 
     for (const slot of optionalSlots) {
       const pick = pickBest(bySlot[slot] || []);
