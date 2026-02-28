@@ -69,6 +69,20 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization") || "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isServiceKeyCall = authHeader === `Bearer ${serviceKey}`;
+
+    if (!isServiceKeyCall) {
+      const admin = await verifyAdmin(req);
+      if (!admin) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const { imageUrl, productId } = await req.json();
 
     if (!imageUrl) {

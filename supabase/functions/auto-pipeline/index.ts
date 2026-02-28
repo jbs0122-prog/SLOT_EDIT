@@ -293,55 +293,24 @@ Rules: formality 1-5, warmth 1-5. Return ONLY the JSON object.`;
   }
 }
 
-async function triggerExtractProduct(
+async function triggerRemoveBg(
   productId: string,
   imageUrl: string,
-  category: string,
-  subCategory: string,
   supabaseUrl: string,
   serviceKey: string
 ): Promise<void> {
   try {
-    const slotMap: Record<string, string> = {
-      outer: "outer", mid: "mid", top: "top", bottom: "bottom",
-      shoes: "shoes", bag: "bag", accessory: "accessory",
-    };
-    const slot = slotMap[category] || "top";
-    const label = subCategory || category;
-
-    const detectRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
+    // remove-bg handles DB update internally; pass service key so it has storage access
+    const res = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "detect", imageUrl }),
+      body: JSON.stringify({ imageUrl, productId }),
     });
 
-    if (!detectRes.ok) return;
-    const detectData = await detectRes.json();
-    if (!detectData.success || !detectData.items?.length) return;
-
-    const targetItem = detectData.items.find((i: any) => i.slot === slot)
-      ?? detectData.items[0];
-
-    const extractRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "extract",
-        imageUrl,
-        slot: targetItem.slot,
-        label: targetItem.label || label,
-      }),
-    });
-
-    if (!extractRes.ok) return;
-    const extractData = await extractRes.json();
-    if (!extractData.success || !extractData.imageUrl) return;
-
-    const adminClient = createClient(supabaseUrl, serviceKey);
-    await adminClient
-      .from("products")
-      .update({ nobg_image_url: extractData.imageUrl })
-      .eq("id", productId);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.success) return;
+    // remove-bg already updates nobg_image_url in products table
   } catch { /* silent */ }
 }
 
@@ -471,11 +440,12 @@ async function generateOutfitsFromBatch(
   const usedProductIds = new Set<string>();
 
   for (let i = 0; i < outfitCount; i++) {
-    // Pick top-scored available product, with slight randomization among top 3
+    // Pick best product: prefer unused, fall back to used if necessary
     const pickBest = (slotProducts: any[]): any | null => {
-      const available = slotProducts.filter((p: any) => !usedProductIds.has(p.id));
-      if (available.length === 0) return null;
-      const topN = available.slice(0, Math.min(3, available.length));
+      if (slotProducts.length === 0) return null;
+      const unused = slotProducts.filter((p: any) => !usedProductIds.has(p.id));
+      const pool = unused.length > 0 ? unused : slotProducts;
+      const topN = pool.slice(0, Math.min(3, pool.length));
       return topN[Math.floor(Math.random() * topN.length)];
     };
 
@@ -801,8 +771,8 @@ Deno.serve(async (req: Request) => {
         (async () => {
           for (const p of productsForBg) {
             if (p.image_url) {
-              await triggerExtractProduct(
-                p.id, p.image_url, p.category || "top", p.sub_category || "",
+              await triggerRemoveBg(
+                p.id, p.image_url,
                 SUPABASE_URL, SUPABASE_SERVICE_KEY
               ).catch(() => {});
               await delay(800);
@@ -810,7 +780,7 @@ Deno.serve(async (req: Request) => {
           }
         })()
       );
-      events.push(makeEvent("nobg", "success", `AI flatlay extraction queued for ${productsForBg.length} products (async)`));
+      events.push(makeEvent("nobg", "success", `Background removal queued for ${productsForBg.length} products (async)`));
     }
 
     // ── STEP 6: Generate outfit candidates ────────────────────────────────────
