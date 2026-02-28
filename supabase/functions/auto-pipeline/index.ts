@@ -293,24 +293,60 @@ Rules: formality 1-5, warmth 1-5. Return ONLY the JSON object.`;
   }
 }
 
-async function triggerRemoveBg(
+async function triggerExtractProduct(
   productId: string,
   imageUrl: string,
+  category: string,
+  subCategory: string,
   supabaseUrl: string,
   serviceKey: string
 ): Promise<void> {
   try {
-    // remove-bg handles DB update internally; pass service key so it has storage access
-    const res = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
+    const headers = { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" };
+
+    const slotMap: Record<string, string> = {
+      outer: "outer", mid: "mid", top: "top", bottom: "bottom",
+      shoes: "shoes", bag: "bag", accessory: "accessory",
+    };
+    const slot = slotMap[category] || "top";
+    const label = subCategory || category;
+
+    // Step 1: AI detect items in image
+    const detectRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ imageUrl, productId }),
+      headers,
+      body: JSON.stringify({ mode: "detect", imageUrl }),
     });
 
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data.success) return;
-    // remove-bg already updates nobg_image_url in products table
+    if (!detectRes.ok) return;
+    const detectData = await detectRes.json();
+    if (!detectData.success || !detectData.items?.length) return;
+
+    const targetItem = detectData.items.find((i: any) => i.slot === slot)
+      ?? detectData.items[0];
+
+    // Step 2: Extract product flatlay from model photo
+    const extractRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        mode: "extract",
+        imageUrl,
+        slot: targetItem.slot,
+        label: targetItem.label || label,
+      }),
+    });
+
+    if (!extractRes.ok) return;
+    const extractData = await extractRes.json();
+    if (!extractData.success || !extractData.imageUrl) return;
+
+    // Step 3: Update product with extracted flatlay image
+    const adminClient = createClient(supabaseUrl, serviceKey);
+    await adminClient
+      .from("products")
+      .update({ nobg_image_url: extractData.imageUrl })
+      .eq("id", productId);
   } catch { /* silent */ }
 }
 
@@ -771,16 +807,16 @@ Deno.serve(async (req: Request) => {
         (async () => {
           for (const p of productsForBg) {
             if (p.image_url) {
-              await triggerRemoveBg(
-                p.id, p.image_url,
+              await triggerExtractProduct(
+                p.id, p.image_url, p.category || "top", p.sub_category || "",
                 SUPABASE_URL, SUPABASE_SERVICE_KEY
               ).catch(() => {});
-              await delay(800);
+              await delay(1500);
             }
           }
         })()
       );
-      events.push(makeEvent("nobg", "success", `Background removal queued for ${productsForBg.length} products (async)`));
+      events.push(makeEvent("nobg", "success", `AI flatlay extraction queued for ${productsForBg.length} products (async)`));
     }
 
     // ── STEP 6: Generate outfit candidates ────────────────────────────────────
