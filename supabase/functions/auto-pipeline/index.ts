@@ -794,7 +794,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── STEP 5: Flatlay extraction (AI detect → extract, background) ──────────
+    // ── STEP 5: Flatlay extraction (AI detect → extract, sync before outfit gen) ──
     events.push(makeEvent("nobg", "start", "Starting AI flatlay extraction for registered products..."));
     const { data: productsForBg } = await adminClient
       .from("products")
@@ -803,25 +803,22 @@ Deno.serve(async (req: Request) => {
       .is("nobg_image_url", null);
 
     if (productsForBg && productsForBg.length > 0) {
-      const PARALLEL = 4;
-      const extractionPromise = (async () => {
-        let ok = 0;
-        const validProducts = productsForBg.filter(p => !!p.image_url);
-        for (let i = 0; i < validProducts.length; i += PARALLEL) {
-          const batch = validProducts.slice(i, i + PARALLEL);
-          const results = await Promise.allSettled(
-            batch.map(p => triggerExtractProduct(
-              p.id, p.image_url, p.category || "top", p.sub_category || "",
-              SUPABASE_URL, SUPABASE_SERVICE_KEY
-            ))
-          );
-          ok += results.filter(r => r.status === "fulfilled").length;
-          if (i + PARALLEL < validProducts.length) await delay(300);
-        }
-        console.log(`Flatlay extraction done: ${ok}/${validProducts.length}`);
-      })();
-      EdgeRuntime.waitUntil(extractionPromise);
-      events.push(makeEvent("nobg", "success", `AI flatlay extraction started for ${productsForBg.length} products (4 concurrent)`));
+      const PARALLEL = 5;
+      let extractedCount = 0;
+      const validProducts = productsForBg.filter(p => !!p.image_url);
+      for (let i = 0; i < validProducts.length; i += PARALLEL) {
+        const batch = validProducts.slice(i, i + PARALLEL);
+        events.push(makeEvent("nobg", "progress", `Extracting batch ${Math.floor(i / PARALLEL) + 1}/${Math.ceil(validProducts.length / PARALLEL)} (${batch.length} products)...`));
+        const results = await Promise.allSettled(
+          batch.map(p => triggerExtractProduct(
+            p.id, p.image_url, p.category || "top", p.sub_category || "",
+            SUPABASE_URL, SUPABASE_SERVICE_KEY
+          ))
+        );
+        extractedCount += results.filter(r => r.status === "fulfilled").length;
+        if (i + PARALLEL < validProducts.length) await delay(200);
+      }
+      events.push(makeEvent("nobg", "success", `Flatlay extraction complete: ${extractedCount}/${validProducts.length} products processed`));
     } else {
       events.push(makeEvent("nobg", "skip", "All products already have flatlay images"));
     }
