@@ -247,36 +247,79 @@ function OutfitCandidateCard({
   );
 }
 
+const PIPELINE_SESSION_KEY = 'auto_pipeline_session';
+const PIPELINE_HISTORY_KEY = 'auto_pipeline_history';
+
+interface PipelineSession {
+  gender: Gender;
+  bodyType: BodyType;
+  vibe: Vibe;
+  season: Season;
+  outfitCount: number;
+  productsPerSlot: number;
+  result: PipelineResult | null;
+  error: string | null;
+  savedCount: number;
+  selectedOutfitIds: string[];
+}
+
+function loadSession(): Partial<PipelineSession> {
+  try {
+    const raw = localStorage.getItem(PIPELINE_SESSION_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* */ }
+  return {};
+}
+
+function saveSession(session: PipelineSession) {
+  try {
+    localStorage.setItem(PIPELINE_SESSION_KEY, JSON.stringify(session));
+  } catch { /* */ }
+}
+
 export default function AdminAutoPipeline() {
-  const [gender, setGender] = useState<Gender>('FEMALE');
-  const [bodyType, setBodyType] = useState<BodyType>('regular');
-  const [vibe, setVibe] = useState<Vibe>('EFFORTLESS_NATURAL');
-  const [season, setSeason] = useState<Season>('spring');
-  const [outfitCount, setOutfitCount] = useState(3);
-  const [productsPerSlot, setProductsPerSlot] = useState(5);
+  const session = loadSession();
+
+  const [gender, setGender] = useState<Gender>(session.gender ?? 'FEMALE');
+  const [bodyType, setBodyType] = useState<BodyType>(session.bodyType ?? 'regular');
+  const [vibe, setVibe] = useState<Vibe>(session.vibe ?? 'EFFORTLESS_NATURAL');
+  const [season, setSeason] = useState<Season>(session.season ?? 'spring');
+  const [outfitCount, setOutfitCount] = useState(session.outfitCount ?? 3);
+  const [productsPerSlot, setProductsPerSlot] = useState(session.productsPerSlot ?? 5);
 
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<PipelineResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PipelineResult | null>(session.result ?? null);
+  const [error, setError] = useState<string | null>(session.error ?? null);
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<RunHistory[]>([]);
 
-  const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
+  const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(
+    new Set(session.selectedOutfitIds ?? [])
+  );
   const [saving, setSaving] = useState(false);
-  const [savedCount, setSavedCount] = useState(0);
+  const [savedCount, setSavedCount] = useState(session.savedCount ?? 0);
 
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  // Persist session state on every relevant change
   useEffect(() => {
-    const saved = localStorage.getItem('auto_pipeline_history');
+    saveSession({
+      gender, bodyType, vibe, season, outfitCount, productsPerSlot,
+      result, error, savedCount,
+      selectedOutfitIds: Array.from(selectedOutfitIds),
+    });
+  }, [gender, bodyType, vibe, season, outfitCount, productsPerSlot, result, error, savedCount, selectedOutfitIds]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(PIPELINE_HISTORY_KEY);
     if (saved) {
       try { setHistory(JSON.parse(saved)); } catch { /* */ }
     }
   }, []);
 
   useEffect(() => {
-    if (result?.outfitCandidates) {
+    if (result?.outfitCandidates && selectedOutfitIds.size === 0) {
       setSelectedOutfitIds(new Set(result.outfitCandidates.map(c => c.outfitId)));
     }
   }, [result]);
@@ -334,7 +377,7 @@ export default function AdminAutoPipeline() {
         };
         setHistory(prev => {
           const next = [entry, ...prev].slice(0, 10);
-          localStorage.setItem('auto_pipeline_history', JSON.stringify(next));
+          localStorage.setItem(PIPELINE_HISTORY_KEY, JSON.stringify(next));
           return next;
         });
       }

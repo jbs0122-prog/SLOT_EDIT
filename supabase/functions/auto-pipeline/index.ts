@@ -293,17 +293,127 @@ Rules: formality 1-5, warmth 1-5. Return ONLY the JSON object.`;
   }
 }
 
-async function triggerBgRemoval(
+async function triggerExtractProduct(
   productId: string,
   imageUrl: string,
+  category: string,
+  subCategory: string,
   supabaseUrl: string,
   serviceKey: string
 ): Promise<void> {
-  await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ imageUrl, productId }),
-  });
+  try {
+    const slotMap: Record<string, string> = {
+      outer: "outer", mid: "mid", top: "top", bottom: "bottom",
+      shoes: "shoes", bag: "bag", accessory: "accessory",
+    };
+    const slot = slotMap[category] || "top";
+    const label = subCategory || category;
+
+    const detectRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "detect", imageUrl }),
+    });
+
+    if (!detectRes.ok) return;
+    const detectData = await detectRes.json();
+    if (!detectData.success || !detectData.items?.length) return;
+
+    const targetItem = detectData.items.find((i: any) => i.slot === slot)
+      ?? detectData.items[0];
+
+    const extractRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "extract",
+        imageUrl,
+        slot: targetItem.slot,
+        label: targetItem.label || label,
+      }),
+    });
+
+    if (!extractRes.ok) return;
+    const extractData = await extractRes.json();
+    if (!extractData.success || !extractData.imageUrl) return;
+
+    const { createClient } = await import("npm:@supabase/supabase-js@2");
+    const adminClient = createClient(supabaseUrl, serviceKey);
+    await adminClient
+      .from("products")
+      .update({ nobg_image_url: extractData.imageUrl })
+      .eq("id", productId);
+  } catch { /* silent */ }
+}
+
+// Warmth range per season (1-5 scale, 1=summer 5=heavy winter)
+const SEASON_WARMTH_RANGE: Record<string, { min: number; max: number }> = {
+  summer: { min: 1, max: 2 },
+  spring: { min: 1, max: 3 },
+  fall:   { min: 2, max: 4 },
+  winter: { min: 3, max: 5 },
+};
+
+// Outer sub-categories that are full coats/jackets vs vests
+const OUTER_VEST_SUBCATS = new Set([
+  "vest", "down_vest", "quilted_vest", "fleece_vest", "knitted_vest", "gilet",
+]);
+
+// For winter, outer must be a proper coat/jacket (not just vest)
+function isSeasonAppropriateOuter(product: any, season: string): boolean {
+  const sub = (product.sub_category || "").toLowerCase().replace(/[\s-]/g, "_");
+  const warmth = typeof product.warmth === "number" ? product.warmth : 3;
+  if (season === "winter") {
+    if (OUTER_VEST_SUBCATS.has(sub)) return false;
+    if (warmth < 3) return false;
+  }
+  if (season === "summer") return false;
+  if (season === "spring") {
+    if (warmth > 4) return false;
+  }
+  return true;
+}
+
+// Score a product for vibe/season/gender/bodyType fit
+function scoreProductFit(product: any, vibe: string, gender: string, bodyType: string, season: string): number {
+  let score = 50;
+
+  // Gender match
+  if (product.gender === gender) score += 20;
+  else if (product.gender === "UNISEX") score += 10;
+  else score -= 30;
+
+  // Body type match
+  if (Array.isArray(product.body_type) && product.body_type.includes(bodyType)) score += 10;
+
+  // Vibe match
+  if (Array.isArray(product.vibe) && product.vibe.includes(vibe)) score += 20;
+
+  // Season warmth match
+  const warmthRange = SEASON_WARMTH_RANGE[season];
+  const warmth = typeof product.warmth === "number" ? product.warmth : 3;
+  if (warmthRange) {
+    if (warmth >= warmthRange.min && warmth <= warmthRange.max) score += 15;
+    else score -= Math.abs(warmth - ((warmthRange.min + warmthRange.max) / 2)) * 10;
+  }
+
+  // Season tag match
+  if (Array.isArray(product.season) && product.season.length > 0) {
+    if (product.season.includes(season)) score += 10;
+    else score -= 10;
+  }
+
+  // Vibe formality alignment
+  const vibeDna = VIBE_DNA[vibe];
+  if (vibeDna && typeof product.formality === "number") {
+    const [fMin, fMax] = vibeDna.formality_range;
+    const fMid = (fMin + fMax) / 2;
+    const fNorm = product.formality * 2; // product is 1-5, vibe is 0-10
+    if (fNorm >= fMin && fNorm <= fMax) score += 10;
+    else score -= Math.abs(fNorm - fMid) * 3;
+  }
+
+  return score;
 }
 
 async function generateOutfitsFromBatch(
@@ -316,7 +426,7 @@ async function generateOutfitsFromBatch(
   adminClient: ReturnType<typeof createClient>,
   supabaseUrl: string,
   anonKey: string
-): Promise<{ outfitIds: string[]; count: number }> {
+): Promise<{ outfitIds: string[]; count: number; outfitCandidates: any[] }> {
   const { data: batchProducts } = await adminClient
     .from("products")
     .select("*")
@@ -326,20 +436,26 @@ async function generateOutfitsFromBatch(
     throw new Error("No products found for batch");
   }
 
-  const SEASON_WARMTH: Record<string, number> = {
-    spring: 2, summer: 1, fall: 3, winter: 5,
-  };
-  const targetWarmth = SEASON_WARMTH[season] || 3;
+  const targetSeason = season || undefined;
 
-  const seasonMap: Record<string, string> = {
-    spring: "spring", summer: "summer", fall: "fall", winter: "winter",
-  };
-  const targetSeason = seasonMap[season] || undefined;
+  // Score and sort all products by fit
+  const scoredProducts = batchProducts.map((p: any) => ({
+    ...p,
+    _fitScore: scoreProductFit(p, vibe, gender, bodyType, season),
+  })).sort((a: any, b: any) => b._fitScore - a._fitScore);
 
   const slots = ["top", "bottom", "shoes", "bag", "accessory", "outer", "mid"];
   const bySlot: Record<string, any[]> = {};
   for (const slot of slots) {
-    bySlot[slot] = batchProducts.filter((p: any) => p.category === slot);
+    bySlot[slot] = scoredProducts.filter((p: any) => p.category === slot);
+  }
+
+  // For outer: filter by season appropriateness
+  bySlot["outer"] = bySlot["outer"].filter((p: any) => isSeasonAppropriateOuter(p, season));
+
+  // For mid: exclude in summer
+  if (season === "summer") {
+    bySlot["mid"] = [];
   }
 
   const essentialSlots = ["top", "bottom", "shoes"];
@@ -356,10 +472,12 @@ async function generateOutfitsFromBatch(
   const usedProductIds = new Set<string>();
 
   for (let i = 0; i < outfitCount; i++) {
+    // Pick top-scored available product, with slight randomization among top 3
     const pickBest = (slotProducts: any[]): any | null => {
       const available = slotProducts.filter((p: any) => !usedProductIds.has(p.id));
       if (available.length === 0) return null;
-      return available[Math.floor(Math.random() * Math.min(available.length, 3))];
+      const topN = available.slice(0, Math.min(3, available.length));
+      return topN[Math.floor(Math.random() * topN.length)];
     };
 
     const top = pickBest(bySlot["top"]);
@@ -405,10 +523,12 @@ async function generateOutfitsFromBatch(
     usedProductIds.add(bottom.id);
     usedProductIds.add(shoes.id);
 
-    const optionalSlots = ["bag", "accessory", "outer", "mid"];
+    // Optional slots: outer is encouraged for fall/winter
+    const optionalSlots = season === "winter" || season === "fall"
+      ? ["outer", "bag", "accessory", "mid"]
+      : ["bag", "accessory", "outer", "mid"];
+
     for (const slot of optionalSlots) {
-      if (targetSeason === "summer" && (slot === "outer" || slot === "mid")) continue;
-      if (targetSeason === "spring" && slot === "mid") continue;
       const pick = pickBest(bySlot[slot] || []);
       if (pick) {
         itemsToInsert.push({ outfit_id: newOutfit.id, product_id: pick.id, slot_type: slot });
@@ -669,11 +789,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── STEP 5: Background removal (async fire-and-forget) ────────────────────
-    events.push(makeEvent("nobg", "start", "Queuing background removal for all products..."));
+    // ── STEP 5: Flatlay extraction (AI detect → extract, async fire-and-forget) ─
+    events.push(makeEvent("nobg", "start", "Queuing AI flatlay extraction for all products..."));
     const { data: productsForBg } = await adminClient
       .from("products")
-      .select("id, image_url")
+      .select("id, image_url, category, sub_category")
       .eq("batch_id", batchId)
       .is("nobg_image_url", null);
 
@@ -682,13 +802,16 @@ Deno.serve(async (req: Request) => {
         (async () => {
           for (const p of productsForBg) {
             if (p.image_url) {
-              await triggerBgRemoval(p.id, p.image_url, SUPABASE_URL, SUPABASE_SERVICE_KEY).catch(() => {});
-              await delay(500);
+              await triggerExtractProduct(
+                p.id, p.image_url, p.category || "top", p.sub_category || "",
+                SUPABASE_URL, SUPABASE_SERVICE_KEY
+              ).catch(() => {});
+              await delay(800);
             }
           }
         })()
       );
-      events.push(makeEvent("nobg", "success", `Background removal queued for ${productsForBg.length} products (async)`));
+      events.push(makeEvent("nobg", "success", `AI flatlay extraction queued for ${productsForBg.length} products (async)`));
     }
 
     // ── STEP 6: Generate outfit candidates ────────────────────────────────────
