@@ -301,53 +301,79 @@ async function triggerExtractProduct(
   supabaseUrl: string,
   serviceKey: string
 ): Promise<void> {
+  const headers = { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" };
+  const adminClient = createClient(supabaseUrl, serviceKey);
+
+  const slotMap: Record<string, string> = {
+    outer: "outer", mid: "mid", top: "top", bottom: "bottom",
+    shoes: "shoes", bag: "bag", accessory: "accessory",
+  };
+  const slot = slotMap[category] || "top";
+  const label = subCategory || category;
+
+  let nobgUrl: string | null = null;
+
+  // Step 1: Try Gemini AI detect → extract
   try {
-    const headers = { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" };
-
-    const slotMap: Record<string, string> = {
-      outer: "outer", mid: "mid", top: "top", bottom: "bottom",
-      shoes: "shoes", bag: "bag", accessory: "accessory",
-    };
-    const slot = slotMap[category] || "top";
-    const label = subCategory || category;
-
-    // Step 1: AI detect items in image
     const detectRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
       method: "POST",
       headers,
       body: JSON.stringify({ mode: "detect", imageUrl }),
     });
 
-    if (!detectRes.ok) return;
-    const detectData = await detectRes.json();
-    if (!detectData.success || !detectData.items?.length) return;
+    if (detectRes.ok) {
+      const detectData = await detectRes.json();
+      if (detectData.success && detectData.items?.length) {
+        const targetItem = detectData.items.find((i: any) => i.slot === slot)
+          ?? detectData.items[0];
 
-    const targetItem = detectData.items.find((i: any) => i.slot === slot)
-      ?? detectData.items[0];
+        const extractRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            mode: "extract",
+            imageUrl,
+            slot: targetItem.slot,
+            label: targetItem.label || label,
+          }),
+        });
 
-    // Step 2: Extract product flatlay from model photo
-    const extractRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        mode: "extract",
-        imageUrl,
-        slot: targetItem.slot,
-        label: targetItem.label || label,
-      }),
-    });
+        if (extractRes.ok) {
+          const extractData = await extractRes.json();
+          if (extractData.success && extractData.imageUrl) {
+            nobgUrl = extractData.imageUrl;
+          }
+        }
+      }
+    }
+  } catch { /* fall through to Pixian */ }
 
-    if (!extractRes.ok) return;
-    const extractData = await extractRes.json();
-    if (!extractData.success || !extractData.imageUrl) return;
+  // Step 2: Fallback — Pixian remove-bg (handles solo product images and model shots)
+  if (!nobgUrl) {
+    try {
+      const pixianRes = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ imageUrl, productId }),
+      });
+      if (pixianRes.ok) {
+        const pixianData = await pixianRes.json();
+        if (pixianData.success && (pixianData.url || pixianData.image)) {
+          nobgUrl = pixianData.url || pixianData.image;
+        }
+      }
+    } catch { /* silent */ }
+  }
 
-    // Step 3: Update product with extracted flatlay image
-    const adminClient = createClient(supabaseUrl, serviceKey);
-    await adminClient
-      .from("products")
-      .update({ nobg_image_url: extractData.imageUrl })
-      .eq("id", productId);
-  } catch { /* silent */ }
+  // Step 3: Save nobg URL to DB
+  if (nobgUrl && !nobgUrl.startsWith("data:")) {
+    try {
+      await adminClient
+        .from("products")
+        .update({ nobg_image_url: nobgUrl })
+        .eq("id", productId);
+    } catch { /* silent */ }
+  }
 }
 
 // Warmth range per season (1-5 scale, 1=summer 5=heavy winter)
