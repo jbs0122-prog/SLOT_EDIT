@@ -209,7 +209,7 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
             >
               <div className="relative aspect-square bg-gray-50">
                 <img
-                  src={product.image_url}
+                  src={product.nobg_image_url || product.image_url}
                   alt={product.name}
                   className="absolute inset-0 w-full h-full object-contain p-1"
                   onError={(e) => {

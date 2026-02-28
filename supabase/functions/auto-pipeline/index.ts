@@ -461,7 +461,7 @@ async function generateOutfitsFromBatch(
         gender,
         body_type: bodyType,
         vibe,
-        season: targetSeason || null,
+        season: targetSeason ? [targetSeason] : [],
         status: "draft",
         tpo: "",
         "AI insight": `Auto-pipeline batch: ${batchId} | Score: ${Math.round(70 + Math.random() * 20)}`,

@@ -77,6 +77,7 @@ export default function AdminProducts() {
         season: p.season || [],
         silhouette: p.silhouette || '',
         image_url: p.image_url,
+        nobg_image_url: p.nobg_image_url || undefined,
         product_link: p.product_link || '',
         affiliate_link: p.affiliate_link || '',
         price: p.price,
