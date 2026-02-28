@@ -38,7 +38,7 @@ type Phase = 'idle' | 'preparing' | 'editing' | 'rendering' | 'success';
 
 function isPixianNobgUrl(url: string | null | undefined): boolean {
   if (!url) return false;
-  return url.includes('/nobg/');
+  return url.includes('/nobg/') || url.includes('/extracted-') || url.includes('supabase.co/storage');
 }
 
 export default function FlatlayRenderer({ outfitId, onClose, onRendered }: FlatlayRendererProps) {
