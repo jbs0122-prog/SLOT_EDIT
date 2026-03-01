@@ -351,13 +351,15 @@ async function triggerExtractProduct(
     }
   } catch { /* fall through */ }
 
-  // Step 2b: Solo product image (no model detected) → Pixian background removal
-  if (!nobgUrl && !isModelShot) {
+  // Step 2b: Solo product image (no model detected) OR after Gemini extraction → Pixian background removal
+  // Gemini-generated images have white backgrounds, so always run Pixian after
+  const pixianSourceUrl = nobgUrl || (!isModelShot ? imageUrl : null);
+  if (pixianSourceUrl) {
     try {
       const pixianRes = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ imageUrl, productId }),
+        body: JSON.stringify({ imageUrl: pixianSourceUrl, productId }),
       });
       if (pixianRes.ok) {
         const pixianData = await pixianRes.json();
@@ -365,7 +367,7 @@ async function triggerExtractProduct(
           nobgUrl = pixianData.url || pixianData.image;
         }
       }
-    } catch { /* silent */ }
+    } catch { /* silent — use Gemini result if available */ }
   }
 
   // Step 3: Save nobg URL to DB (skip data: URLs — storage upload failed)
