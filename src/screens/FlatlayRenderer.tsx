@@ -36,11 +36,13 @@ interface OutfitItem {
 
 type Phase = 'idle' | 'preparing' | 'editing' | 'rendering' | 'success';
 
-function hasNobgImage(url: string | null | undefined): boolean {
-  return !!url && url.trim().length > 0;
-}
 function isPixianNobgUrl(url: string | null | undefined): boolean {
-  return hasNobgImage(url);
+  if (!url || !url.trim()) return false;
+  return (
+    url.includes('/nobg/') ||
+    url.includes('/extracted-') ||
+    (url.includes('supabase.co') && url.includes('/storage/'))
+  );
 }
 
 export default function FlatlayRenderer({ outfitId, onClose, onRendered }: FlatlayRendererProps) {

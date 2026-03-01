@@ -552,13 +552,17 @@ async function generateOutfitsFromBatch(
     usedProductIds.add(top.id);
     usedProductIds.add(bottom.id);
 
-    // shoes is preferred but optional — include if available
-    const shoesSlotOrder = season === "winter" || season === "fall"
-      ? ["outer", "shoes", "bag", "accessory", "mid"]
-      : ["shoes", "bag", "accessory", "outer", "mid"];
-
-    // Optional slots: outer is encouraged for fall/winter
-    const optionalSlots = shoesSlotOrder;
+    // Optional slots priority varies by season
+    // winter/fall: outer + mid (layering) are high priority
+    // spring: mid optional, outer moderate
+    // summer: no mid, outer excluded
+    const optionalSlots = season === "winter"
+      ? ["outer", "mid", "shoes", "bag", "accessory"]
+      : season === "fall"
+      ? ["outer", "shoes", "mid", "bag", "accessory"]
+      : season === "spring"
+      ? ["shoes", "bag", "accessory", "outer", "mid"]
+      : ["shoes", "bag", "accessory"];
 
     for (const slot of optionalSlots) {
       const pick = pickBest(bySlot[slot] || []);
@@ -718,11 +722,34 @@ Deno.serve(async (req: Request) => {
     const MAX_KW_PER_SLOT = 1;
     const MAX_RESULTS_PER_KW = 3;
 
+    const MID_FALLBACK_KEYWORDS: Record<string, string[]> = {
+      winter: [
+        `women's cable knit turtleneck sweater winter`,
+        `women's fleece zip-up hoodie winter`,
+        `women's chunky knit cardigan warm`,
+      ],
+      fall: [
+        `women's lightweight knit sweater fall`,
+        `women's cardigan layering piece autumn`,
+      ],
+      spring: [
+        `women's thin cardigan spring layering`,
+      ],
+      summer: [],
+    };
+
     const slotSearchResults = await Promise.all(
       PRIORITY_SLOTS.map(async (slot) => {
-        const keywords = categories[slot] || [];
+        let keywords = categories[slot] || [];
+
+        if (slot === "mid" && keywords.length === 0) {
+          const seasonKey = (season || "all").toLowerCase();
+          keywords = MID_FALLBACK_KEYWORDS[seasonKey] || MID_FALLBACK_KEYWORDS["winter"];
+        }
+
+        const maxKw = slot === "mid" ? 2 : MAX_KW_PER_SLOT;
         if (keywords.length === 0) return { slot, candidates: [] };
-        const kwToSearch = keywords.slice(0, MAX_KW_PER_SLOT);
+        const kwToSearch = keywords.slice(0, maxKw);
         const seenAsins = new Set<string>();
         const candidates: Array<{ product: any; slot: string; keyword: string }> = [];
         for (const kw of kwToSearch) {
