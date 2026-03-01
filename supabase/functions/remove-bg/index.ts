@@ -30,7 +30,6 @@ function isAllowedUrl(url: string): boolean {
   }
 }
 
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -83,11 +82,42 @@ Deno.serve(async (req: Request) => {
     const pixianAuth = Deno.env.get("PIXIAN_API_KEY") ||
       "cHhyaWd5aXh2cjR4OTNnOnRlbXBmaXNma244Y2t1ZjBlZDg0OWg2YnF2MjZwcDcwc29icjVqYWhydXV1ajlhMjk4Y2Q=";
 
-    console.log(`Using Pixian API for: ${imageUrl}`);
+    console.log(`Fetching image for Pixian: ${imageUrl}`);
+
+    const imageResponse = await fetch(imageUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.amazon.com/",
+      },
+    });
+
+    if (!imageResponse.ok) {
+      console.error(`Failed to fetch image (${imageResponse.status}): ${imageUrl}`);
+      return new Response(
+        JSON.stringify({ error: "Failed to fetch source image", status: imageResponse.status }),
+        {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+    const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
+
+    const ext = contentType.includes("png") ? "png"
+      : contentType.includes("webp") ? "webp"
+      : contentType.includes("gif") ? "gif"
+      : "jpg";
 
     const formData = new FormData();
-    formData.append("image.url", imageUrl);
+    const blob = new Blob([imageBytes], { type: contentType });
+    formData.append("image", blob, `image.${ext}`);
     formData.append("output.format", "png");
+
+    console.log(`Sending ${imageBytes.byteLength} bytes to Pixian for product ${productId || "unnamed"}`);
 
     const pixianResponse = await fetch(
       "https://api.pixian.ai/api/v2/remove-background",
@@ -114,7 +144,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Pixian API success for product ${productId || 'unnamed'}`);
+    console.log(`Pixian API success for product ${productId || "unnamed"}`);
 
     const imageBuffer = new Uint8Array(await pixianResponse.arrayBuffer());
 
