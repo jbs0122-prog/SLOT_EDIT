@@ -14,6 +14,7 @@ export interface GenerateOutfitsParams {
   targetSeason?: string;
   anchorProductId?: string;
   anchorSlot?: string;
+  unusedOnly?: boolean;
 }
 
 export interface GeneratedOutfit {
@@ -31,7 +32,7 @@ export const MAX_OUTFIT_USAGE = 3;
 export async function generateOutfitsAutomatically(
   params: GenerateOutfitsParams
 ): Promise<GeneratedOutfit[]> {
-  const { gender, bodyType, vibe, count = 5, targetWarmth, targetSeason, anchorProductId, anchorSlot } = params;
+  const { gender, bodyType, vibe, count = 5, targetWarmth, targetSeason, anchorProductId, anchorSlot, unusedOnly = false } = params;
 
   const [productsResult, usageResult] = await Promise.all([
     supabase.from('products').select('*'),
@@ -50,11 +51,16 @@ export async function generateOutfitsAutomatically(
     }
   });
 
-  const products = productsResult.data.filter(
-    p => (usageCounts[p.id] || 0) < MAX_OUTFIT_USAGE || p.id === anchorProductId
-  );
+  const products = productsResult.data.filter(p => {
+    if (p.id === anchorProductId) return true;
+    if (unusedOnly) return (usageCounts[p.id] || 0) === 0;
+    return (usageCounts[p.id] || 0) < MAX_OUTFIT_USAGE;
+  });
 
   if (products.length === 0) {
+    if (unusedOnly) {
+      throw new Error('미사용 제품이 없습니다. 모든 제품이 이미 코디에 사용되었습니다.');
+    }
     throw new Error('사용 가능한 제품이 없습니다. 모든 제품이 코디 사용 한도(3회)에 도달했습니다.');
   }
 
@@ -99,7 +105,7 @@ export async function generateOutfitsAutomatically(
     }
   }
 
-  const aiCandidateCount = Math.min(count * 3, 30);
+  const aiCandidateCount = Math.min(count * 5, 50);
   const ruleBased = await findBestOutfits(
     productList,
     {
@@ -118,7 +124,7 @@ export async function generateOutfitsAutomatically(
     throw new Error('조건에 맞는 코디를 생성할 수 없습니다. 제품을 더 추가해주세요.');
   }
 
-  const bestOutfits = await refineWithAI(ruleBased, count, { gender, bodyType, vibe, targetSeason, targetWarmth });
+  const bestOutfits = await refineWithAI(ruleBased, count, { gender, bodyType, vibe, targetSeason, targetWarmth }, unusedOnly);
 
   const generatedOutfits: GeneratedOutfit[] = [];
 
@@ -448,32 +454,28 @@ function canAddWithoutDuplicates(
 
 function deduplicateOutfits(
   candidates: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>,
-  maxCount: number
+  maxCount: number,
+  strict = false
 ): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
   const result: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
-  const usedProducts = new Map<string, number>();
+  const usedProducts = new Set<string>();
 
   for (const candidate of candidates) {
     if (result.length >= maxCount) break;
     const ids = getOutfitProductIds(candidate.outfit);
-    const hasDuplicate = ids.some(id => (usedProducts.get(id) || 0) >= 1);
+    const hasDuplicate = ids.some(id => usedProducts.has(id));
 
     if (!hasDuplicate) {
       result.push(candidate);
-      for (const id of ids) {
-        usedProducts.set(id, (usedProducts.get(id) || 0) + 1);
-      }
+      ids.forEach(id => usedProducts.add(id));
     }
   }
 
-  if (result.length < maxCount) {
+  if (!strict && result.length < maxCount) {
     for (const candidate of candidates) {
       if (result.length >= maxCount) break;
       if (!result.includes(candidate)) {
         result.push(candidate);
-        for (const id of getOutfitProductIds(candidate.outfit)) {
-          usedProducts.set(id, (usedProducts.get(id) || 0) + 1);
-        }
       }
     }
   }
@@ -484,9 +486,12 @@ function deduplicateOutfits(
 async function refineWithAI(
   ruleBased: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>,
   finalCount: number,
-  context: { gender: string; bodyType: string; vibe: string; targetSeason?: string; targetWarmth?: number }
+  context: { gender: string; bodyType: string; vibe: string; targetSeason?: string; targetWarmth?: number },
+  strictDedup = false
 ): Promise<Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>> {
-  if (ruleBased.length <= finalCount) return ruleBased;
+  if (ruleBased.length <= finalCount) {
+    return strictDedup ? deduplicateOutfits(ruleBased, finalCount, true) : ruleBased;
+  }
 
   try {
     const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-match-assist`;
@@ -553,10 +558,11 @@ async function refineWithAI(
 
     const dedupedResult = deduplicateOutfits(
       selectedIndices.map((idx: number) => ruleBased[idx]),
-      finalCount
+      finalCount,
+      strictDedup
     );
 
-    if (dedupedResult.length < finalCount) {
+    if (!strictDedup && dedupedResult.length < finalCount) {
       for (const item of ruleBased) {
         if (dedupedResult.length >= finalCount) break;
         if (!dedupedResult.includes(item)) {
@@ -567,7 +573,7 @@ async function refineWithAI(
       }
     }
 
-    if (dedupedResult.length < finalCount) {
+    if (!strictDedup && dedupedResult.length < finalCount) {
       for (const item of ruleBased) {
         if (dedupedResult.length >= finalCount) break;
         if (!dedupedResult.includes(item)) dedupedResult.push(item);
@@ -577,7 +583,8 @@ async function refineWithAI(
     return dedupedResult.slice(0, finalCount);
   } catch (err) {
     console.error('AI refinement failed, falling back to rule-based:', err);
-    return ruleBased.slice(0, finalCount);
+    const fallback = deduplicateOutfits(ruleBased, finalCount, strictDedup);
+    return fallback.length > 0 ? fallback : (strictDedup ? ruleBased.slice(0, finalCount) : ruleBased.slice(0, finalCount));
   }
 }
 

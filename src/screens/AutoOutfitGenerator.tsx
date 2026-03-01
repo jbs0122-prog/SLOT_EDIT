@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, Sparkles, AlertCircle, Anchor, Search, Check, Wand2, Star, List } from 'lucide-react';
+import { X, Sparkles, AlertCircle, Anchor, Search, Check, Wand2, Star, List, PackageX } from 'lucide-react';
 import { generateOutfitsAutomatically, GeneratedOutfit } from '../utils/outfitGenerator';
 import { supabase } from '../utils/supabase';
 import { Product } from '../data/outfits';
@@ -58,6 +58,7 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
   const [results, setResults] = useState<GeneratedOutfit[]>([]);
   const [error, setError] = useState('');
 
+  const [unusedOnly, setUnusedOnly] = useState(false);
   const [anchorEnabled, setAnchorEnabled] = useState(false);
   const [anchorSlot, setAnchorSlot] = useState('');
   const [anchorProductId, setAnchorProductId] = useState('');
@@ -206,6 +207,7 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
         targetSeason,
         anchorProductId: anchorEnabled && anchorProductId ? anchorProductId : undefined,
         anchorSlot: anchorEnabled && anchorSlot ? anchorSlot : undefined,
+        unusedOnly,
       });
 
       setResults(generated);
@@ -314,6 +316,24 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <p className="text-xs text-gray-500 mt-1">1~20개의 코디를 생성할 수 있습니다</p>
+              </div>
+
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setUnusedOnly(!unusedOnly)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <PackageX size={18} className={unusedOnly ? 'text-amber-600' : 'text-gray-400'} />
+                    <div className="text-left">
+                      <span className="text-sm font-medium text-gray-700">미사용 제품 전용</span>
+                      <p className="text-xs text-gray-400 mt-0.5">코디에 한 번도 사용되지 않은 제품만으로 생성</p>
+                    </div>
+                  </div>
+                  <div className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${unusedOnly ? 'bg-amber-500' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${unusedOnly ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  </div>
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -596,7 +616,11 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                     <ul className="list-disc list-inside space-y-1 text-xs">
                       <li>AI 매칭 엔진이 6가지 기준으로 최적의 조합을 찾습니다</li>
                       <li>컬러 조화, 톤 일치, 패턴 밸런스, 격식 수준, 보온성, 계절 적합성</li>
-                      <li>코디 사용 3회 이상인 제품은 자동으로 제외됩니다</li>
+                      {unusedOnly
+                        ? <li className="text-amber-700 font-medium">미사용 전용: 코디에 한 번도 등장하지 않은 제품만 사용합니다</li>
+                        : <li>코디 사용 3회 이상인 제품은 자동으로 제외됩니다</li>
+                      }
+                      <li>생성된 모든 코디에서 각 제품은 1번씩만 사용됩니다</li>
                       <li>생성된 코디는 "pending_render" 상태로 저장됩니다</li>
                       <li>비어있는 선택 슬롯(가방·액세서리 등)은 추천 엔진이 자동 보완합니다</li>
                       {anchorEnabled && anchorProductId && (
