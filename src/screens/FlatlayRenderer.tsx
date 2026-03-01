@@ -126,8 +126,8 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
         for (let i = 0; i < updatedPins.length; i++) {
           const pin = updatedPins[i];
           const item = validItems.find(vi => vi.product_id === pin.product_id);
-          if (isPixianNobgUrl(item?.product?.nobg_image_url)) {
-            updatedPins[i] = { ...pin, image_url: item!.product!.nobg_image_url! };
+          if (item?.product?.nobg_image_url?.trim()) {
+            updatedPins[i] = { ...pin, image_url: item.product.nobg_image_url };
           }
         }
 
@@ -141,12 +141,15 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
           for (let i = 0; i < updatedPins.length; i++) {
             const pin = updatedPins[i];
             const item = validItems.find(vi => vi.product_id === pin.product_id);
-            if (!isPixianNobgUrl(item?.product?.nobg_image_url) && item?.product?.image_url) {
-              try {
-                const nobgUrl = await removeBackground(item.product.image_url, pin.product_id);
-                updatedPins[i] = { ...pin, image_url: nobgUrl };
-              } catch (e) {
-                console.error('bg removal failed for', pin.product_id, e);
+            if (!isPixianNobgUrl(item?.product?.nobg_image_url)) {
+              const sourceUrl = item?.product?.nobg_image_url?.trim() || item?.product?.image_url;
+              if (sourceUrl) {
+                try {
+                  const nobgUrl = await removeBackground(sourceUrl, pin.product_id);
+                  updatedPins[i] = { ...pin, image_url: nobgUrl };
+                } catch (e) {
+                  console.error('bg removal failed for', pin.product_id, e);
+                }
               }
             }
           }
@@ -158,12 +161,17 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
       } else {
         setRenderingStep('레이아웃 계산 및 배경 제거 중...');
         const renderItems = validItems.map(item => {
-          const hasValidNobg = isPixianNobgUrl(item.product!.nobg_image_url);
+          const hasPixianNobg = isPixianNobgUrl(item.product!.nobg_image_url);
+          const hasAnyNobg = !!item.product!.nobg_image_url?.trim();
           return {
             slot_type: item.slot_type,
             product_id: item.product_id,
-            image_url: hasValidNobg ? item.product!.nobg_image_url! : item.product!.image_url,
-            skipBgRemoval: hasValidNobg,
+            image_url: hasPixianNobg
+              ? item.product!.nobg_image_url!
+              : hasAnyNobg
+                ? item.product!.nobg_image_url!
+                : item.product!.image_url,
+            skipBgRemoval: hasPixianNobg,
             price: item.product!.price,
             name: item.product!.name,
           };
