@@ -724,32 +724,42 @@ Deno.serve(async (req: Request) => {
     const MAX_KW_PER_SLOT = 1;
     const MAX_RESULTS_PER_KW = 3;
 
-    const MID_FALLBACK_KEYWORDS: Record<string, string[]> = {
-      winter: [
-        `women's cable knit turtleneck sweater winter`,
-        `women's fleece zip-up hoodie winter`,
-        `women's chunky knit cardigan warm`,
-      ],
-      fall: [
-        `women's lightweight knit sweater fall`,
-        `women's cardigan layering piece autumn`,
-      ],
-      spring: [
-        `women's thin cardigan spring layering`,
-      ],
-      summer: [],
+    const genderLabel = gender === "MALE" ? "men's" : "women's";
+
+    const SLOT_FALLBACK_KEYWORDS: Record<string, Record<string, string[]>> = {
+      bottom: {
+        winter: [`${genderLabel} slim fit jeans winter`, `${genderLabel} straight leg pants warm`],
+        fall:   [`${genderLabel} high waist jeans fall`, `${genderLabel} wide leg trousers autumn`],
+        spring: [`${genderLabel} straight jeans spring`, `${genderLabel} casual trousers`],
+        summer: [`${genderLabel} linen wide leg pants`, `${genderLabel} flowy midi skirt summer`],
+        all:    [`${genderLabel} straight leg jeans`, `${genderLabel} high waist trousers`],
+      },
+      top: {
+        winter: [`${genderLabel} crewneck sweater winter`, `${genderLabel} long sleeve knit top`],
+        fall:   [`${genderLabel} casual button down shirt fall`, `${genderLabel} knit pullover`],
+        spring: [`${genderLabel} light blouse spring`, `${genderLabel} cotton tee shirt`],
+        summer: [`${genderLabel} sleeveless top summer`, `${genderLabel} linen blouse`],
+        all:    [`${genderLabel} casual top shirt`, `${genderLabel} basic tee`],
+      },
+      mid: {
+        winter: [`${genderLabel} cable knit turtleneck sweater`, `${genderLabel} fleece zip hoodie warm`],
+        fall:   [`${genderLabel} lightweight knit sweater fall`, `${genderLabel} cardigan layering`],
+        spring: [`${genderLabel} thin cardigan spring`, `${genderLabel} zip knit layering`],
+        summer: [],
+        all:    [`${genderLabel} cardigan sweater`, `${genderLabel} knit pullover`],
+      },
     };
 
     const slotSearchResults = await Promise.all(
       PRIORITY_SLOTS.map(async (slot) => {
         let keywords = categories[slot] || [];
 
-        if (slot === "mid" && keywords.length === 0) {
+        if (keywords.length === 0 && SLOT_FALLBACK_KEYWORDS[slot]) {
           const seasonKey = (season || "all").toLowerCase();
-          keywords = MID_FALLBACK_KEYWORDS[seasonKey] || MID_FALLBACK_KEYWORDS["winter"];
+          keywords = SLOT_FALLBACK_KEYWORDS[slot][seasonKey] || SLOT_FALLBACK_KEYWORDS[slot]["all"] || [];
         }
 
-        const maxKw = slot === "mid" ? 2 : MAX_KW_PER_SLOT;
+        const maxKw = (slot === "mid" || slot === "bottom" || slot === "top") ? 2 : MAX_KW_PER_SLOT;
         if (keywords.length === 0) return { slot, candidates: [] };
         const kwToSearch = keywords.slice(0, maxKw);
         const seenAsins = new Set<string>();
