@@ -201,6 +201,41 @@ Deno.serve(async (req: Request) => {
       };
 
       const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const productLink = product.url || "";
+
+      // ── Duplicate guard: check by product_link and ASIN before inserting ──
+      if (productLink) {
+        const { data: existing } = await adminClient
+          .from("products")
+          .select("id")
+          .eq("product_link", productLink)
+          .limit(1)
+          .maybeSingle();
+        if (existing) {
+          await adminClient.from("products").update({ batch_id: batchId }).eq("id", existing.id);
+          return new Response(JSON.stringify({ success: true, productId: existing.id, skipped: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      // ASIN-based duplicate check (handles URL format variations)
+      const asinMatch = productLink.match(/\/dp\/([A-Z0-9]{10})/);
+      if (asinMatch) {
+        const asin = asinMatch[1];
+        const { data: existingByAsin } = await adminClient
+          .from("products")
+          .select("id")
+          .ilike("product_link", `%/dp/${asin}%`)
+          .limit(1)
+          .maybeSingle();
+        if (existingByAsin) {
+          await adminClient.from("products").update({ batch_id: batchId }).eq("id", existingByAsin.id);
+          return new Response(JSON.stringify({ success: true, productId: existingByAsin.id, skipped: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
 
       const res = await fetch(`${SUPABASE_URL}/functions/v1/analyze-amazon-product`, {
         method: "POST",
@@ -215,7 +250,6 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ success: false }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const productLink = product.url || "";
       if (!productLink) {
         return new Response(JSON.stringify({ success: false }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
