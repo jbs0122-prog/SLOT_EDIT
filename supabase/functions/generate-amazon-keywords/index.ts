@@ -573,10 +573,7 @@ Deno.serve(async (req: Request) => {
     let gender: string, body_type: string, vibe: string, season: string;
     let outfit_context: OutfitContext | undefined;
     try {
-      const rawText = await req.text();
-      const cleaned = rawText.trim();
-      if (!cleaned) throw new Error("empty body");
-      const body = JSON.parse(cleaned);
+      const body = await req.json();
       gender = body.gender;
       body_type = body.body_type;
       vibe = body.vibe;
