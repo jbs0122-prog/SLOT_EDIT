@@ -455,7 +455,7 @@ function canAddWithoutDuplicates(
 function deduplicateOutfits(
   candidates: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>,
   maxCount: number,
-  strict = false
+  _strict = false
 ): Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> {
   const result: Array<{ outfit: OutfitCandidate; matchScore: MatchScore }> = [];
   const usedProducts = new Set<string>();
@@ -471,15 +471,6 @@ function deduplicateOutfits(
     }
   }
 
-  if (!strict && result.length < maxCount) {
-    for (const candidate of candidates) {
-      if (result.length >= maxCount) break;
-      if (!result.includes(candidate)) {
-        result.push(candidate);
-      }
-    }
-  }
-
   return result;
 }
 
@@ -490,7 +481,7 @@ async function refineWithAI(
   strictDedup = false
 ): Promise<Array<{ outfit: OutfitCandidate; matchScore: MatchScore }>> {
   if (ruleBased.length <= finalCount) {
-    return strictDedup ? deduplicateOutfits(ruleBased, finalCount, true) : ruleBased;
+    return deduplicateOutfits(ruleBased, finalCount);
   }
 
   try {
@@ -562,7 +553,7 @@ async function refineWithAI(
       strictDedup
     );
 
-    if (!strictDedup && dedupedResult.length < finalCount) {
+    if (dedupedResult.length < finalCount) {
       for (const item of ruleBased) {
         if (dedupedResult.length >= finalCount) break;
         if (!dedupedResult.includes(item)) {
@@ -573,18 +564,11 @@ async function refineWithAI(
       }
     }
 
-    if (!strictDedup && dedupedResult.length < finalCount) {
-      for (const item of ruleBased) {
-        if (dedupedResult.length >= finalCount) break;
-        if (!dedupedResult.includes(item)) dedupedResult.push(item);
-      }
-    }
-
     return dedupedResult.slice(0, finalCount);
   } catch (err) {
     console.error('AI refinement failed, falling back to rule-based:', err);
-    const fallback = deduplicateOutfits(ruleBased, finalCount, strictDedup);
-    return fallback.length > 0 ? fallback : (strictDedup ? ruleBased.slice(0, finalCount) : ruleBased.slice(0, finalCount));
+    const fallback = deduplicateOutfits(ruleBased, finalCount);
+    return fallback;
   }
 }
 
