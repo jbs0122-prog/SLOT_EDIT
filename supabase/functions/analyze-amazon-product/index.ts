@@ -338,7 +338,7 @@ If a product has a very casual silhouette but vibe is ELEVATED_COOL, add other m
 `;
     }
 
-    const prompt = `You are a fashion product data specialist. Analyze this Amazon product and return structured metadata.
+    const prompt = `You are a fashion product data specialist with deep expertise in garment classification. Analyze this Amazon product title and return precise structured metadata.
 
 Product:
 - Title: ${product.title}
@@ -351,39 +351,321 @@ IMPORTANT: The body type is "${body_type}". The silhouette MUST match:
 - regular → use "regular" or "straight"
 - plus-size → use "relaxed" or "oversized"
 
-Extract and return ONLY a valid JSON object with these exact fields:
+━━━ SUB_CATEGORY DECISION RULES ━━━
+Read the product title carefully. Use the MOST SPECIFIC matching value:
+
+outer → Look for keywords:
+  puffer: "puffer", "down jacket", "quilted coat", "padded jacket"
+  trench: "trench"
+  blazer: "blazer", "sport coat", "suit jacket"
+  bomber: "bomber"
+  biker_jacket: "biker", "moto jacket", "motorcycle jacket"
+  denim_jacket: "denim jacket", "jean jacket"
+  shearling: "shearling", "sherpa jacket", "fleece-lined coat"
+  field_jacket: "field jacket", "M-65", "utility jacket" (with multiple pockets)
+  windbreaker: "windbreaker", "wind jacket", "anorak" (if lightweight)
+  anorak: "anorak" (pullover style)
+  parka: "parka" (long, hood, insulated)
+  peacoat: "peacoat", "pea coat"
+  trench: "trench coat", "trench"
+  track_jacket: "track jacket", "zip-up jacket" (athletic)
+  coach_jacket: "coach jacket"
+  varsity_jacket: "varsity", "letterman"
+  harrington: "harrington"
+  chore_coat: "chore coat", "chore jacket"
+  tweed_jacket: "tweed jacket", "tweed blazer"
+  noragi: "noragi"
+  cape: "cape" (no sleeves)
+  poncho: "poncho"
+  kimono: "kimono jacket", "kimono cardigan"
+  gilet: "gilet", "vest" (outer, no sleeves)
+  shell: "shell jacket", "hard shell"
+  faux_fur: "faux fur coat", "faux fur jacket"
+  rain_jacket: "rain jacket", "waterproof jacket"
+  safari_jacket: "safari jacket"
+  leather_trench: "leather trench"
+  quilted_jacket: "quilted jacket" (not puffer)
+  corduroy_jacket: "corduroy jacket"
+  duffle_coat: "duffle coat", "toggle coat"
+  coat: use ONLY if no more specific type matches above
+
+mid → Look for keywords:
+  hoodie: "hoodie", "hooded sweatshirt"
+  sweatshirt: "sweatshirt", "crewneck sweatshirt" (no hood)
+  fleece: "fleece pullover", "fleece top" (not jacket)
+  half_zip: "half zip", "quarter zip", "1/4 zip"
+  mock_neck: "mock neck sweater", "mock turtleneck sweater"
+  turtleneck_knit: "turtleneck sweater", "polo neck sweater"
+  cable_knit: "cable knit", "cable-knit sweater"
+  argyle_sweater: "argyle sweater"
+  fair_isle: "fair isle", "nordic sweater"
+  cashmere_sweater: "cashmere sweater"
+  mohair_knit: "mohair sweater", "mohair knit"
+  boucle_knit: "boucle sweater", "boucle knit"
+  crochet_cardigan: "crochet cardigan"
+  cardigan: "cardigan" (button-front knit)
+  zip_knit: "zip-up sweater", "zip knit"
+  cricket_jumper: "cricket sweater"
+  quilted_vest: "quilted vest"
+  down_vest: "down vest", "puffer vest"
+  fleece_vest: "fleece vest"
+  knitted_vest: "knit vest", "sweater vest"
+  vest: "vest" (if mid-layer, not outer)
+  sweater: use ONLY if no more specific type matches above
+  knit: use ONLY as last resort for knit tops
+
+top → Look for keywords:
+  tshirt: "t-shirt", "tee shirt", "tee" (basic, no collar)
+  polo: "polo shirt", "polo tee"
+  oxford_shirt: "oxford shirt", "oxford cloth"
+  linen_shirt: "linen shirt"
+  flannel_shirt: "flannel shirt"
+  denim_shirt: "denim shirt"
+  chambray: "chambray shirt"
+  western_shirt: "western shirt", "cowboy shirt", "snap button shirt"
+  silk_blouse: "silk blouse", "satin blouse"
+  graphic_tee: "graphic tee", "print tee", "band tee" (with graphic)
+  band_tee: "band tee", "band t-shirt", "concert tee"
+  rugby_shirt: "rugby shirt", "rugby jersey"
+  henley: "henley", "henley shirt" (button placket, no collar)
+  crop_top: "crop top", "cropped tee", "cropped shirt"
+  camisole: "camisole", "cami top", "spaghetti strap top"
+  bodysuit: "bodysuit"
+  tunic: "tunic top", "tunic blouse"
+  corset: "corset top", "bustier"
+  breton_stripe: "breton", "sailor stripe shirt", "striped boat neck"
+  wrap_top: "wrap top", "wrap blouse"
+  peasant_blouse: "peasant blouse", "peasant top", "smock top"
+  puff_sleeve: "puff sleeve top", "balloon sleeve", "puff sleeve blouse"
+  embroidered_blouse: "embroidered blouse", "embroidered top"
+  lace_top: "lace top", "lace blouse"
+  mesh_top: "mesh top", "mesh shirt"
+  halter_top: "halter top", "halter neck"
+  sports_bra: "sports bra"
+  performance_tee: "performance tee", "athletic shirt", "moisture-wicking shirt"
+  compression_top: "compression top", "compression shirt"
+  turtleneck: "turtleneck top", "turtleneck tee" (non-knit)
+  tank: "tank top", "sleeveless top", "muscle tank"
+  jersey: "jersey top", "football jersey", "sports jersey"
+  blouse: "blouse" (dressy, non-specific)
+  shirt: use ONLY if no more specific type matches above
+
+bottom → Look for keywords:
+  denim: "jeans", "denim pants" (generic straight)
+  flared_jeans: "flare jeans", "flared jeans", "bell bottom jeans"
+  baggy_jeans: "baggy jeans", "wide leg jeans", "barrel jeans"
+  carpenter_pants: "carpenter pants", "carpenter jeans"
+  wide_leg: "wide leg pants", "wide-leg trousers" (non-denim)
+  pleated_trousers: "pleated trousers", "pleated pants"
+  leather_pants: "leather pants", "faux leather pants"
+  corduroy_pants: "corduroy pants", "cord trousers"
+  parachute_pants: "parachute pants", "nylon pants"
+  track_pants: "track pants", "track bottoms"
+  linen_trousers: "linen pants", "linen trousers"
+  sailor_pants: "sailor pants", "wide leg sailor"
+  harem_pants: "harem pants", "MC hammer pants"
+  slacks: "dress pants", "slacks", "trousers" (formal)
+  chinos: "chinos", "chino pants", "khaki pants"
+  jogger: "jogger pants", "joggers"
+  cargo: "cargo pants", "cargo shorts" (if length unclear)
+  sweatpants: "sweatpants", "fleece pants"
+  overalls: "overalls", "dungarees"
+  maxi_skirt: "maxi skirt" (ankle length)
+  midi_skirt: "midi skirt" (knee to mid-calf)
+  mini_skirt: "mini skirt" (above knee)
+  pencil_skirt: "pencil skirt"
+  pleated_skirt: "pleated skirt"
+  wrap_skirt: "wrap skirt"
+  tiered_skirt: "tiered skirt", "ruffle skirt"
+  velvet_skirt: "velvet skirt"
+  silk_skirt: "silk skirt", "satin skirt"
+  tennis_skirt: "tennis skirt", "golf skirt"
+  leggings: "leggings", "tights" (athletic)
+  biker_shorts: "biker shorts", "cycling shorts"
+  bermuda_shorts: "bermuda shorts", "long shorts"
+  yoga_pants: "yoga pants", "yoga leggings"
+  shorts: "shorts" (generic)
+  culottes: "culottes"
+
+shoes → Look for keywords:
+  sneaker: "sneaker", "trainers" (generic low-top)
+  high_top: "high top", "high-top sneaker"
+  runner: "running shoes", "running sneakers"
+  trail_runner: "trail running", "trail shoes"
+  training_shoe: "training shoes", "cross training", "gym shoes"
+  chelsea_boot: "chelsea boot"
+  combat_boot: "combat boots", "lace-up boots" (chunky)
+  ankle_boot: "ankle boots" (general)
+  knee_boot: "knee high boots", "knee-high boots"
+  hiking_boot: "hiking boots", "trekking boots"
+  desert_boot: "desert boots", "chukka boots"
+  work_boot: "work boots", "steel toe boots"
+  western_boot: "cowboy boots", "western boots"
+  tabi: "tabi boots", "tabi shoes"
+  boot: "boots" (generic — use only if no specific type matches)
+  loafer: "loafers"
+  derby: "derby shoes"
+  oxford: "oxford shoes"
+  brogue: "brogues"
+  monk_strap: "monk strap"
+  driving_shoe: "driving shoes", "moccasin loafer"
+  moccasin: "moccasins"
+  boat_shoe: "boat shoes", "topsiders"
+  mule: "mules", "backless shoes"
+  slide: "slides", "slip-on sandals"
+  sandal: "sandals", "strappy sandals"
+  espadrille: "espadrilles"
+  clog: "clogs"
+  mary_jane: "mary janes", "mary jane shoes"
+  ballet_flat: "ballet flats", "ballerina flats"
+  platform: "platform shoes", "platform sneakers" (use only when platform is primary feature)
+  kitten_heel: "kitten heel"
+  block_heel: "block heel"
+  slingback: "slingback"
+  creeper: "creepers"
+
+bag → Look for keywords:
+  tote: "tote bag" (open-top, large)
+  canvas_tote: "canvas tote"
+  backpack: "backpack", "rucksack"
+  crossbody: "crossbody bag"
+  shoulder_bag: "shoulder bag"
+  clutch: "clutch", "evening bag" (no strap)
+  satchel: "satchel"
+  messenger: "messenger bag"
+  bucket_bag: "bucket bag"
+  hobo: "hobo bag"
+  belt_bag: "belt bag", "fanny pack"
+  sling: "sling bag", "sling pack"
+  baguette: "baguette bag"
+  box_bag: "box bag", "rigid bag"
+  frame_bag: "frame bag"
+  saddle_bag: "saddle bag"
+  doctor_bag: "doctor bag", "top handle bag" (structured)
+  wristlet: "wristlet"
+  briefcase: "briefcase"
+  gym_bag: "gym bag", "duffel bag" (for gym)
+  duffle: "duffel bag", "duffle bag" (large)
+  camera_bag: "camera bag"
+  weekender: "weekender bag", "overnight bag"
+  straw_bag: "straw bag", "rattan bag"
+  woven_bag: "woven bag", "raffia bag"
+  chain_bag: "chain bag", "chain strap bag"
+  phone_pouch: "phone bag", "phone pouch"
+  sacoche: "sacoche", "hip bag"
+  vanity_case: "vanity case", "vanity bag"
+
+accessory → Look for keywords:
+  belt: "belt" (waist)
+  watch: "watch", "wristwatch"
+  sunglasses: "sunglasses", "shades"
+  scarf: "scarf" (generic)
+  silk_scarf: "silk scarf"
+  bandana: "bandana", "bandanna"
+  beanie: "beanie", "knit hat"
+  cap: "baseball cap", "snapback", "dad hat"
+  bucket_hat: "bucket hat"
+  beret: "beret"
+  wide_brim_hat: "wide brim hat", "sun hat", "floppy hat"
+  visor: "visor hat"
+  glove: "gloves", "mittens"
+  headband: "headband"
+  necktie: "necktie", "tie"
+  bow_tie: "bow tie"
+  suspenders: "suspenders", "braces"
+  choker: "choker"
+  chain_necklace: "chain necklace"
+  pendant: "pendant necklace", "charm necklace"
+  pearl_necklace: "pearl necklace"
+  hoop_earring: "hoop earrings"
+  stud_earring: "stud earrings"
+  ring: "ring", "rings"
+  bracelet: "bracelet"
+  bangle: "bangle"
+  brooch: "brooch", "pin badge"
+  hair_clip: "hair clip", "hair barrette", "hair pin"
+  hair_stick: "hair stick", "hair chopstick"
+  anklet: "anklet"
+  ear_cuff: "ear cuff"
+  tights: "tights", "stockings", "pantyhose"
+  wallet_chain: "wallet chain", "chain wallet"
+
+━━━ SEASON DECISION RULES ━━━
+Assign seasons based on material and garment type. Be precise — do NOT default to all seasons.
+- spring ONLY: "linen", "light cotton", "gauze", transitional layers, light jackets
+- summer ONLY: "sleeveless", "tank", "shorts", "sandals", "breathable mesh", "swimwear", "linen" (if clearly summer)
+- fall ONLY: "flannel", "corduroy", "tweed", "wool blend", "layering piece"
+- winter ONLY: "wool", "cashmere", "fleece", "down", "puffer", "thermal", "sherpa", "heavy knit", "boots" (insulated)
+- spring+summer: lightweight pieces wearable in both warm seasons
+- fall+winter: heavier pieces wearable in both cold seasons
+- spring+fall: transitional pieces (light jacket, denim jacket, trench coat, cardigan)
+- all four seasons: true year-round basics only (plain tee, classic denim, plain sneaker, basic accessories)
+- If context season is "${season || "all"}", use it as a strong hint but verify against the material/garment
+
+━━━ COLOR_FAMILY DECISION RULES ━━━
+Map the product's dominant color to EXACTLY ONE of these values:
+black | white | grey | navy | beige | brown | blue | green | red | yellow | purple | pink | orange | metallic | multi | khaki | cream | ivory | burgundy | wine | olive | mustard | coral | charcoal | tan | camel | rust | sage | mint | lavender | teal | sky_blue | denim
+
+Color mapping guide:
+- "black", "jet black", "onyx" → black
+- "white", "bright white" → white
+- "gray", "grey", "heather grey", "light grey", "slate" → grey
+- "charcoal", "dark grey", "anthracite" → charcoal
+- "navy", "navy blue", "dark navy", "midnight blue" → navy
+- "blue", "royal blue", "cobalt", "electric blue" → blue
+- "sky blue", "light blue", "baby blue", "powder blue", "periwinkle" → sky_blue
+- "denim", "indigo" → denim
+- "teal", "cyan", "turquoise", "aqua" → teal
+- "green", "forest green", "dark green", "hunter green", "emerald" → green
+- "sage", "light green", "mint green", "sage green", "eucalyptus" → sage
+- "mint", "seafoam" → mint
+- "olive", "military green", "army green", "khaki green" → olive
+- "khaki", "tan khaki", "stone" → khaki
+- "brown", "chocolate", "espresso", "walnut" → brown
+- "tan", "light brown", "sand", "wheat" → tan
+- "camel", "caramel", "cognac" → camel
+- "beige", "nude", "taupe", "warm beige" → beige
+- "cream", "off-white", "off white" → cream
+- "ivory", "ecru", "eggshell" → ivory
+- "red", "tomato", "scarlet", "cherry" → red
+- "burgundy", "wine red", "maroon", "oxblood" → burgundy
+- "wine", "deep wine", "bordeaux" → wine
+- "rust", "terracotta", "burnt orange" → rust
+- "coral", "salmon", "peach" → coral
+- "orange", "amber", "tangerine" → orange
+- "yellow", "lemon", "butter yellow" → yellow
+- "mustard", "golden yellow", "ochre" → mustard
+- "pink", "hot pink", "rose pink", "blush pink", "fuchsia" → pink
+- "lavender", "lilac", "mauve", "light purple" → lavender
+- "purple", "violet", "plum", "dark purple", "grape" → purple
+- "gold", "silver", "bronze", "metallic" → metallic
+- "multicolor", "multi-color", "tie-dye", "printed pattern" → multi
+
+Extract and return ONLY a valid JSON object:
 {
   "brand": "brand name (extract from title if not given)",
   "name": "clean product name without brand (max 80 chars)",
   "category": "one of: outer|mid|top|bottom|shoes|bag|accessory",
-  "sub_category": "Pick the MOST SPECIFIC value from the list below based on the detected category:
-    outer: puffer|coat|blazer|jacket|trench|bomber|parka|peacoat|anorak|windbreaker|duffle_coat|biker_jacket|denim_jacket|coach_jacket|varsity_jacket|shearling|field_jacket|harrington|quilted_jacket|corduroy_jacket|cape|poncho|kimono|noragi|chore_coat|safari_jacket|utility_jacket|shell|gilet|faux_fur|rain_jacket|track_jacket|shacket|leather_trench|tweed_jacket
-    mid: knit|cardigan|sweater|vest|fleece|hoodie|sweatshirt|half_zip|turtleneck_knit|cable_knit|argyle_sweater|fair_isle|cricket_jumper|mock_neck|zip_knit|quilted_vest|down_vest|fleece_vest|knitted_vest|cashmere_sweater|boucle_knit|mohair_knit|crochet_cardigan
-    top: tshirt|shirt|polo|turtleneck|tank|blouse|oxford_shirt|linen_shirt|silk_blouse|graphic_tee|rugby_shirt|henley|crop_top|camisole|bodysuit|tunic|corset|breton_stripe|band_tee|jersey|wrap_top|peasant_blouse|puff_sleeve|flannel_shirt|denim_shirt|chambray|western_shirt|sports_bra|performance_tee|compression_top|mesh_top|lace_top|embroidered_blouse|halter_top
-    bottom: denim|slacks|chinos|jogger|cargo|shorts|wide_leg|culottes|pleated_trousers|leather_pants|corduroy_pants|parachute_pants|track_pants|linen_trousers|maxi_skirt|midi_skirt|mini_skirt|pencil_skirt|pleated_skirt|wrap_skirt|flared_jeans|baggy_jeans|carpenter_pants|overalls|bermuda_shorts|biker_shorts|leggings|yoga_pants|sweatpants|sailor_pants|harem_pants|velvet_skirt|silk_skirt|tiered_skirt|tennis_skirt
-    shoes: sneaker|derby|loafer|boot|runner|chelsea_boot|combat_boot|ankle_boot|knee_boot|hiking_boot|desert_boot|work_boot|mule|slide|sandal|espadrille|clog|mary_jane|ballet_flat|oxford|brogue|monk_strap|platform|kitten_heel|block_heel|slingback|boat_shoe|moccasin|western_boot|tabi|driving_shoe|trail_runner|training_shoe|high_top|creeper
-    bag: tote|backpack|crossbody|duffle|clutch|shoulder_bag|satchel|messenger|bucket_bag|hobo|belt_bag|sling|baguette|box_bag|frame_bag|saddle_bag|doctor_bag|wristlet|briefcase|gym_bag|camera_bag|weekender|straw_bag|woven_bag|canvas_tote|chain_bag|phone_pouch|sacoche|vanity_case
-    accessory: necktie|belt|cap|scarf|glove|watch|sunglasses|beanie|bucket_hat|beret|headband|choker|chain_necklace|pendant|pearl_necklace|hoop_earring|stud_earring|ring|bracelet|bangle|brooch|hair_clip|bow_tie|suspenders|silk_scarf|bandana|anklet|ear_cuff|hair_stick|tights|wide_brim_hat|visor|wallet_chain",
+  "sub_category": "use the decision rules above — pick the MOST SPECIFIC matching value",
   "gender": "MALE|FEMALE|UNISEX",
-  "color": "primary color name e.g. 'Navy Blue', 'Cream White'",
-  "color_family": "one of: black|white|gray|navy|blue|green|red|pink|yellow|orange|brown|beige|purple|multicolor",
-  "color_tone": "one of: warm|cool|neutral",
+  "color": "specific color name from title e.g. 'Navy Blue', 'Charcoal Grey'",
+  "color_family": "use the color decision rules above — pick EXACTLY ONE value",
+  "color_tone": "warm (brown/orange/yellow/red/olive/rust/camel/mustard/coral) | cool (blue/green/purple/grey/navy/teal/sage/mint/lavender) | neutral (black/white/beige/cream/ivory/charcoal/tan)",
   "silhouette": "one of: slim|regular|oversized|relaxed|fitted|wide-leg|straight|cropped",
   "material": "primary material e.g. '100% Cotton', 'Polyester Blend'",
-  "pattern": "one of: solid|stripe|check|graphic|print|other",
-  "vibe": ["array of matching vibes from: ELEVATED_COOL, EFFORTLESS_NATURAL, ARTISTIC_MINIMAL, RETRO_LUXE, SPORT_MODERN, CREATIVE_LAYERED"],
-  "body_type": ["array from: slim, regular, plus-size"],
-  "season": ["array from: spring, summer, fall, winter"],
+  "pattern": "solid|stripe|check|graphic|print|other",
+  "vibe": ["array — pick ALL that genuinely match from: ELEVATED_COOL, EFFORTLESS_NATURAL, ARTISTIC_MINIMAL, RETRO_LUXE, SPORT_MODERN, CREATIVE_LAYERED"],
+  "body_type": ["array from: slim, regular, plus-size — MUST include ${body_type || "regular"}"],
+  "season": ["array — use the season decision rules above — be precise, do NOT default to all four"],
   "formality": 3,
   "warmth": 3,
   "stock_status": "in_stock"
 }
 
-Rules:
-- formality: 1=very casual, 5=formal (integer 1-5)
-- warmth: 1=very light, 5=very warm (integer 1-5)
+Final rules:
+- formality: 1=very casual (athleisure/loungewear), 2=casual (everyday tee/jeans), 3=smart-casual (chino/blouse), 4=business-casual (blazer/dress), 5=formal (suit/evening wear)
+- warmth: 1=very light (sleeveless/linen), 2=light (tee/thin shirt), 3=medium (sweatshirt/chino), 4=warm (sweater/jacket), 5=very warm (puffer/heavy coat)
 - body_type array MUST include "${body_type || "regular"}"
-- For sub_category, always prefer the MOST SPECIFIC type from the list. For example, use "bomber" instead of generic "jacket", "chelsea_boot" instead of generic "boot", "oxford_shirt" instead of generic "shirt"
 - Return ONLY the JSON object, no markdown, no explanation`;
 
     const geminiRes = await fetch(
