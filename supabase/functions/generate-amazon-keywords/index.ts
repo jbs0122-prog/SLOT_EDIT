@@ -693,22 +693,28 @@ ${JSON.stringify(
 
 Fill every empty string with a keyword. Return only JSON, nothing else.`;
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 1.0, maxOutputTokens: 4000, responseMimeType: "application/json" },
-        }),
-      }
-    );
+    let geminiRes: Response | null = null;
+    let lastErrText = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 1.0, maxOutputTokens: 8192, responseMimeType: "application/json" },
+          }),
+        }
+      );
+      if (geminiRes.ok) break;
+      lastErrText = await geminiRes.text();
+      if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+    }
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
+    if (!geminiRes || !geminiRes.ok) {
       return new Response(
-        JSON.stringify({ error: "Gemini API error", detail: errText }),
+        JSON.stringify({ error: "Gemini API error", detail: lastErrText }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
