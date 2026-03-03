@@ -7,84 +7,258 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// ── Matching Architecture: Color DNA ─────────────────────────────────────────
+// ── Color DNA (ported from src/utils/matching/colorDna.ts) ───────────────────
 
-const COLOR_TONE_MAP: Record<string, "warm" | "cool" | "neutral"> = {
-  black: "neutral", white: "neutral", grey: "neutral", charcoal: "neutral",
-  cream: "warm", ivory: "warm", beige: "warm", tan: "warm", camel: "warm",
-  brown: "warm", rust: "warm", mustard: "warm", orange: "warm", red: "warm",
-  burgundy: "warm", wine: "warm", gold: "warm", metallic: "neutral",
-  navy: "cool", blue: "cool", sky_blue: "cool", teal: "cool", sage: "cool",
-  olive: "cool", khaki: "neutral", denim: "cool", lavender: "cool",
-  green: "cool", pink: "warm", coral: "warm", purple: "cool",
-  multi: "neutral",
+interface ColorEntry {
+  hue: number;
+  saturation: number;
+  lightness: number;
+  tone: "warm" | "cool" | "neutral";
+  type: "neutral" | "earth" | "accent" | "special";
+}
+
+const COLOR_HSL_MAP: Record<string, ColorEntry> = {
+  black:    { hue: 0,   saturation: 0,  lightness: 5,  tone: "neutral", type: "neutral" },
+  white:    { hue: 0,   saturation: 0,  lightness: 98, tone: "neutral", type: "neutral" },
+  grey:     { hue: 0,   saturation: 0,  lightness: 50, tone: "cool",    type: "neutral" },
+  charcoal: { hue: 0,   saturation: 0,  lightness: 25, tone: "cool",    type: "neutral" },
+  navy:     { hue: 225, saturation: 60, lightness: 22, tone: "cool",    type: "neutral" },
+  beige:    { hue: 38,  saturation: 36, lightness: 80, tone: "warm",    type: "neutral" },
+  cream:    { hue: 42,  saturation: 50, lightness: 90, tone: "warm",    type: "neutral" },
+  ivory:    { hue: 48,  saturation: 60, lightness: 93, tone: "warm",    type: "neutral" },
+  denim:    { hue: 215, saturation: 35, lightness: 45, tone: "cool",    type: "neutral" },
+  brown:    { hue: 25,  saturation: 50, lightness: 30, tone: "warm",    type: "earth" },
+  tan:      { hue: 30,  saturation: 40, lightness: 60, tone: "warm",    type: "earth" },
+  camel:    { hue: 32,  saturation: 45, lightness: 55, tone: "warm",    type: "earth" },
+  olive:    { hue: 80,  saturation: 35, lightness: 38, tone: "warm",    type: "earth" },
+  khaki:    { hue: 50,  saturation: 30, lightness: 55, tone: "warm",    type: "earth" },
+  sage:     { hue: 100, saturation: 20, lightness: 55, tone: "cool",    type: "earth" },
+  rust:     { hue: 15,  saturation: 65, lightness: 40, tone: "warm",    type: "earth" },
+  mustard:  { hue: 45,  saturation: 70, lightness: 50, tone: "warm",    type: "earth" },
+  burgundy: { hue: 345, saturation: 55, lightness: 25, tone: "warm",    type: "earth" },
+  wine:     { hue: 340, saturation: 50, lightness: 28, tone: "warm",    type: "earth" },
+  red:      { hue: 0,   saturation: 80, lightness: 48, tone: "warm",    type: "accent" },
+  blue:     { hue: 215, saturation: 65, lightness: 50, tone: "cool",    type: "accent" },
+  green:    { hue: 140, saturation: 50, lightness: 40, tone: "cool",    type: "accent" },
+  yellow:   { hue: 50,  saturation: 85, lightness: 60, tone: "warm",    type: "accent" },
+  orange:   { hue: 25,  saturation: 85, lightness: 55, tone: "warm",    type: "accent" },
+  pink:     { hue: 340, saturation: 60, lightness: 70, tone: "warm",    type: "accent" },
+  purple:   { hue: 275, saturation: 50, lightness: 42, tone: "cool",    type: "accent" },
+  coral:    { hue: 10,  saturation: 65, lightness: 60, tone: "warm",    type: "accent" },
+  teal:     { hue: 180, saturation: 55, lightness: 38, tone: "cool",    type: "accent" },
+  mint:     { hue: 160, saturation: 40, lightness: 72, tone: "cool",    type: "accent" },
+  sky_blue: { hue: 200, saturation: 55, lightness: 70, tone: "cool",    type: "accent" },
+  lavender: { hue: 270, saturation: 40, lightness: 72, tone: "cool",    type: "accent" },
+  metallic: { hue: 0,   saturation: 5,  lightness: 65, tone: "neutral", type: "special" },
+  multi:    { hue: 0,   saturation: 50, lightness: 50, tone: "neutral", type: "special" },
+  gold:     { hue: 42,  saturation: 70, lightness: 50, tone: "warm",    type: "special" },
+  silver:   { hue: 0,   saturation: 0,  lightness: 72, tone: "cool",    type: "special" },
 };
 
-const NEUTRAL_COLORS = new Set(["black", "white", "grey", "charcoal", "cream", "ivory", "beige"]);
-const EARTH_TONES = new Set(["tan", "camel", "brown", "khaki", "olive", "sage", "rust", "mustard"]);
-
-function isNeutral(color: string): boolean { return NEUTRAL_COLORS.has(color); }
-function isEarth(color: string): boolean { return EARTH_TONES.has(color); }
-function colorTone(color: string): string { return COLOR_TONE_MAP[color] || "neutral"; }
-
-const COLOR_HARMONY: Record<string, string[]> = {
-  black:    ["white", "grey", "charcoal", "cream", "ivory", "beige", "red", "burgundy", "navy"],
-  white:    ["black", "navy", "grey", "blue", "red", "pink", "green", "brown"],
-  grey:     ["black", "white", "navy", "burgundy", "charcoal", "cream", "blue"],
-  charcoal: ["black", "white", "grey", "cream", "navy", "burgundy", "red"],
-  navy:     ["white", "cream", "grey", "red", "burgundy", "camel", "tan", "beige"],
-  beige:    ["brown", "tan", "camel", "cream", "white", "navy", "burgundy", "olive", "rust"],
-  cream:    ["beige", "tan", "brown", "camel", "navy", "burgundy", "black", "olive"],
-  ivory:    ["beige", "tan", "camel", "cream", "black", "brown", "navy"],
-  brown:    ["cream", "beige", "tan", "camel", "olive", "rust", "burgundy", "navy", "white"],
-  tan:      ["brown", "beige", "cream", "camel", "olive", "navy", "burgundy", "rust"],
-  camel:    ["brown", "tan", "beige", "cream", "navy", "burgundy", "rust", "white"],
-  olive:    ["cream", "tan", "brown", "beige", "burgundy", "rust", "navy", "khaki"],
-  khaki:    ["olive", "tan", "brown", "cream", "beige", "navy", "white"],
-  rust:     ["cream", "beige", "tan", "brown", "navy", "olive", "burgundy"],
-  mustard:  ["brown", "cream", "tan", "navy", "olive", "burgundy"],
-  burgundy: ["cream", "beige", "tan", "camel", "navy", "grey", "charcoal", "black"],
-  wine:     ["cream", "beige", "grey", "navy", "black"],
-  denim:    ["white", "cream", "grey", "navy", "brown", "tan"],
-  blue:     ["white", "grey", "navy", "cream", "tan", "brown"],
-  sky_blue: ["white", "cream", "grey", "beige"],
-  teal:     ["cream", "beige", "grey", "white", "navy"],
-  sage:     ["cream", "beige", "tan", "brown", "white"],
-  green:    ["white", "cream", "beige", "brown", "navy"],
-  red:      ["white", "grey", "black", "navy", "cream"],
-  pink:     ["white", "cream", "grey", "navy"],
-  coral:    ["white", "cream", "beige"],
-  orange:   ["white", "cream", "navy", "brown"],
-  purple:   ["white", "cream", "grey", "black"],
-  lavender: ["white", "cream", "grey"],
-  metallic: ["black", "white", "navy", "grey", "cream"],
-  gold:     ["black", "navy", "cream", "burgundy"],
-  multi:    ["black", "white", "grey", "navy"],
-};
+const HARMONY_OVERRIDES = new Map<string, number>();
+function h(c1: string, c2: string, val: number) {
+  HARMONY_OVERRIDES.set([c1, c2].sort().join("-"), val);
+}
+h("black","white",95); h("navy","white",95); h("navy","beige",92);
+h("navy","cream",92); h("black","grey",90); h("black","beige",88);
+h("charcoal","white",92); h("charcoal","beige",88); h("charcoal","cream",87);
+h("black","red",90); h("navy","red",85); h("black","cream",88);
+h("black","ivory",88); h("navy","ivory",90); h("grey","white",88);
+h("grey","navy",82); h("grey","beige",80); h("denim","white",90);
+h("denim","beige",85); h("denim","black",88); h("denim","cream",85);
+h("beige","brown",92); h("cream","brown",90); h("beige","olive",85);
+h("brown","olive",82); h("camel","navy",90); h("camel","white",88);
+h("tan","navy",88); h("tan","white",86); h("burgundy","navy",85);
+h("burgundy","beige",88); h("burgundy","cream",86); h("burgundy","grey",82);
+h("rust","navy",82); h("rust","beige",84); h("rust","cream",82);
+h("mustard","navy",84); h("mustard","brown",78); h("mustard","grey",76);
+h("khaki","white",82); h("khaki","navy",80); h("khaki","brown",78);
+h("sage","beige",82); h("sage","cream",80); h("sage","white",80);
+h("wine","beige",85); h("wine","grey",82); h("wine","cream",84);
+h("olive","beige",84); h("olive","cream",82); h("olive","white",80);
+h("camel","black",85); h("camel","brown",80); h("tan","brown",82);
+h("burgundy","black",84); h("wine","navy",82); h("wine","black",83);
+h("rust","black",78); h("rust","brown",75); h("mustard","black",78);
+h("blue","white",90); h("blue","beige",82); h("blue","grey",80);
+h("green","beige",82); h("green","white",80); h("green","brown",78);
+h("green","cream",80); h("green","navy",72);
+h("red","grey",78); h("red","beige",75); h("red","cream",76);
+h("yellow","navy",85); h("yellow","grey",78); h("yellow","black",80);
+h("pink","grey",80); h("pink","navy",78); h("pink","white",82);
+h("pink","beige",78); h("pink","cream",80);
+h("purple","grey",78); h("purple","white",76); h("purple","black",80);
+h("orange","navy",82); h("orange","black",78); h("orange","beige",75);
+h("coral","navy",80); h("coral","beige",78); h("coral","white",80);
+h("teal","beige",80); h("teal","white",82); h("teal","cream",80);
+h("mint","white",80); h("mint","beige",76); h("mint","navy",78);
+h("sky_blue","white",82); h("sky_blue","beige",78); h("sky_blue","navy",75);
+h("lavender","white",80); h("lavender","grey",78); h("lavender","beige",75);
+h("red","orange",35); h("red","pink",40); h("red","purple",38);
+h("orange","pink",35); h("green","red",38); h("blue","orange",42);
+h("purple","yellow",35); h("purple","orange",32); h("green","purple",38);
+h("pink","orange",40); h("yellow","purple",35); h("red","green",38);
+h("yellow","pink",42); h("coral","red",45); h("orange","red",35);
+h("metallic","black",90); h("metallic","white",85); h("metallic","navy",82);
+h("metallic","grey",80); h("metallic","beige",75);
+h("multi","black",82); h("multi","white",80); h("multi","grey",78);
+h("multi","navy",76); h("multi","beige",74);
 
 function getColorHarmonyScore(c1: string, c2: string): number {
-  if (c1 === c2) return isNeutral(c1) ? 60 : 40;
-  const harmonics = COLOR_HARMONY[c1] || [];
-  if (harmonics.includes(c2)) return 80;
-  const t1 = colorTone(c1), t2 = colorTone(c2);
-  if (t1 === t2) return 55;
-  if (t1 === "neutral" || t2 === "neutral") return 60;
-  return 30;
+  if (c1 === c2) {
+    const entry = COLOR_HSL_MAP[c1];
+    if (!entry) return 50;
+    return entry.type === "neutral" ? 82 : 45;
+  }
+  const key = [c1, c2].sort().join("-");
+  const override = HARMONY_OVERRIDES.get(key);
+  if (override !== undefined) return override;
+  const a = COLOR_HSL_MAP[c1];
+  const b = COLOR_HSL_MAP[c2];
+  if (!a || !b) return 50;
+  if (a.type === "neutral" && b.type === "neutral") return 85;
+  if (a.type === "neutral" || b.type === "neutral") return 78;
+  if (a.type === "earth" && b.type === "earth") {
+    let s = 72;
+    if (a.tone === b.tone) s += 8;
+    if (a.lightness !== b.lightness) s += 5;
+    return Math.min(100, s);
+  }
+  if (a.type === "special" || b.type === "special") return 70;
+  if ((a.type === "earth") !== (b.type === "earth")) {
+    let s = 58;
+    if (a.tone === b.tone) s += 12;
+    else if (a.tone === "neutral" || b.tone === "neutral") s += 6;
+    if (Math.abs(a.lightness - b.lightness) > 20) s += 5;
+    return Math.min(100, s);
+  }
+  let s = 40;
+  if (a.tone === b.tone) s += 15;
+  else s -= 5;
+  if (Math.abs(a.lightness - b.lightness) > 20) s += 8;
+  return Math.max(25, Math.min(100, s));
 }
 
-function getTonalHarmonyScore(colors: string[]): number {
-  if (colors.length < 2) return 60;
-  let sum = 0, count = 0;
-  for (let i = 0; i < colors.length; i++) {
-    for (let j = i + 1; j < colors.length; j++) {
-      sum += getColorHarmonyScore(colors[i], colors[j]);
-      count++;
+function getTonalHarmonyScore(families: string[]): number {
+  const valid = families.filter(f => COLOR_HSL_MAP[f]);
+  if (valid.length < 2) return 70;
+  const neutralCount = valid.filter(f => COLOR_HSL_MAP[f].type === "neutral").length;
+  const earthCount = valid.filter(f => COLOR_HSL_MAP[f].type === "earth").length;
+  const accentFamilies = valid.filter(f => COLOR_HSL_MAP[f].type === "accent");
+  const uniqueAccents = new Set(accentFamilies);
+  const warmCount = valid.filter(f => COLOR_HSL_MAP[f].tone === "warm").length;
+  const coolCount = valid.filter(f => COLOR_HSL_MAP[f].tone === "cool").length;
+  let score = 70;
+  const totalDir = warmCount + coolCount;
+  if (totalDir > 0) {
+    const domRatio = Math.max(warmCount, coolCount) / totalDir;
+    if (domRatio >= 0.8) score += 15;
+    else if (domRatio >= 0.6) score += 8;
+    else score -= 10;
+  }
+  if (neutralCount >= valid.length - 1 && uniqueAccents.size <= 1) score += 12;
+  if (uniqueAccents.size > 2) score -= 15;
+  if (uniqueAccents.size === 1 && neutralCount >= 1) score += 8;
+  if (earthCount >= 2 && neutralCount >= 1) score += 6;
+  if (valid.length >= 2) {
+    const lights = valid.map(f => COLOR_HSL_MAP[f].lightness);
+    const lightRange = Math.max(...lights) - Math.min(...lights);
+    if (lightRange >= 30 && lightRange <= 60) score += 8;
+    else if (lightRange < 15 && valid.length >= 3) score -= 5;
+  }
+  return Math.max(0, Math.min(100, score));
+}
+
+// ── Material DNA (ported from src/utils/matching/itemDna.ts) ─────────────────
+
+const MATERIAL_GROUPS: Record<string, string[]> = {
+  luxe:       ["silk","satin","velvet","cashmere","chiffon","organza"],
+  structured: ["denim","leather","tweed","suede","corduroy"],
+  classic:    ["wool","cotton","linen"],
+  casual:     ["jersey","fleece","sweatshirt","terry"],
+  knit:       ["knit","crochet","ribbed","cable-knit","mohair"],
+  technical:  ["nylon","polyester","gore-tex","spandex","mesh"],
+  blend:      ["blend"],
+  eco:        ["tencel","modal","bamboo"],
+  sheer:      ["lace","tulle","voile"],
+  fur:        ["fur","faux fur","shearling"],
+  down:       ["padding","down","puffer"],
+  waxed:      ["waxed","coated"],
+};
+
+const MATERIAL_COMPAT: Record<string, number> = {
+  "luxe-luxe":1.0,"luxe-classic":0.85,"luxe-structured":0.65,"luxe-knit":0.55,
+  "luxe-casual":0.3,"luxe-technical":0.2,"luxe-blend":0.6,"luxe-eco":0.7,
+  "luxe-sheer":0.85,"luxe-waxed":0.3,"luxe-fur":0.8,"luxe-down":0.3,
+  "structured-structured":1.0,"structured-classic":0.9,"structured-casual":0.65,
+  "structured-knit":0.65,"structured-technical":0.55,"structured-blend":0.75,
+  "structured-eco":0.7,"structured-sheer":0.4,"structured-waxed":0.8,
+  "structured-fur":0.7,"structured-down":0.6,
+  "classic-classic":1.0,"classic-casual":0.8,"classic-knit":0.85,"classic-technical":0.55,
+  "classic-blend":0.9,"classic-eco":0.9,"classic-sheer":0.6,"classic-waxed":0.5,
+  "classic-fur":0.6,"classic-down":0.55,
+  "casual-casual":1.0,"casual-knit":0.9,"casual-technical":0.75,"casual-blend":0.85,
+  "casual-eco":0.85,"casual-sheer":0.3,"casual-waxed":0.5,"casual-fur":0.55,"casual-down":0.7,
+  "knit-knit":1.0,"knit-technical":0.5,"knit-blend":0.85,"knit-eco":0.8,
+  "knit-sheer":0.5,"knit-waxed":0.35,"knit-fur":0.7,"knit-down":0.6,
+  "technical-technical":1.0,"technical-blend":0.7,"technical-eco":0.6,
+  "technical-sheer":0.2,"technical-waxed":0.8,"technical-fur":0.4,"technical-down":0.8,
+  "blend-blend":1.0,"blend-eco":0.85,"blend-sheer":0.5,"blend-waxed":0.55,
+  "blend-fur":0.6,"blend-down":0.65,
+  "eco-eco":1.0,"eco-sheer":0.6,"eco-waxed":0.4,"eco-fur":0.3,"eco-down":0.5,
+  "sheer-sheer":0.8,"sheer-waxed":0.15,"sheer-fur":0.5,"sheer-down":0.2,
+  "waxed-waxed":0.9,"waxed-fur":0.6,"waxed-down":0.7,
+  "fur-fur":0.7,"fur-down":0.8,
+  "down-down":0.9,
+};
+
+function inferMaterialGroup(material: string, name?: string): string {
+  if (material) {
+    const m = material.toLowerCase().trim();
+    for (const [group, mats] of Object.entries(MATERIAL_GROUPS)) {
+      if (mats.some(mat => mat.length <= 4
+        ? new RegExp(`(^|[\\s,/])${mat}($|[\\s,/])`, "i").test(m)
+        : m.includes(mat)
+      )) return group;
     }
   }
-  return count > 0 ? sum / count : 60;
+  if (name) {
+    const n = name.toLowerCase();
+    for (const [grp, mats] of Object.entries(MATERIAL_GROUPS)) {
+      if (mats.some(mat => mat.length <= 4
+        ? new RegExp(`(^|[\\s,/])${mat}($|[\\s,/])`, "i").test(n)
+        : n.includes(mat)
+      )) return grp;
+    }
+  }
+  return "blend";
 }
 
-// ── Matching Architecture: Scoring Rules ─────────────────────────────────────
+function getMaterialCompatScore(g1: string, g2: string): number {
+  return MATERIAL_COMPAT[`${g1}-${g2}`] ?? MATERIAL_COMPAT[`${g2}-${g1}`] ?? 0.5;
+}
+
+// ── Pattern Balance (ported from src/utils/matching/contextLayer.ts) ──────────
+
+const PATTERN_COMPAT: Record<string, Record<string, number>> = {
+  solid:   { solid: 85, stripe: 90, check: 88, graphic: 80, print: 78, floral: 82, other: 75 },
+  stripe:  { solid: 90, stripe: 30, check: 25, graphic: 35, print: 40, floral: 35, other: 45 },
+  check:   { solid: 88, stripe: 25, check: 25, graphic: 35, print: 38, floral: 30, other: 40 },
+  graphic: { solid: 80, stripe: 35, check: 35, graphic: 30, print: 35, floral: 30, other: 40 },
+  print:   { solid: 78, stripe: 40, check: 38, graphic: 35, print: 28, floral: 30, other: 40 },
+  floral:  { solid: 82, stripe: 35, check: 30, graphic: 30, print: 30, floral: 25, other: 35 },
+  other:   { solid: 75, stripe: 45, check: 40, graphic: 40, print: 40, floral: 35, other: 50 },
+};
+
+// ── Season / Warmth (ported from src/utils/matching/beamSearch.ts) ────────────
+
+const SEASON_WARMTH: Record<string, { min: number; max: number; ideal: number }> = {
+  spring: { min: 1.5, max: 3.5, ideal: 2.5 },
+  summer: { min: 1,   max: 2.5, ideal: 1.5 },
+  fall:   { min: 2.5, max: 4,   ideal: 3.2 },
+  winter: { min: 3.5, max: 5,   ideal: 4.2 },
+};
+
+// ── Scoring Rules ─────────────────────────────────────────────────────────────
 
 interface Product {
   id: string;
@@ -105,60 +279,70 @@ interface Product {
   image_url?: string;
   nobg_image_url?: string;
   price?: number;
+  gender?: string;
 }
 
-function normalizeColorFamily(raw: string): string {
-  if (!raw) return "black";
-  const VALID = new Set(["black","white","grey","navy","beige","brown","blue","green","red","yellow","purple","pink","orange","metallic","multi","khaki","cream","ivory","burgundy","wine","olive","mustard","coral","charcoal","tan","camel","rust","sage","mint","lavender","teal","sky_blue","denim"]);
-  const MAP: Record<string, string> = {
-    gray:"grey", multicolor:"multi", "multi-color":"multi", "multi color":"multi",
-    nude:"beige", sand:"beige", taupe:"beige", "light blue":"sky_blue", "sky blue":"sky_blue",
-    "dark blue":"navy", "light brown":"tan", maroon:"burgundy", "dark red":"burgundy",
-    turquoise:"teal", cyan:"teal", gold:"metallic", silver:"metallic", "off-white":"cream",
-    "dark gray":"charcoal", "dark grey":"charcoal", ecru:"ivory",
-  };
-  const lower = raw.toLowerCase().trim();
-  if (VALID.has(lower)) return lower;
-  if (MAP[lower]) return MAP[lower];
-  for (const [k, v] of Object.entries(MAP)) { if (lower.includes(k)) return v; }
-  for (const valid of VALID) { if (lower.includes(valid)) return valid; }
-  return "black";
-}
+const VALID_COLOR_FAMILIES = new Set(["black","white","grey","navy","beige","brown","blue","green","red","yellow","purple","pink","orange","metallic","multi","khaki","cream","ivory","burgundy","wine","olive","mustard","coral","charcoal","tan","camel","rust","sage","mint","lavender","teal","sky_blue","denim","silver","gold"]);
+const COLOR_ALIAS: Record<string, string> = {
+  gray:"grey", multicolor:"multi","multi-color":"multi","multi color":"multi",
+  nude:"beige",sand:"beige",taupe:"beige","light blue":"sky_blue","sky blue":"sky_blue",
+  "dark blue":"navy","light brown":"tan",maroon:"burgundy","dark red":"burgundy",
+  turquoise:"teal",cyan:"teal","off-white":"cream","dark gray":"charcoal","dark grey":"charcoal",
+  ecru:"ivory","dark green":"olive","light grey":"grey","light green":"mint",
+};
 
 function resolveColor(product: Product): string {
-  if (product.color_family) return normalizeColorFamily(product.color_family);
-  if (product.color) return normalizeColorFamily(product.color);
+  const raw = product.color_family || product.color || "";
+  if (!raw) return "black";
+  const lower = raw.toLowerCase().trim();
+  if (VALID_COLOR_FAMILIES.has(lower)) return lower;
+  if (COLOR_ALIAS[lower]) return COLOR_ALIAS[lower];
+  for (const [k, v] of Object.entries(COLOR_ALIAS)) {
+    if (lower.includes(k)) return v;
+  }
+  for (const valid of VALID_COLOR_FAMILIES) {
+    if (lower.includes(valid)) return valid;
+  }
   return "black";
 }
 
-function scoreTonalHarmony(items: Record<string, Product>): number {
-  const all = Object.values(items).filter(Boolean);
-  if (all.length < 2) return 60;
-  const colors = all.map(p => resolveColor(p));
-  let score = getTonalHarmonyScore(colors);
+// Tonal Harmony: HSL getTonalHarmonyScore (50%) + pairwise getColorHarmonyScore (50%)
+function scoreTonalHarmonyRule(items: Record<string, Product>): number {
+  const coreKeys = ["outer","mid","top","bottom","shoes"];
+  const coreItems = coreKeys.map(k => items[k]).filter(Boolean) as Product[];
+  if (coreItems.length < 2) return 50;
+  const colors = coreItems.map(p => resolveColor(p));
 
-  const neutralCount = colors.filter(isNeutral).length;
-  const accents = colors.filter(c => !isNeutral(c) && !isEarth(c));
-  const accentRatio = accents.length / colors.length;
-  const uniqueAccents = new Set(accents);
+  const hslScore = getTonalHarmonyScore(colors);
 
-  if (accentRatio <= 0.10 && neutralCount >= 2) score += 5;
-  else if (accentRatio <= 0.30 && uniqueAccents.size <= 1) score += 3;
-  else if (accentRatio > 0.50) score -= 8;
-  if (uniqueAccents.size > 2) score -= 12;
-
-  const tones = all.map(p => p.color_tone).filter(Boolean);
-  if (tones.length >= 2) {
-    const warm = tones.filter(t => t === "warm").length;
-    const cool = tones.filter(t => t === "cool").length;
-    if (warm > 0 && cool > 0) {
-      const mix = Math.min(warm, cool) / Math.max(warm, cool);
-      if (mix > 0.5) score -= 10;
+  let pairSum = 0, pairCount = 0;
+  for (let i = 0; i < colors.length; i++) {
+    for (let j = i + 1; j < colors.length; j++) {
+      pairSum += getColorHarmonyScore(colors[i], colors[j]);
+      pairCount++;
     }
   }
+  const pairScore = pairCount > 0 ? pairSum / pairCount : 70;
+
+  let score = hslScore * 0.5 + pairScore * 0.5;
+
+  const accessoryColors = [items.bag, items.accessory].filter(Boolean).map(p => resolveColor(p!));
+  if (accessoryColors.length > 0) {
+    let accSum = 0, accCount = 0;
+    for (const ac of accessoryColors) {
+      for (const mc of colors) {
+        accSum += getColorHarmonyScore(mc, ac);
+        accCount++;
+      }
+    }
+    const accScore = accCount > 0 ? accSum / accCount : 70;
+    score = score * 0.85 + accScore * 0.15;
+  }
+
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+// Proportion: silhouette balance + body type prefs
 const SILHOUETTE_BALANCE: Record<string, string[]> = {
   oversized: ["slim","fitted","straight","tapered"],
   relaxed:   ["slim","fitted","straight","tapered"],
@@ -171,12 +355,12 @@ const SILHOUETTE_BALANCE: Record<string, string[]> = {
 };
 
 const BODY_TYPE_SIL_PREFS: Record<string, Record<string, string[]>> = {
-  slim:       { top: ["regular","relaxed","oversized"], outer: ["regular","relaxed","oversized"], bottom: ["wide","straight","relaxed"] },
-  regular:    { top: ["regular","fitted","relaxed"], outer: ["regular","relaxed"], bottom: ["wide","straight","tapered"] },
-  "plus-size":{ top: ["regular","relaxed"], outer: ["regular","relaxed"], bottom: ["wide","straight","relaxed"] },
+  slim:        { top: ["regular","relaxed","oversized"], outer: ["regular","relaxed","oversized"], bottom: ["wide","straight","relaxed"] },
+  regular:     { top: ["regular","fitted","relaxed"], outer: ["regular","relaxed"], bottom: ["wide","straight","tapered"] },
+  "plus-size": { top: ["regular","relaxed"], outer: ["regular","relaxed"], bottom: ["wide","straight","relaxed"] },
 };
 
-function scoreProportion(items: Record<string, Product>, bodyType?: string): number {
+function scoreProportionRule(items: Record<string, Product>, bodyType?: string): number {
   const top = items.top, bottom = items.bottom, outer = items.outer;
   if (!top || !bottom) return 60;
   const topSil = top.silhouette || "regular";
@@ -203,7 +387,7 @@ function scoreProportion(items: Record<string, Product>, bodyType?: string): num
   if (bodyType) {
     const prefs = BODY_TYPE_SIL_PREFS[bodyType];
     if (prefs) {
-      for (const [cat, sil, _prod] of [["top", topSil, top], ["bottom", bottomSil, bottom]] as [string, string, Product][]) {
+      for (const [cat, sil] of [["top", topSil], ["bottom", bottomSil]] as [string, string][]) {
         const preferred = prefs[cat];
         if (!preferred) continue;
         const idx = preferred.indexOf(sil);
@@ -226,6 +410,32 @@ function scoreProportion(items: Record<string, Product>, bodyType?: string): num
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+// Texture Contrast (from textureContrastRule.ts logic)
+function scoreTextureContrastRule(items: Record<string, Product>): number {
+  const coreKeys = ["outer","mid","top","bottom","shoes"];
+  const coreItems = coreKeys.map(k => items[k]).filter(Boolean) as Product[];
+  if (coreItems.length < 2) return 50;
+
+  const groups = coreItems.map(p => inferMaterialGroup(p.material || "", p.name));
+
+  let compatTotal = 0, compatCount = 0;
+  for (let i = 0; i < groups.length; i++) {
+    for (let j = i + 1; j < groups.length; j++) {
+      compatTotal += getMaterialCompatScore(groups[i], groups[j]);
+      compatCount++;
+    }
+  }
+  const avgCompat = compatCount > 0 ? compatTotal / compatCount : 0.5;
+
+  let score = avgCompat * 80;
+  const uniqueGroups = new Set(groups);
+  if (uniqueGroups.size >= 3) score += 15;
+  else if (uniqueGroups.size >= 2) score += 8;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+// Formality Coherence (ported from formalityCoherenceRule.ts)
 const STYLE_COMPAT: Record<string, Record<string, number>> = {
   formal:       { formal: 1.0, smart_casual: 0.75, casual: 0.35, sporty: 0.1 },
   smart_casual: { formal: 0.75, smart_casual: 1.0, casual: 0.8, sporty: 0.4 },
@@ -234,23 +444,52 @@ const STYLE_COMPAT: Record<string, Record<string, number>> = {
 };
 
 const SUB_CATEGORY_STYLE: Record<string, string> = {
-  blazer:"formal", slacks:"formal", pencil_skirt:"formal", trench:"formal",
-  oxford:"formal", loafer:"formal", derby:"formal", necktie:"formal", tuxedo_jacket:"formal",
-  blouse:"smart_casual", cardigan:"smart_casual", polo:"smart_casual", chinos:"smart_casual",
-  knit:"smart_casual", shirt:"smart_casual", turtleneck:"smart_casual", sweater:"smart_casual",
+  blazer:"formal", suit_jacket:"formal", dress_shirt:"formal",
+  slacks:"formal", dress_pants:"formal", pencil_skirt:"formal",
+  trench_coat:"formal", trench:"formal",
+  oxford:"formal", loafer:"formal", heel:"formal", derby:"formal",
+  necktie:"formal", bowtie:"formal", tuxedo_jacket:"formal",
+  blouse:"smart_casual", cardigan:"smart_casual", polo:"smart_casual",
+  chino:"smart_casual", chinos:"smart_casual", knit:"smart_casual",
+  shirt:"smart_casual", turtleneck:"smart_casual", sweater:"smart_casual",
   coat:"smart_casual", boot:"smart_casual", tote:"smart_casual",
-  tshirt:"casual", hoodie:"casual", sweatshirt:"casual", denim_jacket:"casual",
-  denim:"casual", jogger:"casual", shorts:"casual", cargo:"casual",
-  sneaker:"casual", sandal:"casual", backpack:"casual", cap:"casual", beanie:"casual",
-  track_jacket:"sporty", windbreaker:"sporty", puffer:"sporty", leggings:"sporty",
-  track_pants:"sporty", training_shoe:"sporty",
+  t_shirt:"casual", tshirt:"casual", hoodie:"casual", sweatshirt:"casual",
+  denim_jacket:"casual", jeans:"casual", denim:"casual", jogger:"casual",
+  shorts:"casual", cargo:"casual", sneaker:"casual", sandal:"casual",
+  backpack:"casual", cap:"casual", beanie:"casual",
+  track_jacket:"sporty", windbreaker:"sporty", puffer:"sporty",
+  legging:"sporty", leggings:"sporty", track_pants:"sporty",
+  running_shoe:"sporty", training_shoe:"sporty",
+  soccer_jersey:"sporty", basketball_jersey:"sporty",
 };
 
-function formalityToStyle(f: number): string {
-  if (f >= 7) return "formal";
-  if (f >= 4) return "smart_casual";
-  if (f >= 2) return "casual";
-  return "sporty";
+const FORMALITY_BY_SUB_CAT: Record<string, number> = {
+  blazer:7, suit_jacket:8, dress_shirt:7, slacks:7, dress_pants:7,
+  pencil_skirt:7, trench_coat:7, trench:7, oxford:7, loafer:6,
+  heel:7, derby:7, clutch:6, structured_bag:6, necktie:8, bowtie:8,
+  tuxedo_jacket:9, tuxedo_pants:9,
+  blouse:5, cardigan:4, polo:4, chino:4, chinos:4,
+  midi_skirt:5, ankle_boot:4, knit:4, shirt:5, turtleneck:5,
+  sweater:4, vest:5, coat:6, boot:4,
+  tote:4, shoulder_bag:4, watch:5,
+  t_shirt:2, tshirt:2, hoodie:2, sweatshirt:2,
+  denim_jacket:3, jacket:4, jeans:2, denim:2, jogger:1, shorts:2,
+  cargo:2, sneaker:2, sandal:1, canvas:2, runner:2,
+  backpack:2, crossbody:3, cap:1, beanie:2,
+  track_jacket:1, windbreaker:1, puffer:2, legging:1, leggings:1,
+  track_pants:1, biker_shorts:1, running_shoe:1, training_shoe:1,
+  soccer_jersey:1, basketball_jersey:1,
+};
+
+function inferFormality(product: Product): number {
+  if (typeof product.formality === "number") return product.formality;
+  const sub = (product.sub_category || "").toLowerCase().replace(/[\s-]/g, "_");
+  if (FORMALITY_BY_SUB_CAT[sub] !== undefined) return FORMALITY_BY_SUB_CAT[sub];
+  const name = (product.name || "").toLowerCase();
+  for (const [cat, f] of Object.entries(FORMALITY_BY_SUB_CAT)) {
+    if (name.includes(cat.replace(/_/g, " ")) || name.includes(cat)) return f;
+  }
+  return 3;
 }
 
 function inferStyle(product: Product): string {
@@ -260,23 +499,24 @@ function inferStyle(product: Product): string {
   for (const [cat, style] of Object.entries(SUB_CATEGORY_STYLE)) {
     if (name.includes(cat.replace(/_/g, " ")) || name.includes(cat)) return style;
   }
-  const f = typeof product.formality === "number" ? product.formality * 2 : 6;
-  return formalityToStyle(f);
+  const f = inferFormality(product);
+  if (f >= 7) return "formal";
+  if (f >= 4) return "smart_casual";
+  if (f >= 2) return "casual";
+  return "sporty";
 }
 
-function scoreFormalityCoherence(items: Record<string, Product>, vibeDna?: typeof VIBE_DNA[string]): number {
+function scoreFormalityCoherenceRule(items: Record<string, Product>, vibeDna?: typeof VIBE_DNA[string]): number {
   const all = Object.values(items).filter(Boolean);
-  if (all.length < 2) return 60;
-  const formalities = all.map(p => (typeof p.formality === "number" ? p.formality * 2 : 6));
+  if (all.length < 3) return 50;
+  const formalities = all.map(p => inferFormality(p));
   const styles = all.map(p => inferStyle(p));
   let score = 70;
-
   const fRange = Math.max(...formalities) - Math.min(...formalities);
   if (fRange <= 2) score += 15;
   else if (fRange <= 3) score += 5;
   else if (fRange > 5) score -= 20;
   else if (fRange > 4) score -= 10;
-
   let compatSum = 0, compatCount = 0;
   for (let i = 0; i < styles.length; i++) {
     for (let j = i + 1; j < styles.length; j++) {
@@ -286,7 +526,6 @@ function scoreFormalityCoherence(items: Record<string, Product>, vibeDna?: typeo
   }
   const avgCompat = compatCount > 0 ? compatSum / compatCount : 0.5;
   score += (avgCompat - 0.5) * 40;
-
   if (vibeDna) {
     const [fMin, fMax] = vibeDna.formality_range;
     const avgF = formalities.reduce((s, f) => s + f, 0) / formalities.length;
@@ -296,74 +535,175 @@ function scoreFormalityCoherence(items: Record<string, Product>, vibeDna?: typeo
       score -= overshoot * 6;
     }
   }
-
   const coreStyles = ["top","bottom","shoes"].map(k => items[k]).filter(Boolean).map(p => inferStyle(p));
   if (coreStyles.length >= 3 && coreStyles.includes("formal") && coreStyles.includes("sporty")) score -= 15;
-
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function scoreVibeAffinity(items: Record<string, Product>, vibe: string): number {
+// Vibe Affinity
+function scoreVibeAffinityRule(items: Record<string, Product>, vibe?: string): number {
+  if (!vibe) return 50;
   const coreKeys = ["outer","mid","top","bottom","shoes"];
   const coreItems = coreKeys.map(k => items[k]).filter(Boolean) as Product[];
   if (coreItems.length < 2) return 50;
-
   const matchCount = coreItems.filter(p => (p.vibe || []).includes(vibe)).length;
   const ratio = matchCount / coreItems.length;
-  let score = 40 + ratio * 50;
-  if (ratio >= 0.8) score += 10;
-  else if (ratio <= 0.3) score -= 10;
+  const score = 40 + ratio * 50 + (ratio >= 0.8 ? 10 : ratio <= 0.3 ? -10 : 0);
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function scoreSeasonFit(items: Record<string, Product>, season: string): number {
-  if (!season) return 60;
-  const all = Object.values(items).filter(Boolean);
-  if (all.length === 0) return 60;
-  const matchCount = all.filter(p => (p.season || []).includes(season)).length;
-  const ratio = matchCount / all.length;
-  return Math.max(0, Math.min(100, Math.round(40 + ratio * 60)));
-}
+// Color Depth (from scorer.ts scoreColorDepth)
+function scoreColorDepthRule(items: Record<string, Product>): number {
+  const coreKeys = ["outer","mid","top","bottom","shoes"];
+  const colors = coreKeys.map(k => items[k]).filter(Boolean).map(p => resolveColor(p!));
+  if (colors.length < 3) return 50;
 
-const SCORE_WEIGHTS = {
-  tonalHarmony: 0.20,
-  proportion: 0.15,
-  formalityCoherence: 0.15,
-  vibeAffinity: 0.20,
-  seasonFit: 0.15,
-  genderMatch: 0.15,
-};
+  let score = 70;
+  const uniqueColors = new Set(colors);
+  const neutralColors = colors.filter(c => COLOR_HSL_MAP[c]?.type === "neutral");
+  const accentColors = colors.filter(c => COLOR_HSL_MAP[c]?.type === "accent");
+  const neutralRatio = neutralColors.length / colors.length;
+  const uniqueAccents = new Set(accentColors);
 
-function scoreOutfitComposition(
-  items: Record<string, Product>,
-  vibe: string,
-  gender: string,
-  bodyType: string,
-  season: string,
-): number {
-  const vibeDna = VIBE_DNA[vibe];
-  const tonal = scoreTonalHarmony(items);
-  const proportion = scoreProportion(items, bodyType);
-  const formality = scoreFormalityCoherence(items, vibeDna);
-  const vibeAff = scoreVibeAffinity(items, vibe);
-  const seasonFit = scoreSeasonFit(items, season);
+  if (uniqueAccents.size <= 1 && neutralRatio >= 0.4) score += 20;
+  if (uniqueAccents.size === 2) score += 8;
+  if (uniqueAccents.size > 2) score -= 15;
+  if (uniqueColors.size > 4) score -= 15;
+  if (uniqueColors.size === 1 && COLOR_HSL_MAP[colors[0]]?.type === "neutral") score -= 20;
+  if (uniqueColors.size <= 2 && colors.every(c => COLOR_HSL_MAP[c]?.type === "neutral") && colors.length >= 4) score -= 15;
+  const blackCount = colors.filter(c => c === "black").length;
+  if (blackCount >= 3) score -= 15;
+  if (blackCount >= 4) score -= 15;
+  if (uniqueColors.size >= 2 && !colors.every(c => COLOR_HSL_MAP[c]?.type === "neutral")) score += 10;
 
-  const allItems = Object.values(items).filter(Boolean) as Product[];
-  let genderScore = 50;
-  if (allItems.length > 0) {
-    const matchCount = allItems.filter(p =>
-      p.gender === gender || p.gender === "UNISEX"
-    ).length;
-    genderScore = Math.round((matchCount / allItems.length) * 100);
+  const colorCounts = new Map<string, number>();
+  colors.forEach(c => colorCounts.set(c, (colorCounts.get(c) || 0) + 1));
+  const sorted = [...colorCounts.values()].sort((a, b) => b - a);
+  if (sorted.length >= 2) {
+    const baseRatio = sorted[0] / colors.length;
+    if (baseRatio >= 0.4 && baseRatio <= 0.7) score += 10;
   }
 
+  return Math.max(0, Math.min(100, score));
+}
+
+// Material Compat (from scorer.ts scoreMaterialCompat)
+function scoreMaterialCompatRule(items: Record<string, Product>): number {
+  const coreKeys = ["outer","mid","top","bottom","shoes"];
+  const coreItems = coreKeys.map(k => items[k]).filter(Boolean) as Product[];
+  if (coreItems.length < 2) return 50;
+  const groups = coreItems.map(p => inferMaterialGroup(p.material || "", p.name));
+  let compatTotal = 0, compatCount = 0;
+  for (let i = 0; i < groups.length; i++) {
+    for (let j = i + 1; j < groups.length; j++) {
+      compatTotal += getMaterialCompatScore(groups[i], groups[j]);
+      compatCount++;
+    }
+  }
+  const avgCompat = compatCount > 0 ? compatTotal / compatCount : 0.5;
+  return Math.max(0, Math.min(100, Math.round(avgCompat * 100)));
+}
+
+// Context Fit = seasonFit(30%) + warmthFit(30%) + patternBalance(15%) + accessoryHarmony(10%) + 50(15%)
+function computeSeasonFit(items: Record<string, Product>, season?: string): number {
+  if (!season) return 50;
+  const coreKeys = ["outer","mid","top","bottom","shoes"];
+  const coreItems = coreKeys.map(k => items[k]).filter(Boolean) as Product[];
+  if (coreItems.length < 2) return 50;
+  let score = 100;
+  let matchCount = 0, mismatchCount = 0;
+  for (const item of coreItems) {
+    const seasons = item.season || [];
+    if (seasons.includes(season)) { matchCount++; score += 8; }
+    else if (seasons.length === 0) { score -= 5; }
+    else { mismatchCount++; score -= 18; }
+  }
+  if (matchCount === coreItems.length) score += 20;
+  if (mismatchCount >= Math.ceil(coreItems.length * 0.5)) score -= 25;
+  return Math.max(0, Math.min(100, score));
+}
+
+function computeWarmthFit(items: Record<string, Product>, season?: string): number {
+  const coreKeys = ["outer","mid","top","bottom","shoes"];
+  const coreItems = coreKeys.map(k => items[k]).filter(Boolean) as Product[];
+  const warmths = coreItems.map(i => i.warmth).filter((w): w is number => typeof w === "number");
+  if (warmths.length < 2) return 50;
+  let score = 100;
+  const avg = warmths.reduce((s, w) => s + w, 0) / warmths.length;
+  const effectiveTarget = season ? SEASON_WARMTH[season]?.ideal : undefined;
+  if (effectiveTarget !== undefined) {
+    const diff = Math.abs(avg - effectiveTarget);
+    if (diff <= 0.5) score += 15;
+    else if (diff <= 1) score += 5;
+    else if (diff > 2) score -= 45;
+    else if (diff > 1.5) score -= 30;
+    else score -= 15;
+  }
+  if (season) {
+    const bounds = SEASON_WARMTH[season];
+    if (bounds) {
+      if (avg < bounds.min) score -= Math.min(30, (bounds.min - avg) * 20);
+      if (avg > bounds.max) score -= Math.min(30, (avg - bounds.max) * 20);
+    }
+  }
+  const range = Math.max(...warmths) - Math.min(...warmths);
+  if (range > 2) score -= 20;
+  else if (range <= 1) score += 10;
+  return Math.max(0, Math.min(100, score));
+}
+
+function computePatternBalance(items: Record<string, Product>): number {
+  const all = Object.values(items).filter(Boolean);
+  if (all.length < 3) return 50;
+  const patterns = all.map(i => i.pattern || "").filter(Boolean);
+  if (patterns.length < Math.ceil(all.length * 0.4)) return 50;
+  const nonSolid = patterns.filter(p => p !== "solid");
+  if (nonSolid.length === 0) return 92;
+  if (nonSolid.length === 1) return 95;
+  let totalCompat = 0, pairCount = 0;
+  for (let i = 0; i < nonSolid.length; i++) {
+    for (let j = i + 1; j < nonSolid.length; j++) {
+      const p1 = nonSolid[i].toLowerCase();
+      const p2 = nonSolid[j].toLowerCase();
+      totalCompat += PATTERN_COMPAT[p1]?.[p2] ?? PATTERN_COMPAT[p2]?.[p1] ?? 50;
+      pairCount++;
+    }
+  }
+  let score = pairCount > 0 ? totalCompat / pairCount : 70;
+  if (nonSolid.length > 2) score -= 15;
+  if (nonSolid.length >= 3) score -= 10;
+  return Math.max(0, Math.min(100, score));
+}
+
+function computeAccessoryHarmony(items: Record<string, Product>): number {
+  const accessories = [items.bag, items.accessory].filter(Boolean) as Product[];
+  if (accessories.length === 0) return 50;
+  const mainKeys = ["outer","mid","top","bottom","shoes"];
+  const mainColors = mainKeys.map(k => items[k]).filter(Boolean).map(p => resolveColor(p!));
+  if (mainColors.length === 0) return 50;
+  let score = 70;
+  for (const acc of accessories) {
+    const accColor = resolveColor(acc);
+    let bestHarmony = 0;
+    for (const mc of mainColors) bestHarmony = Math.max(bestHarmony, getColorHarmonyScore(mc, accColor));
+    if (bestHarmony >= 85) score += 10;
+    else if (bestHarmony >= 70) score += 5;
+    else if (bestHarmony < 50) score -= 10;
+  }
+  return Math.max(0, Math.min(100, score));
+}
+
+function computeContextFit(items: Record<string, Product>, season?: string): number {
+  const seasonFit = computeSeasonFit(items, season);
+  const warmthFit = computeWarmthFit(items, season);
+  const patternBalance = computePatternBalance(items);
+  const accessoryHarmony = computeAccessoryHarmony(items);
   return Math.round(
-    tonal * SCORE_WEIGHTS.tonalHarmony +
-    proportion * SCORE_WEIGHTS.proportion +
-    formality * SCORE_WEIGHTS.formalityCoherence +
-    vibeAff * SCORE_WEIGHTS.vibeAffinity +
-    seasonFit * SCORE_WEIGHTS.seasonFit +
-    genderScore * SCORE_WEIGHTS.genderMatch
+    seasonFit * 0.30 +
+    warmthFit * 0.30 +
+    patternBalance * 0.15 +
+    accessoryHarmony * 0.10 +
+    50 * 0.15
   );
 }
 
@@ -373,61 +713,81 @@ const VIBE_DNA: Record<string, {
   formality_range: [number, number];
   color_palette: { primary: string[]; secondary: string[]; accent: string[] };
   material_preferences: string[];
-  silhouette_preference: string[];
-  proportion_style: string;
 }> = {
   ELEVATED_COOL: {
     formality_range: [5, 9],
     color_palette: { primary: ["black","charcoal","navy","white"], secondary: ["grey","cream","camel"], accent: ["burgundy","metallic","wine"] },
     material_preferences: ["structured","luxe","classic"],
-    silhouette_preference: ["I","V"],
-    proportion_style: "column",
   },
   EFFORTLESS_NATURAL: {
     formality_range: [2, 6],
     color_palette: { primary: ["beige","cream","ivory","white"], secondary: ["olive","khaki","tan","sage","brown"], accent: ["rust","mustard","burgundy"] },
     material_preferences: ["classic","eco","knit"],
-    silhouette_preference: ["A","H","I"],
-    proportion_style: "relaxed",
   },
   ARTISTIC_MINIMAL: {
     formality_range: [3, 8],
     color_palette: { primary: ["black","white","grey","charcoal"], secondary: ["cream","beige","navy"], accent: ["rust","olive","burgundy"] },
     material_preferences: ["classic","structured","eco","knit"],
-    silhouette_preference: ["I","A","Y"],
-    proportion_style: "column",
   },
   RETRO_LUXE: {
     formality_range: [3, 8],
     color_palette: { primary: ["burgundy","navy","brown","cream"], secondary: ["camel","olive","wine","beige"], accent: ["rust","mustard","teal","gold"] },
     material_preferences: ["luxe","structured","classic","knit"],
-    silhouette_preference: ["A","X","I"],
-    proportion_style: "balanced",
   },
   SPORT_MODERN: {
     formality_range: [0, 4],
     color_palette: { primary: ["black","grey","white","navy"], secondary: ["olive","khaki","charcoal"], accent: ["orange","teal","red","green"] },
     material_preferences: ["technical","casual","blend"],
-    silhouette_preference: ["I","V"],
-    proportion_style: "balanced",
   },
   CREATIVE_LAYERED: {
     formality_range: [0, 5],
     color_palette: { primary: ["black","grey","white","denim"], secondary: ["burgundy","brown","olive","navy"], accent: ["red","purple","orange","pink","yellow"] },
     material_preferences: ["structured","casual","classic","sheer"],
-    silhouette_preference: ["V","A","Y"],
-    proportion_style: "top-heavy",
   },
 };
 
-// ── Season / Warmth helpers ───────────────────────────────────────────────────
+// ── Final Scorer: exact weights from src/utils/matching/scorer.ts ─────────────
 
-const SEASON_WARMTH_RANGE: Record<string, { min: number; max: number }> = {
-  summer: { min: 1, max: 2 },
-  spring: { min: 1, max: 3 },
-  fall:   { min: 2, max: 4 },
-  winter: { min: 3, max: 5 },
+const SCORER_WEIGHTS = {
+  proportion:         0.12,
+  tonalHarmony:       0.15,
+  textureContrast:    0.10,
+  formalityCoherence: 0.12,
+  vibeAffinity:       0.13,
+  colorDepth:         0.08,
+  materialCompat:     0.07,
+  contextFit:         0.23,
 };
+
+function scoreOutfitComposition(
+  items: Record<string, Product>,
+  vibe: string,
+  bodyType: string,
+  season: string,
+): number {
+  const vibeDna = VIBE_DNA[vibe];
+  const proportion         = scoreProportionRule(items, bodyType);
+  const tonalHarmony       = scoreTonalHarmonyRule(items);
+  const textureContrast    = scoreTextureContrastRule(items);
+  const formalityCoherence = scoreFormalityCoherenceRule(items, vibeDna);
+  const vibeAffinity       = scoreVibeAffinityRule(items, vibe);
+  const colorDepth         = scoreColorDepthRule(items);
+  const materialCompat     = scoreMaterialCompatRule(items);
+  const contextFit         = computeContextFit(items, season);
+
+  return Math.round(
+    proportion         * SCORER_WEIGHTS.proportion +
+    tonalHarmony       * SCORER_WEIGHTS.tonalHarmony +
+    textureContrast    * SCORER_WEIGHTS.textureContrast +
+    formalityCoherence * SCORER_WEIGHTS.formalityCoherence +
+    vibeAffinity       * SCORER_WEIGHTS.vibeAffinity +
+    colorDepth         * SCORER_WEIGHTS.colorDepth +
+    materialCompat     * SCORER_WEIGHTS.materialCompat +
+    contextFit         * SCORER_WEIGHTS.contextFit
+  );
+}
+
+// ── Outer season filter ───────────────────────────────────────────────────────
 
 const OUTER_VEST_SUBCATS = new Set([
   "vest","down_vest","quilted_vest","fleece_vest","knitted_vest","gilet",
@@ -443,18 +803,6 @@ function isSeasonAppropriateOuter(product: Product, season: string): boolean {
   if (season === "summer") return false;
   if (season === "spring") { if (warmth > 4) return false; }
   return true;
-}
-
-function upgradeImageResolution(url: string): string {
-  if (!url) return url;
-  return url
-    .replace(/_AC_U[A-Z0-9]+_\./g, "_AC_SL1500_.")
-    .replace(/_AC_SR\d+,\d+_\./g, "_AC_SL1500_.")
-    .replace(/_AC_SY\d+_\./g, "_AC_SL1500_.")
-    .replace(/_AC_SX\d+_\./g, "_AC_SL1500_.")
-    .replace(/_AC_UL\d+_\./g, "_AC_SL1500_.")
-    .replace(/_AC_SS\d+_\./g, "_AC_SL1500_.")
-    .replace(/\._[A-Z0-9,_]+_\./g, "._AC_SL1500_.");
 }
 
 // ── Pipeline types ────────────────────────────────────────────────────────────
@@ -484,12 +832,8 @@ function makeEvent(step: string, status: PipelineEvent["status"], message: strin
 // ── Step 1: Generate keywords ─────────────────────────────────────────────────
 
 async function generateKeywords(
-  gender: string,
-  bodyType: string,
-  vibe: string,
-  season: string,
-  supabaseUrl: string,
-  anonKey: string
+  gender: string, bodyType: string, vibe: string, season: string,
+  supabaseUrl: string, anonKey: string
 ): Promise<Record<string, string[]>> {
   const res = await fetch(`${supabaseUrl}/functions/v1/generate-amazon-keywords`, {
     method: "POST",
@@ -514,34 +858,20 @@ async function searchAmazon(query: string, supabaseUrl: string, anonKey: string)
   return data.results || [];
 }
 
-// ── Step 3: Analyze & register via analyze-amazon-product Edge Function ───────
-// Delegates to the same Edge Function used by AdminAmazonSearch,
-// ensuring identical Gemini prompt, vibe validation, and normalization logic.
-// After insert, we update batch_id by matching on product_link (ASIN).
+// ── Step 3: Analyze & register via analyze-amazon-product ────────────────────
 
 async function analyzeAndRegisterProduct(
-  product: any,
-  gender: string,
-  bodyType: string,
-  vibe: string,
-  season: string,
-  batchId: string,
-  supabaseUrl: string,
-  serviceKey: string,
+  product: any, gender: string, bodyType: string, vibe: string, season: string,
+  batchId: string, supabaseUrl: string, serviceKey: string,
   adminClient: ReturnType<typeof createClient>
 ): Promise<{ success: boolean; productId?: string; name?: string }> {
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/analyze-amazon-product`, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${serviceKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ product, gender, body_type: bodyType, vibe, season }),
     });
-
     if (!res.ok) return { success: false };
-
     const data = await res.json();
     if (data.error) return { success: false };
 
@@ -558,10 +888,7 @@ async function analyzeAndRegisterProduct(
 
     if (findErr || !inserted) return { success: false };
 
-    await adminClient
-      .from("products")
-      .update({ batch_id: batchId })
-      .eq("id", inserted.id);
+    await adminClient.from("products").update({ batch_id: batchId }).eq("id", inserted.id);
 
     return { success: true, productId: inserted.id, name: inserted.name };
   } catch {
@@ -572,26 +899,19 @@ async function analyzeAndRegisterProduct(
 // ── Step 4: Flatlay extraction ────────────────────────────────────────────────
 
 async function triggerExtractProduct(
-  productId: string,
-  imageUrl: string,
-  category: string,
-  subCategory: string,
-  supabaseUrl: string,
-  serviceKey: string
+  productId: string, imageUrl: string, category: string, subCategory: string,
+  supabaseUrl: string, serviceKey: string
 ): Promise<void> {
   const headers = { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" };
   const adminClient = createClient(supabaseUrl, serviceKey);
-
   const slot = ["outer","mid","top","bottom","shoes","bag","accessory"].includes(category) ? category : "top";
   const label = subCategory || category;
-
   let nobgUrl: string | null = null;
   let isModelShot = false;
 
   try {
     const detectRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
-      method: "POST",
-      headers,
+      method: "POST", headers,
       body: JSON.stringify({ mode: "detect", imageUrl }),
     });
     if (detectRes.ok) {
@@ -600,8 +920,7 @@ async function triggerExtractProduct(
         isModelShot = true;
         const targetItem = detectData.items.find((i: any) => i.slot === slot) ?? detectData.items[0];
         const extractRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
-          method: "POST",
-          headers,
+          method: "POST", headers,
           body: JSON.stringify({ mode: "extract", imageUrl, slot: targetItem.slot, label: targetItem.label || label }),
         });
         if (extractRes.ok) {
@@ -616,8 +935,7 @@ async function triggerExtractProduct(
   if (pixianSourceUrl) {
     try {
       const pixianRes = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
-        method: "POST",
-        headers,
+        method: "POST", headers,
         body: JSON.stringify({ imageUrl: pixianSourceUrl, productId }),
       });
       if (pixianRes.ok) {
@@ -636,22 +954,12 @@ async function triggerExtractProduct(
   }
 }
 
-// ── Step 5: Generate outfit candidates using full matching scoring ─────────────
-// Replicates the matching architecture (tonalHarmony, proportion,
-// formalityCoherence, vibeAffinity, seasonFit, genderMatch) from the
-// frontend matchingEngine / scorer, ensuring Auto Pipeline produces
-// the same outfit quality as the manual outfit generation flow.
+// ── Step 5: Generate outfits using full 8-dimension matching scoring ───────────
 
 async function generateOutfitsFromBatch(
-  batchId: string,
-  gender: string,
-  bodyType: string,
-  vibe: string,
-  season: string,
-  outfitCount: number,
-  adminClient: ReturnType<typeof createClient>,
-  supabaseUrl: string,
-  anonKey: string
+  batchId: string, gender: string, bodyType: string, vibe: string, season: string,
+  outfitCount: number, adminClient: ReturnType<typeof createClient>,
+  supabaseUrl: string, anonKey: string
 ): Promise<{ outfitIds: string[]; count: number; outfitCandidates: any[] }> {
   const { data: batchProducts } = await adminClient
     .from("products")
@@ -695,45 +1003,33 @@ async function generateOutfitsFromBatch(
     ? ["shoes","bag","accessory","outer","mid"]
     : ["shoes","bag","accessory"];
 
-  // Generate candidate pool by scoring all possible top+bottom combinations
-  // then greedily pick optional slots to maximize composition score.
-  const tops = bySlot["top"];
-  const bottoms = bySlot["bottom"];
-
-  interface CandidateCombo {
-    items: Record<string, Product>;
-    score: number;
-  }
-
+  interface CandidateCombo { items: Record<string, Product>; score: number; }
   const combos: CandidateCombo[] = [];
-  for (const top of tops) {
-    for (const bottom of bottoms) {
+
+  for (const top of bySlot["top"]) {
+    for (const bottom of bySlot["bottom"]) {
       const baseItems: Record<string, Product> = { top, bottom };
 
-      // Greedily add best optional slot item using composition scoring
       for (const slot of optionalSlots) {
         const pool = bySlot[slot] || [];
         if (pool.length === 0) continue;
-
         let bestScore = -Infinity;
         let bestPick: Product | null = null;
         for (const candidate of pool) {
           const testItems = { ...baseItems, [slot]: candidate };
-          const s = scoreOutfitComposition(testItems, vibe, gender, bodyType, season);
+          const s = scoreOutfitComposition(testItems, vibe, bodyType, season);
           if (s > bestScore) { bestScore = s; bestPick = candidate; }
         }
         if (bestPick) baseItems[slot] = bestPick;
       }
 
-      const score = scoreOutfitComposition(baseItems, vibe, gender, bodyType, season);
+      const score = scoreOutfitComposition(baseItems, vibe, bodyType, season);
       combos.push({ items: baseItems, score });
     }
   }
 
-  // Sort by score descending
   combos.sort((a, b) => b.score - a.score);
 
-  // Pick top N diverse combos (avoid reusing same top or bottom)
   const usedTops = new Set<string>();
   const usedBottoms = new Set<string>();
   const selectedCombos: CandidateCombo[] = [];
@@ -749,7 +1045,6 @@ async function generateOutfitsFromBatch(
     usedBottoms.add(bottomId);
   }
 
-  // If not enough diverse combos, fill with remaining highest scored
   if (selectedCombos.length < outfitCount) {
     for (const combo of combos) {
       if (selectedCombos.length >= outfitCount) break;
@@ -761,18 +1056,12 @@ async function generateOutfitsFromBatch(
     const { data: newOutfit, error: outfitErr } = await adminClient
       .from("outfits")
       .insert({
-        gender,
-        body_type: bodyType,
-        vibe,
+        gender, body_type: bodyType, vibe,
         season: season ? [season] : [],
-        status: "draft",
-        tpo: "",
+        status: "draft", tpo: "",
         "AI insight": `Auto-pipeline batch: ${batchId} | Match Score: ${score}`,
-        image_url_flatlay: "",
-        image_url_on_model: "",
-        flatlay_pins: [],
-        on_model_pins: [],
-        prompt_flatlay: "",
+        image_url_flatlay: "", image_url_on_model: "",
+        flatlay_pins: [], on_model_pins: [], prompt_flatlay: "",
       })
       .select()
       .single();
@@ -808,25 +1097,21 @@ async function generateOutfitsFromBatch(
   return { outfitIds, count: outfitIds.length, outfitCandidates };
 }
 
-// ── Step 6: AI Refinement / Insights ─────────────────────────────────────────
+// ── Step 6: AI Insights ───────────────────────────────────────────────────────
 
 async function triggerAIRefinementAndInsights(
   outfitIds: string[],
   context: { gender: string; bodyType: string; vibe: string; targetSeason?: string },
   adminClient: ReturnType<typeof createClient>,
-  supabaseUrl: string,
-  anonKey: string
+  supabaseUrl: string, anonKey: string
 ): Promise<void> {
   const headers = { "Authorization": `Bearer ${anonKey}`, "Content-Type": "application/json" };
-
   await Promise.allSettled(outfitIds.map(async (outfitId) => {
     const { data: items } = await adminClient
       .from("outfit_items")
       .select("slot_type, products(*)")
       .eq("outfit_id", outfitId);
-
     if (!items || items.length === 0) return;
-
     const itemList = items.map((i: any) => ({
       slot_type: i.slot_type,
       brand: i.products?.brand || "",
@@ -840,17 +1125,13 @@ async function triggerAIRefinementAndInsights(
       sub_category: i.products?.sub_category || "",
       vibe: i.products?.vibe || [],
     }));
-
     try {
       const res = await fetch(`${supabaseUrl}/functions/v1/generate-outfit-insight`, {
-        method: "POST",
-        headers,
+        method: "POST", headers,
         body: JSON.stringify({
           items: itemList,
-          gender: context.gender,
-          bodyType: context.bodyType,
-          vibe: context.vibe,
-          season: context.targetSeason,
+          gender: context.gender, bodyType: context.bodyType,
+          vibe: context.vibe, season: context.targetSeason,
           matchScore: Math.round(75 + Math.random() * 15),
         }),
       });
@@ -891,19 +1172,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const {
-      gender,
-      body_type,
-      vibe,
-      season,
+      gender, body_type, vibe, season,
       outfit_count = 3,
       products_per_slot = 5,
     } = body as {
-      gender?: string;
-      body_type?: string;
-      vibe?: string;
-      season?: string;
-      outfit_count?: number;
-      products_per_slot?: number;
+      gender?: string; body_type?: string; vibe?: string; season?: string;
+      outfit_count?: number; products_per_slot?: number;
     };
 
     if (!gender || !body_type || !vibe) {
@@ -933,8 +1207,6 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── STEP 2: Amazon search per slot ────────────────────────────────────────
-    // Uses same amazon-search Edge Function as AdminAmazonSearch.
-    // Increased result limit to match the manual search experience.
     events.push(makeEvent("search", "start", "Searching Amazon for products per slot..."));
 
     const PRIORITY_SLOTS = ["top","bottom","shoes","outer","bag","accessory","mid"];
@@ -1019,23 +1291,19 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Deduplicate against existing DB products by ASIN
     const existingAsins = new Set<string>();
-    const allAsins = allCandidates.map(c => c.product.asin).filter(Boolean);
-    if (allAsins.length > 0) {
-      const { data: existing } = await adminClient
-        .from("products")
-        .select("product_link")
-        .not("product_link", "is", null);
-      if (existing) {
-        for (const row of existing) {
-          const match = (row.product_link || "").match(/\/dp\/([A-Z0-9]{10})/);
-          if (match) existingAsins.add(match[1]);
-        }
+    const { data: existing } = await adminClient
+      .from("products")
+      .select("product_link")
+      .not("product_link", "is", null);
+    if (existing) {
+      for (const row of existing) {
+        const match = (row.product_link || "").match(/\/dp\/([A-Z0-9]{10})/);
+        if (match) existingAsins.add(match[1]);
       }
     }
 
-    // ── STEP 4: Analyze & register via analyze-amazon-product (same as AdminAmazonSearch) ──
+    // ── STEP 4: Analyze & register via analyze-amazon-product ────────────────
     events.push(makeEvent("register", "start", "Analyzing and registering products via analyze-amazon-product..."));
 
     const registerResults = await Promise.all(
@@ -1102,8 +1370,8 @@ Deno.serve(async (req: Request) => {
       events.push(makeEvent("nobg", "skip", "All products already have flatlay images"));
     }
 
-    // ── STEP 6: Generate outfit candidates using full matching scoring ─────────
-    events.push(makeEvent("outfits", "start", `Generating ${outfit_count} outfit candidates using matching architecture...`));
+    // ── STEP 6: Generate outfit candidates using full 8-dimension scoring ──────
+    events.push(makeEvent("outfits", "start", `Generating ${outfit_count} outfit candidates using full matching architecture...`));
     let outfitIds: string[] = [];
     let outfitCount = 0;
     let outfitCandidates: any[] = [];
@@ -1135,12 +1403,10 @@ Deno.serve(async (req: Request) => {
     }));
 
     const result: PipelineResult = {
-      batchId,
-      events,
+      batchId, events,
       productsRegistered: registeredCount,
       outfitsGenerated: outfitCount,
-      outfitIds,
-      outfitCandidates,
+      outfitIds, outfitCandidates,
       success: true,
     };
 
