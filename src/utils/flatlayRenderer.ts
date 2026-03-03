@@ -75,9 +75,76 @@ async function removeWhiteBackgroundViaApi(imageUrl: string, productId: string):
     console.log(`Background removed for product ${productId}: ${nobgUrl}`);
     return nobgUrl;
   } catch (error) {
-    console.error(`Pixian API bg removal failed for product ${productId}, using original:`, error);
-    return imageUrl;
+    console.error(`Pixian API bg removal failed for product ${productId}, falling back to client-side removal:`, error);
+    try {
+      const clientNobg = await removeWhiteBackgroundClient(imageUrl);
+      return clientNobg;
+    } catch {
+      return imageUrl;
+    }
   }
+}
+
+async function removeWhiteBackgroundClient(imageUrl: string): Promise<string> {
+  const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-ibb-image?url=${encodeURIComponent(imageUrl)}`;
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('load failed'));
+    el.src = proxyUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('no ctx');
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  const threshold = 240;
+  const edgeSampleSize = Math.max(1, Math.floor(Math.min(canvas.width, canvas.height) * 0.02));
+
+  let bgR = 255, bgG = 255, bgB = 255;
+  {
+    let rSum = 0, gSum = 0, bSum = 0, cnt = 0;
+    const corners = [
+      [0, 0], [canvas.width - 1, 0],
+      [0, canvas.height - 1], [canvas.width - 1, canvas.height - 1],
+    ];
+    for (const [cx, cy] of corners) {
+      for (let dy = 0; dy < edgeSampleSize; dy++) {
+        for (let dx = 0; dx < edgeSampleSize; dx++) {
+          const px = Math.min(cx + (cx === 0 ? dx : -dx), canvas.width - 1);
+          const py = Math.min(cy + (cy === 0 ? dy : -dy), canvas.height - 1);
+          const idx = (py * canvas.width + px) * 4;
+          rSum += data[idx]; gSum += data[idx + 1]; bSum += data[idx + 2];
+          cnt++;
+        }
+      }
+    }
+    if (cnt > 0) { bgR = rSum / cnt; bgG = gSum / cnt; bgB = bSum / cnt; }
+  }
+
+  const isBgLight = bgR > threshold && bgG > threshold && bgB > threshold;
+  if (!isBgLight) return imageUrl;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const dr = r - bgR, dg = g - bgG, db = b - bgB;
+    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+    if (dist < 30) {
+      data[i + 3] = 0;
+    } else if (dist < 60) {
+      data[i + 3] = Math.round(((dist - 30) / 30) * 255);
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
 }
 
 interface SlotBoundingBox {
@@ -557,9 +624,17 @@ export async function prepareFlatlayForEditor(
   onProgress?.('에디터 준비 중...');
   const editorData: EditorProductData[] = [];
   for (const position of positions) {
-    const imageUrl = position.skipBgRemoval
+    let imageUrl = position.skipBgRemoval
       ? position.image_url
       : (processedUrls.get(position.product_id) || position.image_url);
+
+    const isPngNobg = imageUrl.includes('/nobg/') || imageUrl.startsWith('data:image/png');
+    const needsClientBgRemoval = !isPngNobg && !imageUrl.startsWith('data:');
+    if (needsClientBgRemoval) {
+      try {
+        imageUrl = await removeWhiteBackgroundClient(imageUrl);
+      } catch { /* keep original */ }
+    }
 
     let aspectRatio = position.width / position.height;
     try {
@@ -737,22 +812,31 @@ export async function saveFlatlayToStorage(
   return { imageUrl: urlData.publicUrl, cleanImageUrl: cleanUrlData.publicUrl };
 }
 
-export function reconstructEditorDataFromPins(
+export async function reconstructEditorDataFromPins(
   savedPins: ProductPosition[],
   canvasWidth: number = 1200,
   canvasHeight: number = 1400
-): EditorProductData[] {
-  return savedPins.map(pin => ({
-    product_id: pin.product_id,
-    processedImageUrl: pin.image_url,
-    x: (pin.x / 100) * canvasWidth - pin.width / 2,
-    y: (pin.y / 100) * canvasHeight - pin.height / 2,
-    width: pin.width,
-    height: pin.height,
-    rotation: pin.rotation,
-    slot_type: pin.slot_type,
-    price: pin.price,
-    name: pin.name,
-    aspectRatio: pin.width / pin.height,
+): Promise<EditorProductData[]> {
+  return Promise.all(savedPins.map(async pin => {
+    let processedImageUrl = pin.image_url;
+    const isPngNobg = processedImageUrl.includes('/nobg/') || processedImageUrl.startsWith('data:image/png');
+    if (!isPngNobg && !processedImageUrl.startsWith('data:')) {
+      try {
+        processedImageUrl = await removeWhiteBackgroundClient(processedImageUrl);
+      } catch { /* keep original */ }
+    }
+    return {
+      product_id: pin.product_id,
+      processedImageUrl,
+      x: (pin.x / 100) * canvasWidth - pin.width / 2,
+      y: (pin.y / 100) * canvasHeight - pin.height / 2,
+      width: pin.width,
+      height: pin.height,
+      rotation: pin.rotation,
+      slot_type: pin.slot_type,
+      price: pin.price,
+      name: pin.name,
+      aspectRatio: pin.width / pin.height,
+    };
   }));
 }

@@ -155,7 +155,7 @@ export default function FlatlayRenderer({ outfitId, onClose, onRendered }: Flatl
           }
         }
 
-        const data = reconstructEditorDataFromPins(updatedPins);
+        const data = await reconstructEditorDataFromPins(updatedPins);
         setEditorData(data);
         setPhase('editing');
       } else {
