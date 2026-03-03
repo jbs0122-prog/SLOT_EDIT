@@ -554,14 +554,12 @@ async function refineWithAI(
     );
 
     if (dedupedResult.length < finalCount) {
-      for (const item of ruleBased) {
-        if (dedupedResult.length >= finalCount) break;
-        if (!dedupedResult.includes(item)) {
-          if (canAddWithoutDuplicates(dedupedResult, item)) {
-            dedupedResult.push(item);
-          }
-        }
-      }
+      const remaining = ruleBased.filter(item => !dedupedResult.includes(item));
+      const extra = deduplicateOutfits(
+        remaining.filter(item => canAddWithoutDuplicates(dedupedResult, item)),
+        finalCount - dedupedResult.length
+      );
+      dedupedResult.push(...extra);
     }
 
     return dedupedResult.slice(0, finalCount);

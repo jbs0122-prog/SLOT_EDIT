@@ -116,19 +116,24 @@ Deno.serve(async (req: Request) => {
       }
 
       combos.sort((a, b) => b.score - a.score);
-      const usedTops = new Set<string>(); const usedBottoms = new Set<string>();
+      const usedProductIds = new Set<string>();
       const selectedCombos: Combo[] = [];
       for (const combo of combos) {
         if (selectedCombos.length >= (outfit_count as number)) break;
-        const topId = combo.items.top?.id; const bottomId = combo.items.bottom?.id;
-        if (!topId || !bottomId) continue;
-        if (usedTops.has(topId) && usedBottoms.has(bottomId)) continue;
-        selectedCombos.push(combo); usedTops.add(topId); usedBottoms.add(bottomId);
+        const comboIds = Object.values(combo.items).filter(Boolean).map((p: any) => p.id as string);
+        if (comboIds.some(id => usedProductIds.has(id))) continue;
+        selectedCombos.push(combo);
+        comboIds.forEach(id => usedProductIds.add(id));
       }
       if (selectedCombos.length < (outfit_count as number)) {
+        const relaxedUsed = new Set<string>();
         for (const combo of combos) {
           if (selectedCombos.length >= (outfit_count as number)) break;
-          if (!selectedCombos.includes(combo)) selectedCombos.push(combo);
+          if (selectedCombos.includes(combo)) continue;
+          const comboIds = Object.values(combo.items).filter(Boolean).map((p: any) => p.id as string);
+          if (comboIds.some(id => relaxedUsed.has(id))) continue;
+          selectedCombos.push(combo);
+          comboIds.forEach(id => relaxedUsed.add(id));
         }
       }
 
