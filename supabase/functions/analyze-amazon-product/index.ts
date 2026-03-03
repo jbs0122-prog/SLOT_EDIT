@@ -215,6 +215,66 @@ function clampFormality(formality: number, vibeKey: string): number {
   return Math.min(scaledMax, Math.max(scaledMin, formality));
 }
 
+async function triggerNobgPipeline(
+  productId: string,
+  imageUrl: string,
+  category: string,
+  subCategory: string,
+  supabaseUrl: string,
+  serviceKey: string,
+  adminClient: ReturnType<typeof createClient>
+): Promise<void> {
+  const headers = { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" };
+  const slot = ["outer","mid","top","bottom","shoes","bag","accessory"].includes(category) ? category : "top";
+  const label = subCategory || category;
+  let nobgUrl: string | null = null;
+  let isModelShot = false;
+
+  try {
+    const detectRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
+      method: "POST", headers,
+      body: JSON.stringify({ mode: "detect", imageUrl }),
+    });
+    if (detectRes.ok) {
+      const detectData = await detectRes.json();
+      if (detectData.success && detectData.items?.length) {
+        isModelShot = true;
+        const targetItem = detectData.items.find((i: any) => i.slot === slot) ?? detectData.items[0];
+        const extractRes = await fetch(`${supabaseUrl}/functions/v1/extract-products`, {
+          method: "POST", headers,
+          body: JSON.stringify({ mode: "extract", imageUrl, slot: targetItem.slot, label: targetItem.label || label }),
+        });
+        if (extractRes.ok) {
+          const extractData = await extractRes.json();
+          if (extractData.success && extractData.imageUrl) nobgUrl = extractData.imageUrl;
+        }
+      }
+    }
+  } catch { /* fall through */ }
+
+  const pixianSourceUrl = nobgUrl || (!isModelShot ? imageUrl : null);
+  if (pixianSourceUrl) {
+    try {
+      const pixianRes = await fetch(`${supabaseUrl}/functions/v1/remove-bg`, {
+        method: "POST", headers,
+        body: JSON.stringify({ imageUrl: pixianSourceUrl, productId }),
+      });
+      if (pixianRes.ok) {
+        const pixianData = await pixianRes.json();
+        if (pixianData.success && (pixianData.url || pixianData.image)) {
+          nobgUrl = pixianData.url || pixianData.image;
+        }
+      }
+    } catch { /* silent */ }
+  }
+
+  if (nobgUrl && !nobgUrl.startsWith("data:")) {
+    try {
+      await adminClient.from("products").update({ nobg_image_url: nobgUrl }).eq("id", productId);
+    } catch { /* silent */ }
+  }
+}
+
 const upgradeImageResolution = (url: string): string => {
   if (!url) return url;
   return url
@@ -516,7 +576,11 @@ Rules:
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { error: insertError } = await adminClient.from("products").insert(result);
+    const { data: insertedRow, error: insertError } = await adminClient
+      .from("products")
+      .insert(result)
+      .select("id")
+      .single();
 
     if (insertError) {
       return new Response(
@@ -525,9 +589,25 @@ Rules:
       );
     }
 
+    const productId = insertedRow?.id as string | undefined;
+
+    if (productId) {
+      EdgeRuntime.waitUntil(
+        triggerNobgPipeline(
+          productId,
+          upgradeImageResolution(product.image || ""),
+          result.category,
+          result.sub_category,
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+          adminClient
+        )
+      );
+    }
+
     return new Response(
       JSON.stringify({
-        result,
+        result: { ...result, id: productId },
         vibe_validation: {
           original_vibes: Array.isArray(analyzed.vibe) ? analyzed.vibe : [vibe],
           validated_vibes: validatedVibes,
