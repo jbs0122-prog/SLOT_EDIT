@@ -53,6 +53,20 @@ export default function AdminProducts() {
   useEffect(() => {
     loadProducts();
     loadProductUsageCounts();
+
+    const channel = supabase
+      .channel('products-nobg-updates')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'products' }, (payload) => {
+        const updated = payload.new as { id: string; nobg_image_url?: string };
+        if (updated?.id && updated?.nobg_image_url) {
+          setProducts(prev => prev.map(p =>
+            p.id === updated.id ? { ...p, nobg_image_url: updated.nobg_image_url } : p
+          ));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const loadProducts = async () => {

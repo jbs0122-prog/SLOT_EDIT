@@ -212,6 +212,7 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
   const [savingAll, setSavingAll] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0, keyword: '' });
   const [sortBy, setSortBy] = useState<'default' | 'rating' | 'reviews'>(saved?.sortBy || 'default');
+  const savedProductIdsRef = useRef<Map<string, string>>(new Map());
 
   const [filtersChanged, setFiltersChanged] = useState(false);
   const savedFiltersRef = useRef({ gender: saved?.gender || '', bodyType: saved?.bodyType || '', vibe: saved?.vibe || '', season: saved?.season || '' });
@@ -258,6 +259,26 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
       }));
     } catch { /* ignore */ }
   }, [step, gender, bodyType, vibe, season, keywords, keywordCategories, activeKeywordCategory, keywordsSource, activeKeyword, userKeyword, products, page, total, categoryFilter, savedAsins, sortBy, generatingKeywords, autoRunning]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('amazon-search-nobg-updates')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'products' }, (payload) => {
+        const updated = payload.new as { id: string; nobg_image_url?: string };
+        if (!updated?.id || !updated?.nobg_image_url) return;
+        const asinEntry = [...savedProductIdsRef.current.entries()].find(([, id]) => id === updated.id);
+        if (!asinEntry) return;
+        const [asin] = asinEntry;
+        setProducts(prev => prev.map(p =>
+          p.asin === asin
+            ? { ...p, analyzed: p.analyzed ? { ...p.analyzed, nobg_image_url: updated.nobg_image_url } : p.analyzed }
+            : p
+        ));
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const canGenerate = gender && vibe;
 
@@ -396,6 +417,10 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
         if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
 
         const analyzed = data.result;
+
+        if (analyzed?.id) {
+          savedProductIdsRef.current.set(product.asin, analyzed.id);
+        }
 
         let vibeScore: number | undefined;
         if (vibe && analyzed) {
