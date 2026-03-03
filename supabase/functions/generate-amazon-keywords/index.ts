@@ -450,6 +450,7 @@ function buildFilteredCategories(
     );
 
     filtered = buildFormalityFilteredSubs(vibeKey, filtered);
+    filtered = filtered.slice(0, 8);
 
     if (filtered.length > 0) {
       result.push({ key: cat.key, label: cat.label, subCategories: filtered });
