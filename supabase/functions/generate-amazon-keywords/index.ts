@@ -682,16 +682,16 @@ DIVERSITY RULES (critical):
 - Use specific fashion vocabulary: texture names, garment details, style subcultures, color tones
 - Avoid formulaic patterns — each keyword should feel like a different person searching
 
-OUTPUT: Return ONLY a valid JSON object. Each sub-category value must be an ARRAY of 3 keyword strings:
-${JSON.stringify(
-  Object.fromEntries(filteredCategoryDefs.map(cat => [
-    cat.key,
-    Object.fromEntries(cat.subCategories.map(s => [s, ["", "", ""]]))
-  ])),
-  null, 2
-)}
+OUTPUT FORMAT: Return ONLY a valid JSON object structured exactly like this example:
+{
+  "top": { "tshirt": ["women's black structured tee", "women's cashmere mock neck", "women's silk button-down"], "shirt": ["...", "...", "..."] },
+  "bottom": { "denim": ["...", "...", "..."] }
+}
 
-Fill every empty string with a keyword. Return only JSON, nothing else.`;
+Required categories and sub-categories to fill:
+${filteredCategoryDefs.map(cat => `${cat.key}: ${cat.subCategories.join(", ")}`).join("\n")}
+
+Fill every sub-category with exactly 3 keywords. Return only JSON, nothing else.`;
 
     let geminiRes: Response | null = null;
     let lastErrText = "";
