@@ -10,14 +10,12 @@ type Gender = 'MALE' | 'FEMALE' | 'UNISEX';
 type BodyType = 'slim' | 'regular' | 'plus-size';
 type Vibe = 'ELEVATED_COOL' | 'EFFORTLESS_NATURAL' | 'ARTISTIC_MINIMAL' | 'RETRO_LUXE' | 'SPORT_MODERN' | 'CREATIVE_LAYERED';
 type Season = 'spring' | 'summer' | 'fall' | 'winter';
-
 type EventStatus = 'start' | 'progress' | 'success' | 'error' | 'skip';
 
 interface PipelineEvent {
   step: string;
   status: EventStatus;
   message: string;
-  data?: Record<string, unknown>;
   timestamp: string;
 }
 
@@ -66,27 +64,21 @@ const VIBES: { key: Vibe; label: string; desc: string }[] = [
 ];
 
 const STEP_META: Record<string, { icon: React.ReactNode; label: string }> = {
-  keywords: { icon: <Sparkles className="w-4 h-4" />,    label: 'AI Keywords' },
+  keywords: { icon: <Sparkles className="w-4 h-4" />, label: 'AI Keywords' },
   search:   { icon: <ShoppingBag className="w-4 h-4" />, label: 'Amazon Search' },
-  register: { icon: <Package className="w-4 h-4" />,     label: 'Register Products' },
-  nobg:     { icon: <Shirt className="w-4 h-4" />,       label: 'Background Removal' },
-  outfits:  { icon: <Sparkles className="w-4 h-4" />,    label: 'Outfit Generation' },
+  register: { icon: <Package className="w-4 h-4" />, label: 'Register Products' },
+  nobg:     { icon: <Shirt className="w-4 h-4" />, label: 'Background Removal' },
+  outfits:  { icon: <Sparkles className="w-4 h-4" />, label: 'Outfit Generation' },
 };
 
 const STATUS_COLOR: Record<EventStatus, string> = {
-  start:    'text-blue-400',
-  progress: 'text-zinc-400',
-  success:  'text-emerald-400',
-  error:    'text-red-400',
-  skip:     'text-zinc-500',
+  start: 'text-blue-400', progress: 'text-zinc-400',
+  success: 'text-emerald-400', error: 'text-red-400', skip: 'text-zinc-500',
 };
 
 const STATUS_DOT: Record<EventStatus, string> = {
-  start:    'bg-blue-400',
-  progress: 'bg-zinc-500',
-  success:  'bg-emerald-400',
-  error:    'bg-red-500',
-  skip:     'bg-zinc-600',
+  start: 'bg-blue-400', progress: 'bg-zinc-500',
+  success: 'bg-emerald-400', error: 'bg-red-500', skip: 'bg-zinc-600',
 };
 
 const PIPELINE_STEPS = ['keywords', 'search', 'register', 'nobg', 'outfits'];
@@ -101,8 +93,7 @@ function getStepPhase(events: PipelineEvent[]): Record<string, EventStatus | 'id
   for (const step of PIPELINE_STEPS) {
     const stepEvents = events.filter(e => e.step === step);
     if (stepEvents.length === 0) { phases[step] = 'idle'; continue; }
-    const last = stepEvents[stepEvents.length - 1];
-    phases[step] = last.status;
+    phases[step] = stepEvents[stepEvents.length - 1].status;
   }
   return phases;
 }
@@ -111,16 +102,16 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+function makeEvent(step: string, status: EventStatus, message: string): PipelineEvent {
+  return { step, status, message, timestamp: new Date().toISOString() };
+}
+
 function EventRow({ event }: { event: PipelineEvent }) {
   return (
     <div className="flex items-start gap-3 py-1.5">
-      <span className="text-[10px] text-zinc-600 font-mono mt-0.5 shrink-0 w-20">
-        {formatTime(event.timestamp)}
-      </span>
+      <span className="text-[10px] text-zinc-600 font-mono mt-0.5 shrink-0 w-20">{formatTime(event.timestamp)}</span>
       <span className={`mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full ${STATUS_DOT[event.status]}`} />
-      <span className={`text-xs leading-relaxed ${STATUS_COLOR[event.status]}`}>
-        {event.message}
-      </span>
+      <span className={`text-xs leading-relaxed ${STATUS_COLOR[event.status]}`}>{event.message}</span>
     </div>
   );
 }
@@ -131,114 +122,71 @@ function StepIndicator({ step, phase }: { step: string; phase: EventStatus | 'id
   const isRunning = phase === 'start' || phase === 'progress';
   const isSuccess = phase === 'success';
   const isError = phase === 'error';
-
   return (
     <div className="flex flex-col items-center gap-1.5 flex-1 transition-all duration-300">
-      <div className={`
-        w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300
         ${isIdle ? 'border-zinc-700 text-zinc-600 bg-zinc-900' : ''}
         ${isRunning ? 'border-blue-500 text-blue-400 bg-blue-500/10 animate-pulse' : ''}
         ${isSuccess ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10' : ''}
-        ${isError ? 'border-red-500 text-red-400 bg-red-500/10' : ''}
-      `}>
+        ${isError ? 'border-red-500 text-red-400 bg-red-500/10' : ''}`}>
         {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : meta.icon}
       </div>
       <span className={`text-[10px] font-medium text-center leading-tight ${
         isIdle ? 'text-zinc-600' : isRunning ? 'text-blue-400' : isSuccess ? 'text-emerald-400' : 'text-red-400'
-      }`}>
-        {meta.label}
-      </span>
+      }`}>{meta.label}</span>
     </div>
   );
 }
 
-function OutfitCandidateCard({
-  candidate,
-  index,
-  selected,
-  onToggle,
-}: {
-  candidate: OutfitCandidate;
-  index: number;
-  selected: boolean;
-  onToggle: () => void;
+function OutfitCandidateCard({ candidate, index, selected, onToggle }: {
+  candidate: OutfitCandidate; index: number; selected: boolean; onToggle: () => void;
 }) {
   const essentials = candidate.items.filter(i => ['top', 'bottom', 'shoes'].includes(i.slot));
   const optionals = candidate.items.filter(i => !['top', 'bottom', 'shoes'].includes(i.slot));
-
   return (
-    <div
-      onClick={onToggle}
-      className={`relative cursor-pointer rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
-        selected
-          ? 'border-emerald-500 bg-emerald-500/8 shadow-lg shadow-emerald-500/10'
-          : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/6'
-      }`}
-    >
-      {/* Selection badge */}
+    <div onClick={onToggle} className={`relative cursor-pointer rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
+      selected ? 'border-emerald-500 bg-emerald-500/8 shadow-lg shadow-emerald-500/10' : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/6'
+    }`}>
       <div className={`absolute top-3 right-3 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
         selected ? 'bg-emerald-500 border-emerald-500' : 'bg-transparent border-white/30'
       }`}>
         {selected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
       </div>
-
       <div className="p-4">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs font-bold text-zinc-300">Outfit {index + 1}</span>
           {optionals.length > 0 && (
-            <span className="text-[10px] text-zinc-500 bg-white/6 px-2 py-0.5 rounded-full">
-              +{optionals.length} 추가
-            </span>
+            <span className="text-[10px] text-zinc-500 bg-white/6 px-2 py-0.5 rounded-full">+{optionals.length} 추가</span>
           )}
         </div>
-
-        {/* Essential slots grid */}
         <div className="grid grid-cols-3 gap-1.5 mb-2">
           {essentials.map((item) => (
             <div key={item.slot} className="flex flex-col gap-1">
               <div className="aspect-square bg-zinc-800 rounded-lg overflow-hidden">
-                <img
-                  src={item.imageUrl}
-                  alt={item.name}
-                  className="w-full h-full object-contain p-1"
-                  onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/100x100?text=No+Img'; }}
-                />
+                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain p-1"
+                  onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100?text=No+Img'; }} />
               </div>
-              <span className="text-[9px] text-zinc-500 text-center truncate">
-                {SLOT_LABEL[item.slot] || item.slot}
-              </span>
+              <span className="text-[9px] text-zinc-500 text-center truncate">{SLOT_LABEL[item.slot] || item.slot}</span>
             </div>
           ))}
         </div>
-
-        {/* Optional slots row */}
         {optionals.length > 0 && (
           <div className="flex gap-1.5 mt-1">
             {optionals.map((item) => (
               <div key={item.slot} className="flex flex-col gap-0.5 flex-1">
                 <div className="aspect-square bg-zinc-800/60 rounded-md overflow-hidden">
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-full h-full object-contain p-1"
-                    onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/60x60?text=?'; }}
-                  />
+                  <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain p-1"
+                    onError={(e) => { e.currentTarget.src = 'https://placehold.co/60x60?text=?'; }} />
                 </div>
-                <span className="text-[8px] text-zinc-600 text-center truncate">
-                  {SLOT_LABEL[item.slot] || item.slot}
-                </span>
+                <span className="text-[8px] text-zinc-600 text-center truncate">{SLOT_LABEL[item.slot] || item.slot}</span>
               </div>
             ))}
           </div>
         )}
-
-        {/* Price total */}
         {candidate.items.some(i => i.price) && (
           <div className="mt-2.5 pt-2 border-t border-white/6">
             <span className="text-[10px] text-zinc-400">
-              합계: <span className="text-white font-semibold">
-                ${candidate.items.reduce((sum, i) => sum + (i.price || 0), 0)}
-              </span>
+              합계: <span className="text-white font-semibold">${candidate.items.reduce((sum, i) => sum + (i.price || 0), 0)}</span>
             </span>
           </div>
         )}
@@ -251,30 +199,19 @@ const PIPELINE_SESSION_KEY = 'auto_pipeline_session';
 const PIPELINE_HISTORY_KEY = 'auto_pipeline_history';
 
 interface PipelineSession {
-  gender: Gender;
-  bodyType: BodyType;
-  vibe: Vibe;
-  season: Season;
-  outfitCount: number;
-  productsPerSlot: number;
-  result: PipelineResult | null;
-  error: string | null;
-  savedCount: number;
-  selectedOutfitIds: string[];
+  gender: Gender; bodyType: BodyType; vibe: Vibe; season: Season;
+  outfitCount: number; productsPerSlot: number;
+  result: PipelineResult | null; error: string | null;
+  savedCount: number; selectedOutfitIds: string[];
 }
 
 function loadSession(): Partial<PipelineSession> {
-  try {
-    const raw = localStorage.getItem(PIPELINE_SESSION_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* */ }
+  try { const raw = localStorage.getItem(PIPELINE_SESSION_KEY); if (raw) return JSON.parse(raw); } catch { /**/ }
   return {};
 }
 
 function saveSession(session: PipelineSession) {
-  try {
-    localStorage.setItem(PIPELINE_SESSION_KEY, JSON.stringify(session));
-  } catch { /* */ }
+  try { localStorage.setItem(PIPELINE_SESSION_KEY, JSON.stringify(session)); } catch { /**/ }
 }
 
 export default function AdminAutoPipeline() {
@@ -282,40 +219,32 @@ export default function AdminAutoPipeline() {
 
   const [gender, setGender] = useState<Gender>(session.gender ?? 'FEMALE');
   const [bodyType, setBodyType] = useState<BodyType>(session.bodyType ?? 'regular');
-  const [vibe, setVibe] = useState<Vibe>(session.vibe ?? 'EFFORTLESS_NATURAL');
-  const [season, setSeason] = useState<Season>(session.season ?? 'spring');
+  const [vibe, setVibe] = useState<Vibe>(session.vibe ?? 'ELEVATED_COOL');
+  const [season, setSeason] = useState<Season>(session.season ?? 'winter');
   const [outfitCount, setOutfitCount] = useState(session.outfitCount ?? 3);
   const [productsPerSlot, setProductsPerSlot] = useState(session.productsPerSlot ?? 5);
 
   const [running, setRunning] = useState(false);
+  const [events, setEvents] = useState<PipelineEvent[]>([]);
   const [result, setResult] = useState<PipelineResult | null>(session.result ?? null);
   const [error, setError] = useState<string | null>(session.error ?? null);
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<RunHistory[]>([]);
-
-  const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(
-    new Set(session.selectedOutfitIds ?? [])
-  );
+  const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set(session.selectedOutfitIds ?? []));
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState(session.savedCount ?? 0);
 
   const logEndRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef(false);
 
-  // Persist session state on every relevant change
   useEffect(() => {
-    saveSession({
-      gender, bodyType, vibe, season, outfitCount, productsPerSlot,
-      result, error, savedCount,
-      selectedOutfitIds: Array.from(selectedOutfitIds),
-    });
+    saveSession({ gender, bodyType, vibe, season, outfitCount, productsPerSlot, result, error, savedCount, selectedOutfitIds: Array.from(selectedOutfitIds) });
   }, [gender, bodyType, vibe, season, outfitCount, productsPerSlot, result, error, savedCount, selectedOutfitIds]);
 
   useEffect(() => {
     const saved = localStorage.getItem(PIPELINE_HISTORY_KEY);
-    if (saved) {
-      try { setHistory(JSON.parse(saved)); } catch { /* */ }
-    }
+    if (saved) { try { setHistory(JSON.parse(saved)); } catch { /**/ } }
   }, []);
 
   useEffect(() => {
@@ -325,26 +254,13 @@ export default function AdminAutoPipeline() {
   }, [result]);
 
   useEffect(() => {
-    if (logEndRef.current && showAllLogs) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [result?.events, showAllLogs]);
+    if (logEndRef.current && showAllLogs) logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [events, showAllLogs]);
 
-  const toggleStep = (step: string) => {
-    setExpandedSteps(prev => {
-      const next = new Set(prev);
-      next.has(step) ? next.delete(step) : next.add(step);
-      return next;
-    });
-  };
+  const addEvent = (ev: PipelineEvent) => setEvents(prev => [...prev, ev]);
 
-  const toggleOutfit = (outfitId: string) => {
-    setSelectedOutfitIds(prev => {
-      const next = new Set(prev);
-      next.has(outfitId) ? next.delete(outfitId) : next.add(outfitId);
-      return next;
-    });
-  };
+  const toggleStep = (step: string) => setExpandedSteps(prev => { const n = new Set(prev); n.has(step) ? n.delete(step) : n.add(step); return n; });
+  const toggleOutfit = (id: string) => setSelectedOutfitIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const handleSaveSelected = async () => {
     if (selectedOutfitIds.size === 0) return;
@@ -352,34 +268,16 @@ export default function AdminAutoPipeline() {
     try {
       const selectedIds = Array.from(selectedOutfitIds);
       const rejectedIds = (result?.outfitIds || []).filter(id => !selectedOutfitIds.has(id));
-
       await Promise.all([
         supabase.from('outfits').update({ status: 'pending_render' }).in('id', selectedIds),
-        rejectedIds.length > 0
-          ? supabase.from('outfits').delete().in('id', rejectedIds)
-          : Promise.resolve(),
+        rejectedIds.length > 0 ? supabase.from('outfits').delete().in('id', rejectedIds) : Promise.resolve(),
       ]);
-
       setSavedCount(selectedIds.length);
       setSelectedOutfitIds(new Set());
       setResult(prev => prev ? { ...prev, outfitCandidates: undefined } : prev);
-
       if (result) {
-        const entry: RunHistory = {
-          batchId: result.batchId,
-          timestamp: new Date().toISOString(),
-          gender,
-          vibe,
-          season,
-          productsRegistered: result.productsRegistered,
-          outfitsGenerated: selectedIds.length,
-          success: true,
-        };
-        setHistory(prev => {
-          const next = [entry, ...prev].slice(0, 10);
-          localStorage.setItem(PIPELINE_HISTORY_KEY, JSON.stringify(next));
-          return next;
-        });
+        const entry: RunHistory = { batchId: result.batchId, timestamp: new Date().toISOString(), gender, vibe, season, productsRegistered: result.productsRegistered, outfitsGenerated: selectedIds.length, success: true };
+        setHistory(prev => { const next = [entry, ...prev].slice(0, 10); localStorage.setItem(PIPELINE_HISTORY_KEY, JSON.stringify(next)); return next; });
       }
     } catch (err) {
       alert('저장 실패: ' + (err as Error).message);
@@ -392,165 +290,246 @@ export default function AdminAutoPipeline() {
     setRunning(true);
     setResult(null);
     setError(null);
+    setEvents([]);
     setShowAllLogs(false);
     setSavedCount(0);
     setSelectedOutfitIds(new Set());
+    abortRef.current = false;
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+    let authHeader = `Bearer ${anonKey}`;
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      if (authSession?.access_token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        const token = refreshed.session?.access_token ?? authSession.access_token;
+        authHeader = `Bearer ${token}`;
+      }
+    } catch { /**/ }
+
+    const apiBase = `${supabaseUrl}/functions/v1`;
+    const authHeaders = { 'Authorization': authHeader, 'apikey': anonKey, 'Content-Type': 'application/json' };
+
+    const batchId = `auto-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const allOutfitIds: string[] = [];
+    const allOutfitCandidates: OutfitCandidate[] = [];
+    let registeredCount = 0;
 
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-      if (!supabaseUrl || !anonKey) {
-        throw new Error('Supabase environment variables not configured');
-      }
-
-      let authHeader = `Bearer ${anonKey}`;
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          // Refresh to ensure token is not expired
-          const { data: refreshed } = await supabase.auth.refreshSession();
-          const token = refreshed.session?.access_token ?? session.access_token;
-          authHeader = `Bearer ${token}`;
-        }
-      } catch { /* use anon key */ }
-
-      const apiUrl = `${supabaseUrl}/functions/v1/auto-pipeline`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': authHeader,
-          'apikey': anonKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          gender,
-          body_type: bodyType,
-          vibe,
-          season,
-          outfit_count: outfitCount,
-          products_per_slot: productsPerSlot,
-        }),
+      // ── STEP 1: Generate keywords ─────────────────────────────────────────
+      addEvent(makeEvent('keywords', 'start', 'Generating style keywords via Gemini AI...'));
+      const kwRes = await fetch(`${apiBase}/generate-amazon-keywords`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ gender, body_type: bodyType, vibe, season }),
       });
+      if (!kwRes.ok) throw new Error(`Keyword generation failed (${kwRes.status})`);
+      const kwData = await kwRes.json();
+      const categories: Record<string, string[]> = kwData.categories || {};
+      const totalKw = Object.values(categories).reduce((a, b) => a + b.length, 0);
+      addEvent(makeEvent('keywords', 'success', `Generated ${totalKw} keywords across ${Object.keys(categories).length} categories`));
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Pipeline request failed (${res.status}): ${errText.slice(0, 200)}`);
+      // ── STEP 2: Amazon search ─────────────────────────────────────────────
+      addEvent(makeEvent('search', 'start', 'Searching Amazon for products per slot...'));
+      const PRIORITY_SLOTS = ['top','bottom','shoes','outer','bag','accessory','mid'];
+      const MAX_KW_PER_SLOT = 2;
+      const MAX_RESULTS_PER_KW = 15;
+      const genderLabel = gender === 'MALE' ? "men's" : "women's";
+      const SLOT_FALLBACK: Record<string, string[]> = {
+        bottom: [`${genderLabel} jeans`, `${genderLabel} trousers`],
+        top: [`${genderLabel} shirt`, `${genderLabel} blouse`],
+        shoes: [`${genderLabel} shoes`, `${genderLabel} sneakers`],
+        outer: [`${genderLabel} jacket`, `${genderLabel} coat`],
+        bag: [`${genderLabel} bag`, `${genderLabel} tote`],
+        accessory: [`${genderLabel} scarf`, `${genderLabel} belt`],
+        mid: [`${genderLabel} cardigan`, `${genderLabel} sweater`],
+      };
+
+      const slotCandidates: Record<string, any[]> = {};
+      for (const slot of PRIORITY_SLOTS) {
+        let keywords = categories[slot] || [];
+        if (keywords.length === 0) keywords = SLOT_FALLBACK[slot] || [];
+        if (keywords.length === 0) continue;
+        const kwToSearch = keywords.slice(0, MAX_KW_PER_SLOT);
+        const seenAsins = new Set<string>();
+        const candidates: any[] = [];
+        for (const kw of kwToSearch) {
+          try {
+            const r = await fetch(`${apiBase}/amazon-search`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ query: kw, page: 1 }) });
+            if (r.ok) {
+              const d = await r.json();
+              for (const item of (d.results || []).slice(0, MAX_RESULTS_PER_KW)) {
+                if (item.asin && !seenAsins.has(item.asin) && candidates.length < productsPerSlot) {
+                  seenAsins.add(item.asin); candidates.push(item);
+                }
+              }
+            }
+          } catch { /**/ }
+        }
+        if (candidates.length > 0) {
+          slotCandidates[slot] = candidates;
+          addEvent(makeEvent('search', 'progress', `[${slot}] Found ${candidates.length} candidates`));
+        }
+      }
+      const totalCandidates = Object.values(slotCandidates).reduce((a, b) => a + b.length, 0);
+      addEvent(makeEvent('search', 'success', `Total ${totalCandidates} candidates found`));
+      if (totalCandidates === 0) throw new Error('No products found in Amazon search');
+
+      // ── STEP 3: Register products ─────────────────────────────────────────
+      addEvent(makeEvent('register', 'start', 'Analyzing and registering products...'));
+      const existingAsins = new Set<string>();
+      const { data: existingProducts } = await supabase.from('products').select('product_link').not('product_link', 'is', null);
+      if (existingProducts) {
+        for (const row of existingProducts) {
+          const match = (row.product_link || '').match(/\/dp\/([A-Z0-9]{10})/);
+          if (match) existingAsins.add(match[1]);
+        }
       }
 
-      const data: PipelineResult = await res.json();
-      setResult(data);
+      for (const slot of PRIORITY_SLOTS) {
+        const candidates = slotCandidates[slot] || [];
+        let slotRegistered = 0;
+        for (const product of candidates) {
+          if (product.asin && existingAsins.has(product.asin)) continue;
+          try {
+            const r = await fetch(`${apiBase}/auto-pipeline`, {
+              method: 'POST', headers: authHeaders,
+              body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId }),
+            });
+            if (r.ok) {
+              const d = await r.json();
+              if (d.success) { slotRegistered++; registeredCount++; if (product.asin) existingAsins.add(product.asin); }
+            }
+          } catch { /**/ }
+        }
+        if (slotRegistered > 0) addEvent(makeEvent('register', 'progress', `[${slot}] Registered ${slotRegistered} products`));
+      }
+      addEvent(makeEvent('register', 'success', `Registered ${registeredCount} products total`));
+      if (registeredCount === 0) throw new Error('No products were successfully registered');
+
+      // ── STEP 4: Background removal (parallel batches) ────────────────────
+      addEvent(makeEvent('nobg', 'start', 'Starting flatlay extraction for registered products...'));
+      const { data: productsForBg } = await supabase.from('products').select('id, image_url, category, sub_category').eq('batch_id', batchId).is('nobg_image_url', null);
+      if (productsForBg && productsForBg.length > 0) {
+        const valid = productsForBg.filter(p => !!p.image_url);
+        const PARALLEL = 3;
+        let extractedCount = 0;
+        for (let i = 0; i < valid.length; i += PARALLEL) {
+          const batch = valid.slice(i, i + PARALLEL);
+          addEvent(makeEvent('nobg', 'progress', `Extracting batch ${Math.floor(i / PARALLEL) + 1}/${Math.ceil(valid.length / PARALLEL)}...`));
+          const results = await Promise.allSettled(batch.map(p =>
+            fetch(`${apiBase}/auto-pipeline`, {
+              method: 'POST', headers: authHeaders,
+              body: JSON.stringify({ action: 'extract-nobg', productId: p.id, imageUrl: p.image_url, category: p.category || 'top', subCategory: p.sub_category || '' }),
+            })
+          ));
+          extractedCount += results.filter(r => r.status === 'fulfilled').length;
+          await new Promise(r => setTimeout(r, 300));
+        }
+        addEvent(makeEvent('nobg', 'success', `Flatlay extraction complete: ${extractedCount}/${valid.length} processed`));
+      } else {
+        addEvent(makeEvent('nobg', 'skip', 'All products already have flatlay images'));
+      }
+
+      // ── STEP 5: Generate outfits ──────────────────────────────────────────
+      addEvent(makeEvent('outfits', 'start', `Generating ${outfitCount} outfit candidates...`));
+      const outfitRes = await fetch(`${apiBase}/auto-pipeline`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ action: 'generate-outfits', batchId, gender, body_type: bodyType, vibe, season, outfit_count: outfitCount }),
+      });
+      if (!outfitRes.ok) {
+        const errText = await outfitRes.text();
+        throw new Error(`Outfit generation failed (${outfitRes.status}): ${errText.slice(0, 200)}`);
+      }
+      const outfitData = await outfitRes.json();
+      if (outfitData.error) throw new Error(outfitData.error);
+
+      allOutfitIds.push(...(outfitData.outfitIds || []));
+      allOutfitCandidates.push(...(outfitData.outfitCandidates || []));
+      addEvent(makeEvent('outfits', 'success', `Generated ${allOutfitIds.length} outfit candidates`));
+
+      const finalResult: PipelineResult = {
+        batchId, events: [],
+        productsRegistered: registeredCount,
+        outfitsGenerated: allOutfitIds.length,
+        outfitIds: allOutfitIds,
+        outfitCandidates: allOutfitCandidates,
+        success: true,
+      };
+      setResult(finalResult);
+
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      addEvent(makeEvent('done', 'error', `Pipeline failed: ${msg}`));
     } finally {
       setRunning(false);
     }
   };
 
-  const stepPhases = result ? getStepPhase(result.events) : {};
-
-  const groupedEvents = result
-    ? PIPELINE_STEPS.reduce<Record<string, PipelineEvent[]>>((acc, step) => {
-        acc[step] = result.events.filter(e => e.step === step);
-        return acc;
-      }, {})
-    : {};
-
+  const allEvents = [...events, ...(result?.events || [])];
+  const stepPhases = getStepPhase(allEvents);
+  const groupedEvents = PIPELINE_STEPS.reduce<Record<string, PipelineEvent[]>>((acc, step) => {
+    acc[step] = allEvents.filter(e => e.step === step);
+    return acc;
+  }, {});
   const hasCandidates = result?.outfitCandidates && result.outfitCandidates.length > 0;
 
   return (
     <div className="min-h-screen bg-[#111] text-white">
       <div className="max-w-5xl mx-auto px-6 py-10">
 
-        {/* Header */}
         <div className="mb-10">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Auto Pipeline</h1>
-            <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-500/30">
-              BETA
-            </span>
+            <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-500/30">BETA</span>
           </div>
-          <p className="text-zinc-400 text-sm ml-12">
-            키워드 생성 → 아마존 서칭 → 제품 등록 → 누끼 제거 → 코디 생성까지 한 번에
-          </p>
+          <p className="text-zinc-400 text-sm ml-12">키워드 생성 → 아마존 서칭 → 제품 등록 → 누끼 제거 → 코디 생성까지 한 번에</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
-          {/* ── LEFT: Config Panel ─────────────────────────────────────────── */}
+          {/* LEFT: Config Panel */}
           <div className="lg:col-span-2 space-y-5">
 
-            {/* Gender */}
             <div className="bg-white/5 rounded-2xl p-5 border border-white/8">
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 block">Gender</label>
               <div className="grid grid-cols-3 gap-2">
                 {(['MALE', 'FEMALE', 'UNISEX'] as Gender[]).map(g => (
-                  <button
-                    key={g}
-                    onClick={() => setGender(g)}
-                    className={`py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                      gender === g ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
+                  <button key={g} onClick={() => setGender(g)} className={`py-2.5 rounded-xl text-xs font-semibold transition-all ${gender === g ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}>
                     {g === 'MALE' ? 'Male' : g === 'FEMALE' ? 'Female' : 'Unisex'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Body Type */}
             <div className="bg-white/5 rounded-2xl p-5 border border-white/8">
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 block">Body Type</label>
               <div className="grid grid-cols-3 gap-2">
                 {(['slim', 'regular', 'plus-size'] as BodyType[]).map(b => (
-                  <button
-                    key={b}
-                    onClick={() => setBodyType(b)}
-                    className={`py-2.5 rounded-xl text-xs font-semibold transition-all capitalize ${
-                      bodyType === b ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    {b}
-                  </button>
+                  <button key={b} onClick={() => setBodyType(b)} className={`py-2.5 rounded-xl text-xs font-semibold transition-all capitalize ${bodyType === b ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}>{b}</button>
                 ))}
               </div>
             </div>
 
-            {/* Season */}
             <div className="bg-white/5 rounded-2xl p-5 border border-white/8">
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 block">Season</label>
               <div className="grid grid-cols-4 gap-2">
                 {(['spring', 'summer', 'fall', 'winter'] as Season[]).map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setSeason(s)}
-                    className={`py-2.5 rounded-xl text-xs font-semibold transition-all capitalize ${
-                      season === s ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    {s}
-                  </button>
+                  <button key={s} onClick={() => setSeason(s)} className={`py-2.5 rounded-xl text-xs font-semibold transition-all capitalize ${season === s ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}>{s}</button>
                 ))}
               </div>
             </div>
 
-            {/* Vibe */}
             <div className="bg-white/5 rounded-2xl p-5 border border-white/8">
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 block">Vibe</label>
               <div className="space-y-2">
                 {VIBES.map(v => (
-                  <button
-                    key={v.key}
-                    onClick={() => setVibe(v.key)}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left transition-all border ${
-                      vibe === v.key
-                        ? 'border-white/30 bg-white/10'
-                        : 'border-transparent bg-white/3 hover:bg-white/7 hover:border-white/10'
-                    }`}
-                  >
+                  <button key={v.key} onClick={() => setVibe(v.key)} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left transition-all border ${vibe === v.key ? 'border-white/30 bg-white/10' : 'border-transparent bg-white/3 hover:bg-white/7 hover:border-white/10'}`}>
                     <div className={`w-2 h-2 rounded-full shrink-0 ${vibe === v.key ? 'bg-white' : 'bg-zinc-600'}`} />
                     <div>
                       <div className="text-xs font-semibold text-white">{v.label}</div>
@@ -561,7 +540,6 @@ export default function AdminAutoPipeline() {
               </div>
             </div>
 
-            {/* Settings */}
             <div className="bg-white/5 rounded-2xl p-5 border border-white/8 space-y-4">
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">Settings</label>
               <div className="flex items-center justify-between">
@@ -588,50 +566,33 @@ export default function AdminAutoPipeline() {
               </div>
             </div>
 
-            {/* Run Button */}
-            <button
-              onClick={handleRun}
-              disabled={running}
-              className={`w-full py-4 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2.5 ${
-                running
-                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                  : 'bg-white text-black hover:bg-zinc-100 active:scale-[0.98] shadow-lg shadow-white/5'
-              }`}
-            >
-              {running ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Pipeline Running...</>
-              ) : (
-                <><Play className="w-4 h-4" fill="currentColor" />Run Auto Pipeline</>
-              )}
+            <button onClick={handleRun} disabled={running} className={`w-full py-4 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2.5 ${running ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' : 'bg-white text-black hover:bg-zinc-100 active:scale-[0.98] shadow-lg shadow-white/5'}`}>
+              {running ? <><Loader2 className="w-4 h-4 animate-spin" />Pipeline Running...</> : <><Play className="w-4 h-4" fill="currentColor" />Run Auto Pipeline</>}
             </button>
           </div>
 
-          {/* ── RIGHT: Progress & Results ───────────────────────────────────── */}
+          {/* RIGHT: Progress & Results */}
           <div className="lg:col-span-3 space-y-4">
 
-            {/* Pipeline Steps Visual */}
-            {(running || result) && (
+            {(running || result || events.length > 0) && (
               <div className="bg-white/5 rounded-2xl p-5 border border-white/8">
                 <div className="flex items-center gap-2 mb-5">
-                  {running ? (
-                    <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                  ) : result?.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-red-400" />
-                  )}
+                  {running ? <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                    : result?.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    : <XCircle className="w-4 h-4 text-red-400" />}
                   <span className="text-xs font-semibold text-zinc-300">
-                    {running ? 'Pipeline running...' : result?.success ? `Done — ${result.productsRegistered} products registered` : `Failed: ${result?.error}`}
+                    {running ? 'Pipeline running...'
+                      : result?.success ? `Done — ${result.productsRegistered} products registered`
+                      : `Failed: ${error}`}
                   </span>
                 </div>
                 <div className="flex items-start gap-0">
                   {PIPELINE_STEPS.map((step, i) => (
                     <div key={step} className="flex items-center flex-1">
-                      <StepIndicator step={step} phase={running && !stepPhases[step] ? 'idle' : (stepPhases[step] || 'idle')} />
+                      <StepIndicator step={step} phase={stepPhases[step] || 'idle'} />
                       {i < PIPELINE_STEPS.length - 1 && (
                         <div className={`h-0.5 flex-1 mx-1 mb-5 transition-all duration-500 ${
-                          stepPhases[PIPELINE_STEPS[i + 1]] && stepPhases[PIPELINE_STEPS[i + 1]] !== 'idle'
-                            ? 'bg-emerald-500/50' : 'bg-zinc-700'
+                          stepPhases[PIPELINE_STEPS[i + 1]] && stepPhases[PIPELINE_STEPS[i + 1]] !== 'idle' ? 'bg-emerald-500/50' : 'bg-zinc-700'
                         }`} />
                       )}
                     </div>
@@ -640,80 +601,34 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {/* ── Outfit Candidate Selection ─── */}
             {hasCandidates && (
               <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
                 <div className="px-5 py-4 border-b border-white/8 flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-bold text-white">코디 후보 선택</h3>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      등록할 코디를 선택하세요 · {selectedOutfitIds.size}/{result!.outfitCandidates!.length} 선택됨
-                    </p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">등록할 코디를 선택하세요 · {selectedOutfitIds.size}/{result!.outfitCandidates!.length} 선택됨</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedOutfitIds(new Set(result!.outfitCandidates!.map(c => c.outfitId)))}
-                      className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/8 transition-all"
-                    >
-                      전체 선택
-                    </button>
-                    <button
-                      onClick={() => setSelectedOutfitIds(new Set())}
-                      className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/8 transition-all"
-                    >
-                      전체 해제
-                    </button>
+                    <button onClick={() => setSelectedOutfitIds(new Set(result!.outfitCandidates!.map(c => c.outfitId)))} className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/8 transition-all">전체 선택</button>
+                    <button onClick={() => setSelectedOutfitIds(new Set())} className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/8 transition-all">전체 해제</button>
                   </div>
                 </div>
-
                 <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {result!.outfitCandidates!.map((candidate, i) => (
-                    <OutfitCandidateCard
-                      key={candidate.outfitId}
-                      candidate={candidate}
-                      index={i}
-                      selected={selectedOutfitIds.has(candidate.outfitId)}
-                      onToggle={() => toggleOutfit(candidate.outfitId)}
-                    />
+                    <OutfitCandidateCard key={candidate.outfitId} candidate={candidate} index={i} selected={selectedOutfitIds.has(candidate.outfitId)} onToggle={() => toggleOutfit(candidate.outfitId)} />
                   ))}
                 </div>
-
                 <div className="px-4 pb-4 flex items-center gap-3">
-                  <button
-                    onClick={handleSaveSelected}
-                    disabled={saving || selectedOutfitIds.size === 0}
-                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
-                      selectedOutfitIds.size === 0
-                        ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                        : saving
-                        ? 'bg-emerald-600 text-white cursor-not-allowed'
-                        : 'bg-emerald-500 text-white hover:bg-emerald-400 active:scale-[0.98]'
-                    }`}
-                  >
-                    {saving ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" />저장 중...</>
-                    ) : (
-                      <><Check className="w-4 h-4" />{selectedOutfitIds.size}개 코디 등록</>
-                    )}
+                  <button onClick={handleSaveSelected} disabled={saving || selectedOutfitIds.size === 0} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${selectedOutfitIds.size === 0 ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : saving ? 'bg-emerald-600 text-white cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-400 active:scale-[0.98]'}`}>
+                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" />저장 중...</> : <><Check className="w-4 h-4" />{selectedOutfitIds.size}개 코디 등록</>}
                   </button>
-                  <button
-                    onClick={() => {
-                      const rejected = result?.outfitIds || [];
-                      if (rejected.length > 0) {
-                        supabase.from('outfits').delete().in('id', rejected);
-                      }
-                      setResult(prev => prev ? { ...prev, outfitCandidates: undefined } : prev);
-                    }}
-                    className="px-4 py-3 rounded-xl font-medium text-sm text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all flex items-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                    전체 취소
+                  <button onClick={() => { const rejected = result?.outfitIds || []; if (rejected.length > 0) supabase.from('outfits').delete().in('id', rejected); setResult(prev => prev ? { ...prev, outfitCandidates: undefined } : prev); }} className="px-4 py-3 rounded-xl font-medium text-sm text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all flex items-center gap-2">
+                    <X className="w-4 h-4" />전체 취소
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Saved confirmation */}
             {savedCount > 0 && !hasCandidates && (
               <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-5">
                 <div className="flex items-center gap-3 mb-4">
@@ -734,32 +649,13 @@ export default function AdminAutoPipeline() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
-                  <a
-                    href="#admin-products"
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-medium text-white transition-all"
-                  >
-                    <Package className="w-3.5 h-3.5" />
-                    View Products
-                  </a>
-                  <a
-                    href="#admin-outfit-linker"
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-medium text-white transition-all"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    View Outfits
-                  </a>
-                  <button
-                    onClick={handleRun}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-medium text-white transition-all ml-auto"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Run Again
-                  </button>
+                  <a href="#admin-products" className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-medium text-white transition-all"><Package className="w-3.5 h-3.5" />View Products</a>
+                  <a href="#admin-outfit-linker" className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-medium text-white transition-all"><ExternalLink className="w-3.5 h-3.5" />View Outfits</a>
+                  <button onClick={handleRun} className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-medium text-white transition-all ml-auto"><RefreshCw className="w-3.5 h-3.5" />Run Again</button>
                 </div>
               </div>
             )}
 
-            {/* Error */}
             {(error || (result && !result.success)) && (
               <div className="bg-red-500/10 border border-red-500/25 rounded-2xl p-5">
                 <div className="flex items-start gap-3">
@@ -772,67 +668,41 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {/* No Activity Yet */}
-            {!running && !result && !error && (
+            {!running && events.length === 0 && !result && !error && (
               <div className="bg-white/3 border border-white/6 rounded-2xl p-10 flex flex-col items-center justify-center text-center gap-3">
                 <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-1">
                   <Zap className="w-7 h-7 text-zinc-500" />
                 </div>
                 <div className="text-sm font-medium text-zinc-400">Ready to run</div>
-                <div className="text-xs text-zinc-600 max-w-xs">
-                  Select gender, body type, vibe, and season, then hit Run Auto Pipeline to start the full automation.
-                </div>
+                <div className="text-xs text-zinc-600 max-w-xs">Select gender, body type, vibe, and season, then hit Run Auto Pipeline to start the full automation.</div>
               </div>
             )}
 
-            {/* Detailed Logs by Step */}
-            {result && (
+            {allEvents.length > 0 && (
               <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
-                <button
-                  onClick={() => setShowAllLogs(v => !v)}
-                  className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-all"
-                >
+                <button onClick={() => setShowAllLogs(v => !v)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-all">
                   <span className="text-xs font-semibold text-zinc-300 flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 text-zinc-500" />
                     Pipeline Logs
-                    <span className="bg-white/10 text-zinc-400 text-[10px] px-1.5 py-0.5 rounded-full">
-                      {result.events.length} events
-                    </span>
+                    <span className="bg-white/10 text-zinc-400 text-[10px] px-1.5 py-0.5 rounded-full">{allEvents.length} events</span>
                   </span>
-                  {showAllLogs
-                    ? <ChevronDown className="w-4 h-4 text-zinc-500" />
-                    : <ChevronRight className="w-4 h-4 text-zinc-500" />
-                  }
+                  {showAllLogs ? <ChevronDown className="w-4 h-4 text-zinc-500" /> : <ChevronRight className="w-4 h-4 text-zinc-500" />}
                 </button>
-
                 {showAllLogs && (
                   <div className="border-t border-white/8">
                     {PIPELINE_STEPS.map(step => {
                       const stepEvents = groupedEvents[step] || [];
                       if (stepEvents.length === 0) return null;
                       const meta = STEP_META[step];
-                      const phase = stepPhases[step] || 'idle';
+                      const phase = (stepPhases[step] || 'idle') as EventStatus;
                       const isExpanded = expandedSteps.has(step);
-
                       return (
                         <div key={step} className="border-b border-white/5 last:border-0">
-                          <button
-                            onClick={() => toggleStep(step)}
-                            className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-all text-left"
-                          >
-                            <span className={`${STATUS_COLOR[phase]}`}>{meta.icon}</span>
+                          <button onClick={() => toggleStep(step)} className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-all text-left">
+                            <span className={STATUS_COLOR[phase] || 'text-zinc-400'}>{meta.icon}</span>
                             <span className="text-xs font-semibold text-zinc-300 flex-1">{meta.label}</span>
-                            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                              phase === 'success' ? 'bg-emerald-500/15 text-emerald-400' :
-                              phase === 'error' ? 'bg-red-500/15 text-red-400' :
-                              'bg-zinc-700 text-zinc-400'
-                            }`}>
-                              {stepEvents.length} events
-                            </span>
-                            {isExpanded
-                              ? <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
-                              : <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
-                            }
+                            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${phase === 'success' ? 'bg-emerald-500/15 text-emerald-400' : phase === 'error' ? 'bg-red-500/15 text-red-400' : 'bg-zinc-700 text-zinc-400'}`}>{stepEvents.length} events</span>
+                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-zinc-600" /> : <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />}
                           </button>
                           {isExpanded && (
                             <div className="px-5 pb-3 space-y-0.5 bg-black/20">
@@ -848,7 +718,6 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {/* Run History */}
             {history.length > 0 && (
               <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
                 <div className="px-5 py-4 border-b border-white/8">
@@ -859,16 +728,10 @@ export default function AdminAutoPipeline() {
                     <div key={i} className="flex items-center gap-4 px-5 py-3">
                       <div className={`w-2 h-2 rounded-full shrink-0 ${run.success ? 'bg-emerald-400' : 'bg-red-500'}`} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-white">
-                          {run.gender} · {run.vibe.replace(/_/g, ' ')} · {run.season}
-                        </div>
-                        <div className="text-[10px] text-zinc-500 mt-0.5">
-                          {new Date(run.timestamp).toLocaleString('ko-KR')} · {run.productsRegistered} products · {run.outfitsGenerated} outfits
-                        </div>
+                        <div className="text-xs font-medium text-white">{run.gender} · {run.vibe.replace(/_/g, ' ')} · {run.season}</div>
+                        <div className="text-[10px] text-zinc-500 mt-0.5">{new Date(run.timestamp).toLocaleString('ko-KR')} · {run.productsRegistered} products · {run.outfitsGenerated} outfits</div>
                       </div>
-                      <div className="text-[10px] font-mono text-zinc-600 truncate max-w-[80px]">
-                        {run.batchId.split('-').slice(-1)[0]}
-                      </div>
+                      <div className="text-[10px] font-mono text-zinc-600 truncate max-w-[80px]">{run.batchId.split('-').slice(-1)[0]}</div>
                     </div>
                   ))}
                 </div>
