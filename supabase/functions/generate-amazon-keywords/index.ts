@@ -331,10 +331,46 @@ const SEASON_MODIFIERS: Record<string, { fabric: string[]; note: string }> = {
   winter: { fabric: ["wool","cashmere","fleece","thermal","down"], note: "insulated, warm, cold-weather fabrics" },
 };
 
-const BODY_FIT: Record<string, { top: string; bottom: string; outer: string }> = {
-  slim: { top: "oversized, relaxed, boxy", bottom: "wide-leg, relaxed, straight", outer: "oversized, relaxed" },
-  regular: { top: "regular, straight, relaxed, fitted", bottom: "straight, slim, regular", outer: "regular, relaxed" },
-  "plus-size": { top: "straight, A-line, empire waist", bottom: "straight, wide-leg, bootcut", outer: "straight, open-front" },
+const BODY_FIT: Record<string, { top: string; bottom: string; outer: string; avoid: string; shape_goal: string }> = {
+  slim: {
+    top: "oversized, relaxed, boxy, dropped-shoulder",
+    bottom: "wide-leg, balloon, relaxed, straight",
+    outer: "oversized, cocoon, longline",
+    avoid: "skin-tight, body-con, very fitted",
+    shape_goal: "add volume and visual weight — wide-leg bottoms, oversized tops, structured coats",
+  },
+  regular: {
+    top: "regular, straight, relaxed, slightly fitted, tucked",
+    bottom: "straight, slim, tapered, regular, midi",
+    outer: "regular, single-breasted, relaxed",
+    avoid: "extreme oversized without structure",
+    shape_goal: "balanced silhouette — mix fitted tops with relaxed bottoms or vice versa",
+  },
+  "plus-size": {
+    top: "straight, flowy, empire-waist, wrap, V-neck, A-line",
+    bottom: "straight-leg, wide-leg, bootcut, high-waist, A-line skirt",
+    outer: "open-front, duster, single-breasted, longline",
+    avoid: "horizontal stripes, boxy shapeless cuts, super cropped tops",
+    shape_goal: "elongate and define — high-waist bottoms, wrap tops, open-front outerwear",
+  },
+};
+
+const GENDER_STYLE_RULES: Record<string, { silhouette_priority: string; cut_notes: string; search_terms: string[] }> = {
+  women: {
+    silhouette_priority: "hourglass, A-line, high-waist emphasis, column, wrap",
+    cut_notes: "feminine details welcome: ruffle, pleat, dart-fitted, wrap, puff-sleeve, midi, maxi lengths",
+    search_terms: ["women's", "womens", "ladies"],
+  },
+  men: {
+    silhouette_priority: "inverted-triangle, straight, relaxed, tapered",
+    cut_notes: "clean masculine cuts: chest-width, shoulder-fitted, tapered leg, structured collar",
+    search_terms: ["men's", "mens"],
+  },
+  unisex: {
+    silhouette_priority: "straight, boxy, relaxed, oversized",
+    cut_notes: "gender-neutral cuts: drop-shoulder, boxy, straight-leg, minimal details",
+    search_terms: ["unisex", "gender neutral", "oversized"],
+  },
 };
 
 Deno.serve(async (req: Request) => {
@@ -379,7 +415,8 @@ Deno.serve(async (req: Request) => {
     const seasonLabel = (season || "all season").toLowerCase();
     const dna = VIBE_DNA[vibeKey];
     const looks = VIBE_LOOKS[vibeKey];
-    const bodyFit = BODY_FIT[body_type] || BODY_FIT["regular"];
+    const bodyFit = BODY_FIT[body_type?.toLowerCase()] || BODY_FIT["regular"];
+    const genderRules = GENDER_STYLE_RULES[genderLabel] || GENDER_STYLE_RULES["women"];
     const seasonMod = SEASON_MODIFIERS[seasonLabel];
     const excludedCats = new Set(SEASON_EXCLUDE_CATS[seasonLabel] || []);
 
@@ -388,64 +425,113 @@ Deno.serve(async (req: Request) => {
       .map(([k, v]) => `${k}: ${v}`)
       .join("\n");
 
+    const bodyTypeLabel = (body_type || "regular").toLowerCase();
+
+    const profileBlock = `GENDER: ${genderLabel}
+- Silhouette priority: ${genderRules.silhouette_priority}
+- Cut style: ${genderRules.cut_notes}
+
+BODY TYPE: ${bodyTypeLabel}
+- Top fit preference: ${bodyFit.top}
+- Bottom fit preference: ${bodyFit.bottom}
+- Outer fit preference: ${bodyFit.outer}
+- Avoid: ${bodyFit.avoid}
+- Styling goal: ${bodyFit.shape_goal}
+
+SEASON: ${seasonLabel}${seasonMod ? `
+- Key fabrics: ${seasonMod.fabric.join(", ")}
+- Styling note: ${seasonMod.note}
+- Layering strategy: ${
+  seasonLabel === "winter" ? "full layers — base + mid + outer all essential; prioritize warmth-first fabrics (cashmere, wool, down, thermal)" :
+  seasonLabel === "fall" ? "2–3 layers — outer or mid always present; rich textures and warm tones" :
+  seasonLabel === "spring" ? "light layers — outer optional but present; breathable and transitional pieces" :
+  "minimal layers — no outer/mid; prioritize breathability, exposed skin acceptable"
+}` : ""}`;
+
     const dnaBlock = dna
-      ? `Formality: ${dna.formality}
-Color palette — primary: ${dna.colors.primary.join(", ")} | secondary: ${dna.colors.secondary.join(", ")} | accent (sparingly): ${dna.colors.accent.join(", ")}
-Tonal strategy: ${dna.tonal}
-Era/mood: ${dna.era.join(", ")}`
-      : "";
+      ? `VIBE: "${vibeKey.replace(/_/g, " ")}"
+- Formality range: ${dna.formality}
+- Color palette:
+    PRIMARY (use most): ${dna.colors.primary.join(", ")}
+    SECONDARY (supporting): ${dna.colors.secondary.join(", ")}
+    ACCENT (1 item max): ${dna.colors.accent.join(", ")}
+- Tonal strategy: ${dna.tonal}
+- Era / mood references: ${dna.era.join(", ")}`
+      : `VIBE: "${vibeKey.replace(/_/g, " ")}"`;
 
     const looksBlock = looks
       ? Object.entries(looks).map(([k, l]) => {
           const sampleItems = Object.entries(l.items)
             .filter(([cat]) => !excludedCats.has(cat))
-            .map(([cat, items]) => `  ${cat}: ${items.slice(0, 6).join(", ")}`)
+            .map(([cat, items]) => `    ${cat}: ${items.join(", ")}`)
             .join("\n");
-          return `Look ${k} — "${l.name}" (${l.mood})
-Materials: ${l.materials.join(", ")}
-Reference items per category:
+          return `LOOK ${k} — "${l.name}"
+  Mood / aesthetic: ${l.mood}
+  Key materials: ${l.materials.join(", ")}
+  Item pool per category (choose specific items from here):
 ${sampleItems}`;
         }).join("\n\n")
       : "";
 
     const ctxBlock = outfit_context
-      ? `OUTFIT HARMONY: existing colors=${(outfit_context.existing_colors || []).join(",")} | existing materials=${(outfit_context.existing_materials || []).join(",")} | target slot=${outfit_context.target_slot || "any"}. Generate COMPLEMENTARY keywords that harmonize.`
+      ? `OUTFIT HARMONY CONTEXT:
+- Existing colors in outfit: ${(outfit_context.existing_colors || []).join(", ") || "none"}
+- Existing materials in outfit: ${(outfit_context.existing_materials || []).join(", ") || "none"}
+- Target slot: ${outfit_context.target_slot || "any"}
+→ Generate keywords that COMPLEMENT these existing pieces (harmonizing colors and materials).`
       : "";
 
-    const prompt = `You are a fashion buyer who shops on Amazon daily. Generate Amazon search keywords a real person would type.
+    const prompt = `You are a professional fashion buyer who sources ${genderLabel}'s clothing on Amazon. Your task is to generate precise Amazon search keywords that real shoppers would type.
 
-PROFILE:
-- Gender: ${genderLabel}
-- Body fit: top(${bodyFit.top}) | bottom(${bodyFit.bottom}) | outer(${bodyFit.outer})
-- Vibe: "${vibeKey.replace(/_/g, " ")}"
-- Season: ${seasonLabel}${seasonMod ? ` — fabrics: ${seasonMod.fabric.join(", ")} | note: ${seasonMod.note}` : ""}
-${ctxBlock ? `- ${ctxBlock}` : ""}
+═══════════════════════════════════════
+SHOPPER PROFILE
+═══════════════════════════════════════
+${profileBlock}
 
-VIBE DNA:
+═══════════════════════════════════════
+STYLE VIBE DNA
+═══════════════════════════════════════
 ${dnaBlock}
 
-LOOK VARIANTS (A = core aesthetic, B = adjacent mood, C = edge/experimental):
+═══════════════════════════════════════
+LOOK VARIANTS — use ALL THREE as distinct creative directions
+═══════════════════════════════════════
 ${looksBlock}
+${ctxBlock ? `\n═══════════════════════════════════════\n${ctxBlock}\n═══════════════════════════════════════` : ""}
 
-TASK: For each category below, generate exactly 6 Amazon search keywords — 2 inspired by each Look (A, B, C), picking different specific item types within each Look.
-Each keyword must:
-1. Start with "${genderLabel}" or "${genderLabel}'s"
-2. Be 3–6 words long
-3. Reference a SPECIFIC item type from that Look's reference items (pick different item types per look; the 2 keywords from the same Look must reference different items)
-4. Include a color from the vibe palette OR a material from that Look
-5. Include a fit word when relevant (e.g., oversized, slim, wide-leg)
-6. Sound like a real Amazon search query
+═══════════════════════════════════════
+KEYWORD GENERATION RULES
+═══════════════════════════════════════
+For EACH category below, generate exactly 6 keywords: 2 per Look (A×2, B×2, C×2).
+
+Every keyword MUST satisfy ALL of the following:
+1. GENDER prefix: Start with "${genderLabel}'s" (always possessive form)
+2. LENGTH: 3–6 words total (including the gender prefix)
+3. ITEM SPECIFICITY: Reference a specific item type from that Look's item pool — each of the 2 keywords within the same Look must reference a DIFFERENT item type
+4. COLOR or MATERIAL: Include at least one color from the vibe palette OR one material from that Look's key materials
+5. FIT / SILHOUETTE: Embed a fit word that matches the body type preference for this category (e.g., "${bodyFit.top}" for tops, "${bodyFit.bottom}" for bottoms, "${bodyFit.outer}" for outerwear)
+6. SEASON-AWARE: For ${seasonLabel} — keywords must reflect appropriate fabric weight and layering${seasonMod ? ` (prioritize: ${seasonMod.fabric.slice(0, 3).join(", ")})` : ""}
+7. AMAZON-REALISTIC: Must read like a genuine Amazon search query — no poetic language, no brand names unless generic
+
+ANTI-PATTERNS (never do these):
+- Do NOT repeat the same item type twice within one Look's 2 keywords
+- Do NOT use vague terms like "nice top" or "cool jacket"
+- Do NOT ignore the body type fit guidance
+- Do NOT use colors outside the vibe palette
 
 CATEGORIES TO FILL:
 ${activeCats}
 
-OUTPUT: Return ONLY valid JSON — no markdown, no comments:
+═══════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════
+Return ONLY valid JSON — no markdown fences, no comments, no explanation:
 {
-  "outer": ["women's keyword A1", "women's keyword A2", "women's keyword B1", "women's keyword B2", "women's keyword C1", "women's keyword C2"],
+  "outer": ["${genderLabel}'s [Look A item1 + color/material + fit]", "${genderLabel}'s [Look A item2 + color/material + fit]", "${genderLabel}'s [Look B item1...]", "${genderLabel}'s [Look B item2...]", "${genderLabel}'s [Look C item1...]", "${genderLabel}'s [Look C item2...]"],
   "top": ["...", "...", "...", "...", "...", "..."],
   ...
 }
-Include every category listed above. Each value is an array of exactly 6 strings.`;
+Include EVERY category listed above. Each array must contain EXACTLY 6 strings.`;
 
     let geminiRes: Response | null = null;
     let lastErrText = "";
@@ -457,7 +543,7 @@ Include every category listed above. Each value is an array of exactly 6 strings
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.9, maxOutputTokens: 2048, responseMimeType: "application/json" },
+            generationConfig: { temperature: 0.85, maxOutputTokens: 4096, responseMimeType: "application/json" },
           }),
         }
       );

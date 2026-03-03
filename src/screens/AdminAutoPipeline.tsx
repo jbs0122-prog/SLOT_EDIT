@@ -333,7 +333,7 @@ export default function AdminAutoPipeline() {
       // ── STEP 2: Amazon search ─────────────────────────────────────────────
       addEvent(makeEvent('search', 'start', 'Searching Amazon for products per slot...'));
       const PRIORITY_SLOTS = ['top','bottom','shoes','outer','bag','accessory','mid'];
-      const MAX_KW_PER_SLOT = 5;
+      const MAX_KW_PER_SLOT = 6;
       const MAX_RESULTS_PER_KW = 20;
       const genderLabel = gender === 'MALE' ? "men's" : "women's";
       const SLOT_FALLBACK: Record<string, string[]> = {
