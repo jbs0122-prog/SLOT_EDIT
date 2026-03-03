@@ -662,11 +662,120 @@ Extract and return ONLY a valid JSON object:
   "stock_status": "in_stock"
 }
 
-Final rules:
-- formality: 1=very casual (athleisure/loungewear), 2=casual (everyday tee/jeans), 3=smart-casual (chino/blouse), 4=business-casual (blazer/dress), 5=formal (suit/evening wear)
-- warmth: 1=very light (sleeveless/linen), 2=light (tee/thin shirt), 3=medium (sweatshirt/chino), 4=warm (sweater/jacket), 5=very warm (puffer/heavy coat)
-- body_type array MUST include "${body_type || "regular"}"
-- Return ONLY the JSON object, no markdown, no explanation`;
+━━━ MATERIAL DECISION RULES ━━━
+Extract material from the product title. Use these patterns:
+- "cotton", "100% cotton", "pima cotton", "supima" → "100% Cotton"
+- "linen", "100% linen" → "100% Linen"
+- "wool", "merino wool", "merino", "lambswool", "shetland" → "Wool" or "Merino Wool"
+- "cashmere" → "Cashmere"
+- "mohair" → "Mohair"
+- "silk", "100% silk" → "100% Silk"
+- "satin" → "Satin"
+- "polyester", "poly" → "Polyester"
+- "nylon", "ripstop nylon" → "Nylon"
+- "acrylic" → "Acrylic"
+- "viscose", "rayon" → "Viscose"
+- "spandex", "elastane", "lycra" → include as blend e.g. "Cotton/Spandex"
+- "denim" → "Denim"
+- "leather", "genuine leather", "real leather" → "Leather"
+- "faux leather", "vegan leather", "PU leather" → "Faux Leather"
+- "suede", "microsuede" → "Suede"
+- "fleece", "polar fleece", "sherpa" → "Fleece"
+- "velvet" → "Velvet"
+- "tweed" → "Tweed"
+- "corduroy" → "Corduroy"
+- "canvas" → "Canvas"
+- "oxford cloth" → "Oxford Cloth"
+- "chambray" → "Chambray"
+- "poplin" → "Poplin"
+- "jersey", "jersey knit" → "Jersey"
+- "tech fabric", "performance fabric", "moisture-wicking", "quick-dry" → "Technical Fabric"
+- "down", "goose down", "duck down" → "Down"
+- "recycled polyester", "recycled material" → "Recycled Polyester"
+- If no material is mentioned in the title, infer from sub_category:
+  denim/flared_jeans/baggy_jeans → "Denim"
+  leather_pants/biker_jacket → "Faux Leather" (default unless title says genuine)
+  hoodie/sweatshirt → "Cotton Fleece"
+  tshirt → "Cotton"
+  linen_shirt → "Linen"
+  silk_blouse → "Silk"
+  puffer/down_vest → "Down Fill"
+  fleece/fleece_vest → "Fleece"
+  corduroy_pants/corduroy_jacket → "Corduroy"
+  tweed_jacket → "Tweed"
+  cable_knit/cashmere_sweater/knit → "Knit"
+  sneaker/runner/trail_runner → "Mesh/Synthetic"
+  boot/chelsea_boot/combat_boot → "Leather" or "Synthetic"
+  sandal/slide/mule → "Synthetic" or "Leather"
+
+━━━ PATTERN DECISION RULES ━━━
+- solid: single color, no visible pattern
+- stripe: horizontal, vertical, or diagonal stripes (breton, rugby, striped)
+- check: plaid, tartan, houndstooth, argyle, gingham, windowpane
+- graphic: logo, artwork, text print, geometric shapes, abstract design
+- print: floral, animal print, camouflage, tie-dye, paisley, tropical, all-over pattern
+- other: unusual or mixed patterns not fitting above
+Keywords:
+  "striped", "stripe", "breton" → stripe
+  "plaid", "tartan", "houndstooth", "gingham", "argyle", "check", "windowpane" → check
+  "graphic", "logo", "text", "slogan", "art print", "geometric" → graphic
+  "floral", "flower", "botanical", "animal print", "leopard", "zebra", "snake", "camo", "camouflage", "tie-dye", "paisley", "tropical", "all-over" → print
+  "solid", "plain", single color mentioned → solid
+
+━━━ SILHOUETTE DECISION RULES ━━━
+Determine from garment cut, NOT from body type (body type affects body_type field only):
+- slim: slim-fit jeans, skinny pants, fitted shirts, slim-cut blazers, pencil skirts
+- fitted: fitted tops, bodycon, structured bodysuits, performance wear
+- straight: straight-leg jeans, straight-cut trousers, classic button-down shirts
+- regular: standard fit items without notable silhouette description
+- relaxed: relaxed-fit, easy-fit, comfort-fit items
+- oversized: oversized tees, boxy cuts, drop-shoulder, oversized hoodies/coats
+- wide-leg: wide-leg pants/jeans, palazzo, culottes, wide-leg trousers
+- cropped: cropped jackets, cropped tops, cropped blazers (shorter-than-standard length)
+Title keywords:
+  "slim fit", "skinny", "slim-cut", "tapered" → slim
+  "fitted", "form-fitting", "bodycon" → fitted
+  "straight leg", "straight-fit", "straight cut" → straight
+  "relaxed fit", "easy fit", "comfort fit", "loose" → relaxed
+  "oversized", "boxy", "drop shoulder" → oversized
+  "wide leg", "wide-leg", "palazzo", "flare" → wide-leg
+  "cropped", "crop" → cropped
+  No keyword → use "regular"
+
+━━━ GENDER DECISION RULES ━━━
+- MALE: "men's", "mens", "for men", "man's", "him", "his", "boys'" in title
+- FEMALE: "women's", "womens", "for women", "ladies'", "lady", "girls'", "her", "feminine" in title
+- UNISEX: "unisex", no gender keyword, or clearly gender-neutral basics
+Context gender is "${gender}" — use it as the default if no title keyword contradicts it.
+
+━━━ VIBE DECISION RULES ━━━
+Assign vibe tags based on the ITEM's aesthetic, not just the search context vibe.
+Multiple vibes allowed if the item genuinely fits more than one.
+
+ELEVATED_COOL: structured, minimalist luxury items — blazers, trench coats, leather pieces, tailored trousers, sleek sneakers, box bags, silver hardware. Dark palette (black/navy/charcoal/white). Clean lines.
+EFFORTLESS_NATURAL: organic, relaxed, earthy items — linen shirts, waffle knits, chore coats, vintage denim, canvas totes, suede mules, straw bags. Neutral/earthy palette.
+ARTISTIC_MINIMAL: sculptural, asymmetric, avant-garde items — cape coats, tabi boots, culottes, architectural bags, mohair knits, draped pieces. Monochrome or muted palette.
+RETRO_LUXE: vintage-inspired, rich-texture items — corduroy, tweed, velvet, shearling, flared jeans, platform shoes, saddle bags, pearl jewelry. Warm earthy palette (burgundy/camel/brown).
+SPORT_MODERN: athletic, technical, utilitarian items — hoodies, joggers, puffer jackets, sneakers, track pants, gym bags, sports bras, technical fabrics. Functional aesthetic.
+CREATIVE_LAYERED: eclectic, expressive items — band tees, combat boots, cargo pants, denim jackets, chain bags, layering pieces. Mixing textures/styles. Bold accent colors.
+
+━━━ FORMALITY & WARMTH SCALES ━━━
+formality (1-5 integer):
+  1 = athleisure/loungewear: sports bra, leggings, joggers, hoodie, slides
+  2 = casual: t-shirt, jeans, sneakers, casual dress, sweatshirt
+  3 = smart-casual: chinos, blouse, polo, loafer, casual blazer, midi dress
+  4 = business-casual: blazer, dress shirt, trousers, heels, structured bag
+  5 = formal/evening: suit, tuxedo, evening gown, formal shoes, luxury accessories
+
+warmth (1-5 integer):
+  1 = very light: sleeveless tops, tanks, shorts, sandals, lightweight linen
+  2 = light: t-shirts, thin shirts, light blouses, lightweight trousers
+  3 = medium: sweatshirts, chinos, denim, light mid-layers, sneakers
+  4 = warm: sweaters, cardigans, jackets, wool coats, boots
+  5 = very warm: puffer coats, heavy wool coats, sherpa, down jackets, heavy knitwear
+
+body_type array MUST include "${body_type || "regular"}"
+Return ONLY the JSON object, no markdown, no explanation`;
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -675,7 +784,7 @@ Final rules:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
+          generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
         }),
       }
     );
