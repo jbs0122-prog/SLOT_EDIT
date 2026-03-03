@@ -656,34 +656,37 @@ VIBE-SPECIFIC ITEM REFERENCE (~20 items per slot from all 3 Look variants):
 ${vibeItemPool}
 
 INSTRUCTIONS:
-Generate one Amazon search keyword per sub-category. Each keyword should:
+Generate THREE Amazon search keywords per sub-category — one for each Look variant (A, B, C). This gives wide product variety:
+- keyword_a: inspired by Look A (e.g., core/clean aesthetic of the vibe)
+- keyword_b: inspired by Look B (slightly different mood/formality)
+- keyword_c: inspired by Look C (more experimental or edge-leaning)
+
+Each keyword should:
 1. Always start with "${genderLabel}" or "${genderLabel}'s"
 2. Reflect the style vibe ("${vibeLabel}") through descriptive words, trend terms, aesthetic references, or specific style names — NOT by repeating the same adjective in every keyword
-3. Reference the VIBE-SPECIFIC ITEM REFERENCE above — use specific garment names, details, and vocabulary from the item pool to make keywords more targeted
+3. Reference the VIBE-SPECIFIC ITEM REFERENCE above — use specific garment names, details, and vocabulary from the item pool
 4. Use colors from the VIBE DNA COLOR PALETTE — prefer primary/secondary colors, use accent colors sparingly
-5. Use materials from VIBE DNA MATERIAL PREFERENCES where relevant — also use Look-specific materials (e.g., Look A might prefer "fine wool, gabardine" while Look C prefers "nylon, mesh")
+5. Use materials from VIBE DNA MATERIAL PREFERENCES — vary materials between keyword_a / b / c for each sub-category
 6. Consider the SILHOUETTE × BODY TYPE guidance for fit terms
 7. Follow the TONAL STRATEGY when combining color descriptors
-8. Consider the season (${seasonLabel}) — use season-appropriate fabrics, weights, or styling cues naturally where relevant
-9. For tops/bottoms/outerwear, incorporate a fit word that suits the ${body_type || "regular"} body type — but vary which fit word you pick from the recommended list
+8. Consider the season (${seasonLabel}) — use season-appropriate fabrics, weights, or styling cues
+9. For tops/bottoms/outerwear, incorporate a fit word that suits the ${body_type || "regular"} body type
 10. Be 3-6 words long
-11. Sound like something a real shopper would search — natural, specific, and varied
-12. DISTRIBUTE keywords across all 3 Look variants — roughly 1/3 per Look mood${outfit_context ? `
-13. OUTFIT HARMONY: The outfit already contains items with specific colors/materials. Generate keywords for items that would COMPLEMENT the existing outfit — harmonize colors and create texture contrast` : ""}
+11. Sound like something a real shopper would search — natural, specific, and varied${outfit_context ? `
+12. OUTFIT HARMONY: Generate keywords for items that COMPLEMENT the existing outfit — harmonize colors and create texture contrast` : ""}
 
 DIVERSITY RULES (critical):
-- Do NOT use the same adjective or descriptor more than twice across all keywords
-- Mix up keyword structures: some can lead with fabric, some with style, some with fit, some with color mood
+- The 3 keywords for the same sub-category MUST differ meaningfully: different color, material, style reference, or fit angle
+- Do NOT use the same adjective or descriptor more than 3 times across ALL keywords total
+- Mix keyword structures: some lead with fabric, some with style, some with fit, some with color mood
 - Use specific fashion vocabulary: texture names, garment details, style subcultures, color tones
-- Think about what makes each sub-category item unique within the "${vibeLabel}" aesthetic
 - Avoid formulaic patterns — each keyword should feel like a different person searching
-- Distribute materials across the 3 Look variants (e.g., Look A's "cashmere, silk" vs Look C's "nylon, mesh")
 
-OUTPUT: Return ONLY a valid JSON object with this exact structure:
+OUTPUT: Return ONLY a valid JSON object. Each sub-category value must be an ARRAY of 3 keyword strings:
 ${JSON.stringify(
   Object.fromEntries(filteredCategoryDefs.map(cat => [
     cat.key,
-    Object.fromEntries(cat.subCategories.map(s => [s, ""]))
+    Object.fromEntries(cat.subCategories.map(s => [s, ["", "", ""]]))
   ])),
   null, 2
 )}
@@ -743,9 +746,17 @@ Fill every empty string with a keyword. Return only JSON, nothing else.`;
       const catData = parsed[cat.key];
       let kws: string[] = [];
       if (catData && !Array.isArray(catData) && typeof catData === "object") {
-        kws = cat.subCategories.map(sub => (catData as Record<string, string>)[sub]).filter(Boolean);
+        for (const sub of cat.subCategories) {
+          const val = (catData as Record<string, string | string[]>)[sub];
+          if (!val) continue;
+          if (Array.isArray(val)) {
+            kws.push(...val.filter(Boolean));
+          } else if (typeof val === "string" && val) {
+            kws.push(val);
+          }
+        }
       } else if (Array.isArray(catData)) {
-        kws = catData.filter(Boolean);
+        kws = (catData as string[]).filter(Boolean);
       }
       categories[cat.key] = kws;
       allKeywords.push(...kws);
