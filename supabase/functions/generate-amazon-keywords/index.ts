@@ -427,11 +427,11 @@ ${dnaBlock}
 LOOK VARIANTS (A = core aesthetic, B = adjacent mood, C = edge/experimental):
 ${looksBlock}
 
-TASK: For each category below, generate exactly 3 Amazon search keywords — one inspired by each Look (A, B, C).
+TASK: For each category below, generate exactly 6 Amazon search keywords — 2 inspired by each Look (A, B, C), picking different specific item types within each Look.
 Each keyword must:
 1. Start with "${genderLabel}" or "${genderLabel}'s"
 2. Be 3–6 words long
-3. Reference a SPECIFIC item type from that Look's reference items (pick different item types per look)
+3. Reference a SPECIFIC item type from that Look's reference items (pick different item types per look; the 2 keywords from the same Look must reference different items)
 4. Include a color from the vibe palette OR a material from that Look
 5. Include a fit word when relevant (e.g., oversized, slim, wide-leg)
 6. Sound like a real Amazon search query
@@ -441,11 +441,11 @@ ${activeCats}
 
 OUTPUT: Return ONLY valid JSON — no markdown, no comments:
 {
-  "outer": ["women's keyword A", "women's keyword B", "women's keyword C"],
-  "top": ["...", "...", "..."],
+  "outer": ["women's keyword A1", "women's keyword A2", "women's keyword B1", "women's keyword B2", "women's keyword C1", "women's keyword C2"],
+  "top": ["...", "...", "...", "...", "...", "..."],
   ...
 }
-Include every category listed above. Each value is an array of exactly 3 strings.`;
+Include every category listed above. Each value is an array of exactly 6 strings.`;
 
     let geminiRes: Response | null = null;
     let lastErrText = "";
