@@ -3,6 +3,7 @@ import {
   Zap, Play, CheckCircle2, XCircle, Loader2,
   ChevronDown, ChevronRight, Package, ShoppingBag, Shirt,
   Sparkles, Clock, RefreshCw, ExternalLink, Check, X,
+  BarChart3, ThumbsUp, ThumbsDown,
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
@@ -27,9 +28,20 @@ interface OutfitCandidateItem {
   price?: number;
 }
 
+interface ScoreBreakdown {
+  tonalHarmony: number;
+  formalityCoherence: number;
+  materialCompat: number;
+  vibeMatch: number;
+  seasonFit: number;
+  colorDepth: number;
+}
+
 interface OutfitCandidate {
   outfitId: string;
   items: OutfitCandidateItem[];
+  matchScore?: number;
+  scoreBreakdown?: ScoreBreakdown;
 }
 
 interface PipelineResult {
@@ -64,11 +76,11 @@ const VIBES: { key: Vibe; label: string; desc: string }[] = [
 ];
 
 const STEP_META: Record<string, { icon: React.ReactNode; label: string }> = {
-  keywords: { icon: <Sparkles className="w-4 h-4" />, label: 'AI Keywords' },
-  search:   { icon: <ShoppingBag className="w-4 h-4" />, label: 'Amazon Search' },
-  register: { icon: <Package className="w-4 h-4" />, label: 'Register Products' },
+  keywords: { icon: <Sparkles className="w-4 h-4" />, label: 'Rule Keywords' },
+  search:   { icon: <ShoppingBag className="w-4 h-4" />, label: 'Filtered Search' },
+  register: { icon: <Package className="w-4 h-4" />, label: 'Analyze & Register' },
   nobg:     { icon: <Shirt className="w-4 h-4" />, label: 'Background Removal' },
-  outfits:  { icon: <Sparkles className="w-4 h-4" />, label: 'Outfit Generation' },
+  outfits:  { icon: <BarChart3 className="w-4 h-4" />, label: 'Match Engine' },
 };
 
 const STATUS_COLOR: Record<EventStatus, string> = {
@@ -138,59 +150,108 @@ function StepIndicator({ step, phase }: { step: string; phase: EventStatus | 'id
   );
 }
 
+const SCORE_LABELS: Record<string, string> = {
+  tonalHarmony: 'Tonal',
+  formalityCoherence: 'Formal',
+  materialCompat: 'Material',
+  vibeMatch: 'Vibe',
+  seasonFit: 'Season',
+  colorDepth: 'Color',
+};
+
+function scoreColor(val: number): string {
+  if (val >= 80) return 'bg-emerald-500';
+  if (val >= 60) return 'bg-sky-500';
+  if (val >= 40) return 'bg-amber-500';
+  return 'bg-red-500';
+}
+
 function OutfitCandidateCard({ candidate, index, selected, onToggle }: {
   candidate: OutfitCandidate; index: number; selected: boolean; onToggle: () => void;
 }) {
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const essentials = candidate.items.filter(i => ['top', 'bottom', 'shoes'].includes(i.slot));
   const optionals = candidate.items.filter(i => !['top', 'bottom', 'shoes'].includes(i.slot));
+  const bd = candidate.scoreBreakdown;
   return (
-    <div onClick={onToggle} className={`relative cursor-pointer rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
+    <div className={`relative rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
       selected ? 'border-emerald-500 bg-emerald-500/8 shadow-lg shadow-emerald-500/10' : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/6'
     }`}>
-      <div className={`absolute top-3 right-3 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-        selected ? 'bg-emerald-500 border-emerald-500' : 'bg-transparent border-white/30'
-      }`}>
-        {selected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
-      </div>
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xs font-bold text-zinc-300">Outfit {index + 1}</span>
-          {optionals.length > 0 && (
-            <span className="text-[10px] text-zinc-500 bg-white/6 px-2 py-0.5 rounded-full">+{optionals.length} 추가</span>
-          )}
+      <div onClick={onToggle} className="cursor-pointer">
+        <div className={`absolute top-3 right-3 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+          selected ? 'bg-emerald-500 border-emerald-500' : 'bg-transparent border-white/30'
+        }`}>
+          {selected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
         </div>
-        <div className="grid grid-cols-3 gap-1.5 mb-2">
-          {essentials.map((item) => (
-            <div key={item.slot} className="flex flex-col gap-1">
-              <div className="aspect-square bg-zinc-800 rounded-lg overflow-hidden">
-                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain p-1"
-                  onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100?text=No+Img'; }} />
-              </div>
-              <span className="text-[9px] text-zinc-500 text-center truncate">{SLOT_LABEL[item.slot] || item.slot}</span>
-            </div>
-          ))}
-        </div>
-        {optionals.length > 0 && (
-          <div className="flex gap-1.5 mt-1">
-            {optionals.map((item) => (
-              <div key={item.slot} className="flex flex-col gap-0.5 flex-1">
-                <div className="aspect-square bg-zinc-800/60 rounded-md overflow-hidden">
+        <div className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-bold text-zinc-300">Outfit {index + 1}</span>
+            {candidate.matchScore !== undefined && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                candidate.matchScore >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
+                candidate.matchScore >= 50 ? 'bg-sky-500/20 text-sky-400' :
+                'bg-amber-500/20 text-amber-400'
+              }`}>{candidate.matchScore}pt</span>
+            )}
+            {optionals.length > 0 && (
+              <span className="text-[10px] text-zinc-500 bg-white/6 px-2 py-0.5 rounded-full">+{optionals.length}</span>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 mb-2">
+            {essentials.map((item) => (
+              <div key={item.slot} className="flex flex-col gap-1">
+                <div className="aspect-square bg-zinc-800 rounded-lg overflow-hidden">
                   <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain p-1"
-                    onError={(e) => { e.currentTarget.src = 'https://placehold.co/60x60?text=?'; }} />
+                    onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100?text=No+Img'; }} />
                 </div>
-                <span className="text-[8px] text-zinc-600 text-center truncate">{SLOT_LABEL[item.slot] || item.slot}</span>
+                <span className="text-[9px] text-zinc-500 text-center truncate">{SLOT_LABEL[item.slot] || item.slot}</span>
               </div>
             ))}
           </div>
-        )}
-        {candidate.items.some(i => i.price) && (
-          <div className="mt-2.5 pt-2 border-t border-white/6">
-            <span className="text-[10px] text-zinc-400">
-              합계: <span className="text-white font-semibold">${candidate.items.reduce((sum, i) => sum + (i.price || 0), 0)}</span>
-            </span>
-          </div>
-        )}
+          {optionals.length > 0 && (
+            <div className="flex gap-1.5 mt-1">
+              {optionals.map((item) => (
+                <div key={item.slot} className="flex flex-col gap-0.5 flex-1">
+                  <div className="aspect-square bg-zinc-800/60 rounded-md overflow-hidden">
+                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain p-1"
+                      onError={(e) => { e.currentTarget.src = 'https://placehold.co/60x60?text=?'; }} />
+                  </div>
+                  <span className="text-[8px] text-zinc-600 text-center truncate">{SLOT_LABEL[item.slot] || item.slot}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+      {bd && (
+        <div className="px-4 pb-3">
+          <button onClick={(e) => { e.stopPropagation(); setShowBreakdown(!showBreakdown); }}
+            className="w-full flex items-center justify-between py-1.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors">
+            <span className="flex items-center gap-1"><BarChart3 className="w-3 h-3" />Score Detail</span>
+            {showBreakdown ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          </button>
+          {showBreakdown && (
+            <div className="mt-1.5 space-y-1.5">
+              {Object.entries(bd).map(([key, val]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-[9px] text-zinc-500 w-12 shrink-0">{SCORE_LABELS[key] || key}</span>
+                  <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${scoreColor(val)}`} style={{ width: `${val}%` }} />
+                  </div>
+                  <span className="text-[9px] text-zinc-400 font-mono w-6 text-right">{val}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {candidate.items.some(i => i.price) && (
+        <div className="px-4 pb-3 pt-1 border-t border-white/6">
+          <span className="text-[10px] text-zinc-400">
+            Total: <span className="text-white font-semibold">${candidate.items.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(0)}</span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -268,10 +329,37 @@ export default function AdminAutoPipeline() {
     try {
       const selectedIds = Array.from(selectedOutfitIds);
       const rejectedIds = (result?.outfitIds || []).filter(id => !selectedOutfitIds.has(id));
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      let authHeader = `Bearer ${anonKey}`;
+      try {
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        if (authSession?.access_token) authHeader = `Bearer ${authSession.access_token}`;
+      } catch { /**/ }
+      const feedbackHeaders = { 'Authorization': authHeader, 'apikey': anonKey, 'Content-Type': 'application/json' };
+
       await Promise.all([
         supabase.from('outfits').update({ status: 'pending_render' }).in('id', selectedIds),
         rejectedIds.length > 0 ? supabase.from('outfits').delete().in('id', rejectedIds) : Promise.resolve(),
       ]);
+
+      const candidates = result?.outfitCandidates || [];
+      const feedbackPromises = candidates.map(c =>
+        fetch(`${supabaseUrl}/functions/v1/auto-pipeline`, {
+          method: 'POST', headers: feedbackHeaders,
+          body: JSON.stringify({
+            action: 'submit-feedback',
+            batchId: result?.batchId,
+            outfitId: c.outfitId,
+            accepted: selectedIds.includes(c.outfitId),
+            vibe, season,
+            matchScore: c.matchScore,
+          }),
+        }).catch(() => {})
+      );
+      await Promise.allSettled(feedbackPromises);
+
       setSavedCount(selectedIds.length);
       setSelectedOutfitIds(new Set());
       setResult(prev => prev ? { ...prev, outfitCandidates: undefined } : prev);
@@ -318,9 +406,9 @@ export default function AdminAutoPipeline() {
     let registeredCount = 0;
 
     try {
-      // ── STEP 1: Generate keywords ─────────────────────────────────────────
-      addEvent(makeEvent('keywords', 'start', 'Generating style keywords via Gemini AI...'));
-      const kwRes = await fetch(`${apiBase}/generate-amazon-keywords`, {
+      // ── STEP 1: Generate keywords (rule-based, zero Gemini) ────────────────
+      addEvent(makeEvent('keywords', 'start', 'Generating keywords via rule engine (zero tokens)...'));
+      const kwRes = await fetch(`${apiBase}/auto-generate-keywords`, {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ gender, body_type: bodyType, vibe, season }),
       });
@@ -328,13 +416,12 @@ export default function AdminAutoPipeline() {
       const kwData = await kwRes.json();
       const categories: Record<string, string[]> = kwData.categories || {};
       const totalKw = Object.values(categories).reduce((a, b) => a + b.length, 0);
-      addEvent(makeEvent('keywords', 'success', `Generated ${totalKw} keywords across ${Object.keys(categories).length} categories`));
+      addEvent(makeEvent('keywords', 'success', `${totalKw} keywords across ${Object.keys(categories).length} slots (source: ${kwData.source || 'rule-based'})`));
 
-      // ── STEP 2: Amazon search ─────────────────────────────────────────────
-      addEvent(makeEvent('search', 'start', 'Searching Amazon for products per slot...'));
+      // ── STEP 2: Amazon search (quality-filtered) ──────────────────────────
+      addEvent(makeEvent('search', 'start', 'Searching Amazon with quality filters (rating>=3.5, reviews>=10)...'));
       const PRIORITY_SLOTS = ['top','bottom','shoes','outer','bag','accessory','mid'];
       const MAX_KW_PER_SLOT = 6;
-      const MAX_RESULTS_PER_KW = 20;
       const genderLabel = gender === 'MALE' ? "men's" : "women's";
       const SLOT_FALLBACK: Record<string, string[]> = {
         bottom: [`${genderLabel} jeans`, `${genderLabel} trousers`],
@@ -356,28 +443,34 @@ export default function AdminAutoPipeline() {
         const candidates: any[] = [];
         for (const kw of kwToSearch) {
           try {
-            const r = await fetch(`${apiBase}/amazon-search`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ query: kw, page: 1 }) });
+            const r = await fetch(`${apiBase}/auto-amazon-search`, {
+              method: 'POST', headers: authHeaders,
+              body: JSON.stringify({ query: kw, page: 1 }),
+            });
             if (r.ok) {
               const d = await r.json();
-              for (const item of (d.results || []).slice(0, MAX_RESULTS_PER_KW)) {
+              const filtered = d.results || [];
+              for (const item of filtered) {
                 if (item.asin && !seenAsins.has(item.asin) && candidates.length < productsPerSlot) {
                   seenAsins.add(item.asin); candidates.push(item);
                 }
+              }
+              if (d.total_raw !== undefined) {
+                addEvent(makeEvent('search', 'progress', `[${slot}] "${kw}" → ${d.total_filtered}/${d.total_raw} passed filter`));
               }
             }
           } catch { /**/ }
         }
         if (candidates.length > 0) {
           slotCandidates[slot] = candidates;
-          addEvent(makeEvent('search', 'progress', `[${slot}] Found ${candidates.length} candidates`));
         }
       }
       const totalCandidates = Object.values(slotCandidates).reduce((a, b) => a + b.length, 0);
-      addEvent(makeEvent('search', 'success', `Total ${totalCandidates} candidates found`));
+      addEvent(makeEvent('search', 'success', `Total ${totalCandidates} quality-filtered candidates found`));
       if (totalCandidates === 0) throw new Error('No products found in Amazon search');
 
-      // ── STEP 3: Register products ─────────────────────────────────────────
-      addEvent(makeEvent('register', 'start', 'Analyzing and registering products...'));
+      // ── STEP 3: Register products (lightweight Gemini + rule engine) ─────
+      addEvent(makeEvent('register', 'start', 'Analyzing via lightweight Gemini (512 tokens) + rule engine...'));
       const existingAsins = new Set<string>();
       const { data: existingProducts } = await supabase.from('products').select('product_link').not('product_link', 'is', null);
       if (existingProducts) {
@@ -432,8 +525,8 @@ export default function AdminAutoPipeline() {
         addEvent(makeEvent('nobg', 'skip', 'All products already have flatlay images'));
       }
 
-      // ── STEP 5: Generate outfits ──────────────────────────────────────────
-      addEvent(makeEvent('outfits', 'start', `Generating ${outfitCount} outfit candidates...`));
+      // ── STEP 5: Generate outfits (8-dim matching engine) ────────────────
+      addEvent(makeEvent('outfits', 'start', `Assembling ${outfitCount} outfits via 8-dimension scoring engine...`));
       const outfitRes = await fetch(`${apiBase}/auto-pipeline`, {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ action: 'generate-outfits', batchId, gender, body_type: bodyType, vibe, season, outfit_count: outfitCount }),
@@ -488,7 +581,7 @@ export default function AdminAutoPipeline() {
             <h1 className="text-2xl font-bold text-white tracking-tight">Auto Pipeline</h1>
             <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-500/30">BETA</span>
           </div>
-          <p className="text-zinc-400 text-sm ml-12">키워드 생성 → 아마존 서칭 → 제품 등록 → 누끼 제거 → 코디 생성까지 한 번에</p>
+          <p className="text-zinc-400 text-sm ml-12">룰 키워드 → 품질 필터 서칭 → 경량 분석 → 누끼 제거 → 8차원 매칭 엔진</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -605,8 +698,19 @@ export default function AdminAutoPipeline() {
               <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
                 <div className="px-5 py-4 border-b border-white/8 flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-white">코디 후보 선택</h3>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">등록할 코디를 선택하세요 · {selectedOutfitIds.size}/{result!.outfitCandidates!.length} 선택됨</p>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      코디 후보 선택
+                      {result!.outfitCandidates!.some(c => c.matchScore !== undefined) && (
+                        <span className="text-[10px] font-normal text-zinc-500">
+                          avg score: {Math.round(result!.outfitCandidates!.reduce((s, c) => s + (c.matchScore || 0), 0) / result!.outfitCandidates!.length)}pt
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      <ThumbsUp className="w-3 h-3 inline mr-1" />{selectedOutfitIds.size} accept
+                      <span className="mx-1.5 text-zinc-600">|</span>
+                      <ThumbsDown className="w-3 h-3 inline mr-1" />{result!.outfitCandidates!.length - selectedOutfitIds.size} reject
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setSelectedOutfitIds(new Set(result!.outfitCandidates!.map(c => c.outfitId)))} className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/8 transition-all">전체 선택</button>
@@ -620,7 +724,7 @@ export default function AdminAutoPipeline() {
                 </div>
                 <div className="px-4 pb-4 flex items-center gap-3">
                   <button onClick={handleSaveSelected} disabled={saving || selectedOutfitIds.size === 0} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${selectedOutfitIds.size === 0 ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : saving ? 'bg-emerald-600 text-white cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-400 active:scale-[0.98]'}`}>
-                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" />저장 중...</> : <><Check className="w-4 h-4" />{selectedOutfitIds.size}개 코디 등록</>}
+                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" />저장 + 피드백 전송 중...</> : <><ThumbsUp className="w-4 h-4" />{selectedOutfitIds.size}개 등록 + 피드백 전송</>}
                   </button>
                   <button onClick={() => { const rejected = result?.outfitIds || []; if (rejected.length > 0) supabase.from('outfits').delete().in('id', rejected); setResult(prev => prev ? { ...prev, outfitCandidates: undefined } : prev); }} className="px-4 py-3 rounded-xl font-medium text-sm text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all flex items-center gap-2">
                     <X className="w-4 h-4" />전체 취소
