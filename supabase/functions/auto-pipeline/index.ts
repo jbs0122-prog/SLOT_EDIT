@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// COLOR DNA (ported from src/utils/matching/colorDna.ts)
+// COLOR DNA
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface ColorEntry {
@@ -124,7 +124,7 @@ function getColorHarmonyScore(c1: string, c2: string): number {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MATERIAL DNA (ported from src/utils/matching/itemDna.ts)
+// MATERIAL DNA
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const MATERIAL_GROUPS: Record<string, string[]> = {
@@ -165,7 +165,7 @@ function getMaterialCompatScore(g1: string, g2: string): number {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FORMALITY (ported from formalityCoherenceRule.ts)
+// FORMALITY
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const FORMALITY_BY_SUB: Record<string, number> = {
@@ -213,7 +213,121 @@ function inferStyle(p: any): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SCORING ENGINE (ported from scorer.ts + rules)
+// VIBE ITEM AFFINITY (ported from src/utils/matching/vibeAffinity.ts)
+// Fuzzy matching between product sub_category/name and vibe item pools
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const VIBE_ITEM_POOLS: Record<string, Record<string, string[]>> = {
+  ELEVATED_COOL: {
+    outer: ["oversized wool coat", "structured trench", "leather blazer", "tailored jacket", "technical bomber", "nylon windbreaker", "biker jacket", "puffer jacket", "tweed blazer", "wool peacoat", "denim jacket"],
+    top: ["high-neck knit", "poplin shirt", "silk button-down", "cashmere turtleneck", "oxford shirt", "cable-knit sweater", "graphic tee", "oversized long sleeve", "logo sweatshirt", "crew-neck sweat"],
+    bottom: ["wide-leg wool trousers", "cigarette pants", "pleated trousers", "leather pants", "straight-leg jeans", "chinos", "corduroy pants", "cargo pants", "parachute pants", "track pants", "baggy jeans"],
+    shoes: ["square-toe ankle boots", "chunky loafers", "pointed-toe flats", "chelsea boots", "derby shoes", "brogue loafers", "leather sneakers", "chunky sneakers", "high-top sneakers", "combat boots"],
+    bag: ["geometric tote", "box bag", "structured clutch", "briefcase", "satchel", "canvas tote", "chest rig", "belt bag", "tech backpack"],
+    accessory: ["silver chain necklace", "metal-frame sunglasses", "leather gloves", "minimalist watch", "bucket hat", "baseball cap", "shield sunglasses"],
+    mid: ["cashmere turtleneck", "cable-knit sweater", "oxford shirt", "argyle sweater"],
+  },
+  EFFORTLESS_NATURAL: {
+    outer: ["collarless linen coat", "robe coat", "noragi", "kimono cardigan", "wool blazer", "trench coat", "chore coat", "field jacket", "barn jacket"],
+    top: ["linen tunic", "gauze blouse", "organic cotton tee", "breton stripe tee", "cashmere crew-neck", "silk blouse", "linen shirt", "flannel shirt", "waffle henley", "chambray shirt"],
+    bottom: ["wide linen trousers", "drawstring linen pants", "culottes", "straight-leg jeans", "wide-leg trousers", "midi skirt", "vintage denim", "fatigue pants", "corduroy trousers"],
+    shoes: ["leather slides", "tabi flats", "wooden clogs", "ballet flats", "loafers", "espadrilles", "suede ankle boots", "desert boots", "moccasins", "canvas sneakers"],
+    bag: ["natural canvas tote", "woven basket bag", "soft leather tote", "mini shoulder bag", "canvas messenger", "backpack"],
+    accessory: ["wooden bead bracelet", "linen headband", "straw hat", "silk scarf", "gold hoops", "pearl studs", "leather belt", "bandana"],
+    mid: ["cashmere crew-neck", "waffle henley", "cardigan"],
+  },
+  ARTISTIC_MINIMAL: {
+    outer: ["collarless long coat", "cocoon coat", "longline blazer", "wrap coat", "asymmetric jacket", "linen duster", "draped cardigan"],
+    top: ["structured tee", "ribbed tank", "mock-neck top", "silk shell", "asymmetric knit", "pleated linen top", "cowl-neck top", "sheer mesh top", "organza blouse", "mohair knit"],
+    bottom: ["wide cropped trousers", "pleated wide pants", "maxi pencil skirt", "barrel leg pants", "wrap skirt", "hakama pants", "leather skirt", "satin wide pants"],
+    shoes: ["square-toe flats", "architectural mules", "derby shoes", "minimal sneakers", "suede tabi", "leather clog", "tabi boots", "sculptural heels"],
+    bag: ["geometric tote", "origami bag", "structured clutch", "portfolio bag", "pleated tote", "sculptural shoulder bag"],
+    accessory: ["sculptural bangle", "bold geometric earrings", "minimalist choker", "oversized sunglasses", "ceramic bead necklace", "metal cuff"],
+    mid: ["ribbed tank", "mock-neck top", "turtleneck"],
+  },
+  RETRO_LUXE: {
+    outer: ["suede fringe jacket", "velvet blazer", "crochet cardigan", "tweed blazer", "camel overcoat", "polo coat", "corduroy blazer", "faux fur coat", "gold button blazer"],
+    top: ["peasant blouse", "embroidered tunic", "lace top", "cashmere turtleneck", "cable-knit sweater", "silk blouse", "oxford shirt", "satin blouse", "velvet halter", "corset top"],
+    bottom: ["flared jeans", "maxi boho skirt", "tiered skirt", "wool trousers", "riding pants", "corduroy pants", "plaid skirt", "velvet trousers", "satin midi skirt", "leather pants"],
+    shoes: ["platform sandals", "suede knee boots", "wedge espadrilles", "leather loafers", "penny loafers", "riding boots", "oxford shoes", "kitten heel mules", "strappy sandals", "velvet pumps"],
+    bag: ["tapestry bag", "fringe suede bag", "wicker bag", "frame bag", "structured handbag", "leather satchel", "satin clutch", "metallic evening bag"],
+    accessory: ["headscarf", "layered necklace", "turquoise jewelry", "pearl earrings", "gold signet ring", "silk scarf", "chandelier earrings", "statement necklace"],
+    mid: ["cable-knit sweater", "cashmere turtleneck", "crochet vest"],
+  },
+  SPORT_MODERN: {
+    outer: ["gore-tex shell", "technical anorak", "fleece jacket", "insulated parka", "zip-up hoodie", "lightweight bomber", "cropped track jacket", "tactical jacket", "nylon field jacket"],
+    top: ["merino base layer", "half-zip fleece", "technical quarter-zip", "performance tee", "sports bra", "fitted tank", "ribbed crop tee", "seamless top", "mesh layer top", "compression long sleeve"],
+    bottom: ["hiking pants", "convertible pants", "trail shorts", "high-waist leggings", "bike shorts", "yoga pants", "wide-leg sweatpants", "cargo trousers", "tactical pants", "jogger cargo"],
+    shoes: ["trail running shoes", "hiking boots", "retro running shoes", "platform sneakers", "court shoes", "training shoes", "chunky platform sneakers", "tactical boots", "tech runners"],
+    bag: ["hiking backpack", "hydration pack", "utility sling", "gym tote", "canvas duffel", "mini backpack", "chest harness bag", "tactical sling"],
+    accessory: ["bucket hat", "sun visor", "sports visor", "minimalist watch", "sport headband", "smart watch", "tactical cap"],
+    mid: ["half-zip fleece", "technical quarter-zip", "ribbed crop tee"],
+  },
+  CREATIVE_LAYERED: {
+    outer: ["oversized flannel shirt", "leather biker jacket", "denim jacket", "velvet blazer", "tapestry coat", "patchwork denim jacket", "chain-detail blazer"],
+    top: ["band tee", "ripped tee", "mesh top", "graphic tee", "floral print blouse", "lace top", "vintage graphic tee", "crochet vest", "corset top", "fishnet top"],
+    bottom: ["ripped jeans", "plaid mini skirt", "cargo pants", "baggy jeans", "corduroy wide-leg", "velvet midi skirt", "patchwork jeans", "leather pants", "tartan trousers"],
+    shoes: ["combat boots", "chunky platform boots", "mary janes", "vintage loafers", "platform boots", "platform combat boots", "studded ankle boots", "creepers"],
+    bag: ["canvas backpack", "guitar strap bag", "tapestry bag", "vintage frame bag", "studded backpack", "chain shoulder bag"],
+    accessory: ["choker necklace", "safety pin set", "layered chain necklace", "brooch collection", "oversized retro glasses", "spike choker", "chain belt"],
+    mid: ["crochet vest", "denim jacket", "flannel shirt"],
+  },
+};
+
+function normalizeText(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+}
+
+function fuzzyMatchScore(productTerms: string[], itemPool: string[]): number {
+  let bestScore = 0;
+  const normalizedPool = itemPool.map(normalizeText);
+
+  for (const rawTerm of productTerms) {
+    const term = normalizeText(rawTerm);
+    if (!term) continue;
+
+    for (const poolItem of normalizedPool) {
+      if (term === poolItem) { bestScore = Math.max(bestScore, 1.0); continue; }
+      if (term.includes(poolItem) || poolItem.includes(term)) {
+        const shorter = term.length < poolItem.length ? term : poolItem;
+        const longer = term.length >= poolItem.length ? term : poolItem;
+        bestScore = Math.max(bestScore, 0.6 + (shorter.length / longer.length) * 0.3);
+        continue;
+      }
+      const termWords = term.split(/\s+/).filter(w => w.length >= 3);
+      const poolWords = poolItem.split(/\s+/).filter(w => w.length >= 3);
+      let matchedWords = 0;
+      for (const tw of termWords) {
+        for (const pw of poolWords) {
+          if (tw === pw || tw.includes(pw) || pw.includes(tw)) { matchedWords++; break; }
+        }
+      }
+      if (matchedWords > 0) {
+        const total = Math.max(termWords.length, poolWords.length, 1);
+        bestScore = Math.max(bestScore, 0.3 + (matchedWords / total) * 0.5);
+      }
+    }
+  }
+
+  return bestScore;
+}
+
+function getVibeItemAffinity(product: any, vibe: string): number {
+  const pool = VIBE_ITEM_POOLS[vibe];
+  if (!pool) return 0;
+  const category = product.category as string;
+  const slotKey = category === "mid" ? "top" : category;
+  const itemPool = pool[slotKey];
+  if (!itemPool?.length) return 0;
+  const terms: string[] = [];
+  if (product.sub_category) terms.push(product.sub_category);
+  if (product.name) terms.push(product.name);
+  if (!terms.length) return 0;
+  return fuzzyMatchScore(terms, itemPool);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCORING ENGINE (8 dimensions + Pattern Balance + Accessory Harmony)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function scoreTonalHarmony(items: Record<string, any>): number {
@@ -286,13 +400,22 @@ function scoreMaterialCompat(items: Record<string, any>): number {
   return Math.max(0, Math.min(100, Math.round((compatCount > 0 ? compatTotal / compatCount : 0.5) * 100)));
 }
 
+// [Issue 2] Vibe Match now uses fuzzy affinity instead of simple array includes
 function scoreVibeMatch(items: Record<string, any>, vibe: string): number {
   const all = Object.values(items).filter(Boolean);
   if (all.length === 0) return 50;
 
-  const matches = all.filter((p: any) => Array.isArray(p.vibe) && p.vibe.includes(vibe)).length;
-  const matchRatio = matches / all.length;
-  return Math.max(0, Math.min(100, Math.round(50 + matchRatio * 50)));
+  let totalAffinity = 0;
+  for (const p of all) {
+    const affinity = getVibeItemAffinity(p, vibe);
+    if (affinity >= 0.8) totalAffinity += 1.0;
+    else if (affinity >= 0.5) totalAffinity += 0.75;
+    else if (affinity >= 0.3) totalAffinity += 0.5;
+    else if (Array.isArray(p.vibe) && p.vibe.includes(vibe)) totalAffinity += 0.4;
+    else totalAffinity += 0.1;
+  }
+  const avgAffinity = totalAffinity / all.length;
+  return Math.max(0, Math.min(100, Math.round(30 + avgAffinity * 70)));
 }
 
 function scoreSeasonFit(items: Record<string, any>, season: string): number {
@@ -361,17 +484,6 @@ function scoreColorDepth(items: Record<string, any>): number {
   return Math.max(0, Math.min(100, score));
 }
 
-const SCORE_WEIGHTS = {
-  tonalHarmony: 0.18,
-  formalityCoherence: 0.14,
-  materialCompat: 0.10,
-  vibeMatch: 0.15,
-  seasonFit: 0.15,
-  warmthFit: 0.10,
-  colorDepth: 0.10,
-  proportionBalance: 0.08,
-};
-
 function scoreProportionBalance(items: Record<string, any>): number {
   const top = items.top, bottom = items.bottom;
   if (!top || !bottom) return 50;
@@ -405,7 +517,75 @@ function scoreProportionBalance(items: Record<string, any>): number {
   return Math.max(0, Math.min(100, score));
 }
 
-function scoreComposition(items: Record<string, any>, vibe: string, season: string): number {
+// [Issue 3] Pattern Balance: penalizes clashing prints
+function scorePatternBalance(items: Record<string, any>): number {
+  const coreKeys = ["outer", "top", "bottom"];
+  const patterns = coreKeys.map(k => items[k]).filter(Boolean)
+    .map((p: any) => (p.pattern || "solid").toLowerCase());
+
+  if (patterns.length < 2) return 75;
+
+  const LOUD = new Set(["stripe", "check", "graphic", "print"]);
+  const loudPatterns = patterns.filter(p => LOUD.has(p));
+  const uniqueLoud = new Set(loudPatterns);
+
+  let score = 80;
+  if (loudPatterns.length >= 3) score -= 30;
+  else if (loudPatterns.length === 2 && uniqueLoud.size === 2) score -= 20;
+  else if (loudPatterns.length === 2 && uniqueLoud.size === 1) score -= 10;
+  else if (loudPatterns.length === 1) score += 10;
+
+  if (loudPatterns.includes("stripe") && loudPatterns.includes("check")) score -= 15;
+  if (loudPatterns.includes("print") && loudPatterns.length > 1) score -= 10;
+
+  return Math.max(0, Math.min(100, score));
+}
+
+// [Issue 3] Accessory Harmony: bag/accessory should harmonize with core palette
+function scoreAccessoryHarmony(items: Record<string, any>): number {
+  const coreFamilies = ["top", "bottom", "shoes"]
+    .map(k => items[k]).filter(Boolean)
+    .map((p: any) => resolveColorFamily(p.color || "", p.color_family)).filter(Boolean);
+
+  if (coreFamilies.length === 0) return 75;
+
+  const accItems = ["bag", "accessory"].map(k => items[k]).filter(Boolean);
+  if (accItems.length === 0) return 75;
+
+  let totalHarmony = 0, count = 0;
+  for (const acc of accItems) {
+    const accFamily = resolveColorFamily(acc.color || "", acc.color_family);
+    if (!accFamily) continue;
+    let best = 0;
+    for (const cf of coreFamilies) {
+      best = Math.max(best, getColorHarmonyScore(accFamily, cf));
+    }
+    totalHarmony += best;
+    count++;
+  }
+
+  if (count === 0) return 75;
+  return Math.max(0, Math.min(100, Math.round(totalHarmony / count)));
+}
+
+// [Issue 5] Dynamic maxProductRepeat: scales with productsPerSlot via context
+const SCORE_WEIGHTS = {
+  tonalHarmony: 0.15,
+  formalityCoherence: 0.12,
+  materialCompat: 0.09,
+  vibeMatch: 0.16,
+  seasonFit: 0.13,
+  warmthFit: 0.09,
+  colorDepth: 0.08,
+  proportionBalance: 0.07,
+  patternBalance: 0.07,
+  accessoryHarmony: 0.04,
+};
+
+function scoreComposition(items: Record<string, any>, vibe: string, season: string): {
+  total: number;
+  breakdown: Record<string, number>;
+} {
   const breakdown = {
     tonalHarmony: scoreTonalHarmony(items),
     formalityCoherence: scoreFormalityCoherence(items),
@@ -415,6 +595,8 @@ function scoreComposition(items: Record<string, any>, vibe: string, season: stri
     warmthFit: scoreWarmthFit(items, season),
     colorDepth: scoreColorDepth(items),
     proportionBalance: scoreProportionBalance(items),
+    patternBalance: scorePatternBalance(items),
+    accessoryHarmony: scoreAccessoryHarmony(items),
   };
 
   let total = 0;
@@ -422,7 +604,7 @@ function scoreComposition(items: Record<string, any>, vibe: string, season: stri
     total += (breakdown[key as keyof typeof breakdown] || 50) * weight;
   }
 
-  return Math.round(total);
+  return { total: Math.round(total), breakdown };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -450,6 +632,7 @@ function isSeasonAppropriateOuter(product: any, season: string): boolean {
 interface ScoredOutfit {
   items: Record<string, any>;
   score: number;
+  breakdown: Record<string, number>;
 }
 
 function assembleAndScore(
@@ -504,9 +687,7 @@ function assembleAndScore(
           const items: Record<string, any> = { ...coreItems };
           if (outer) items.outer = outer;
 
-          const midPool = bySlot["mid"].filter((m: any) =>
-            quickColorCheck(m, coreFamilies)
-          );
+          const midPool = bySlot["mid"].filter((m: any) => quickColorCheck(m, coreFamilies));
           if (midPool.length > 0 && !items.outer) items.mid = midPool[0];
 
           if (bySlot["bag"]?.length) {
@@ -528,10 +709,10 @@ function assembleAndScore(
             .filter(c => c === "black").length;
           if (blackCount >= 4 && allItems.length >= 5) continue;
 
-          const score = scoreComposition(items, vibe, season);
+          const { total, breakdown } = scoreComposition(items, vibe, season);
 
-          if (score >= 40) {
-            combos.push({ items, score });
+          if (total >= 40) {
+            combos.push({ items, score: total, breakdown });
           }
 
           if (combos.length >= MAX_COMBOS) break;
@@ -548,6 +729,7 @@ function assembleAndScore(
   return selectDiverseOutfits(combos, outfitCount);
 }
 
+// [Issue 5] Dynamic maxProductRepeat: based on available products per slot
 function selectDiverseOutfits(scored: ScoredOutfit[], topN: number): ScoredOutfit[] {
   if (scored.length <= topN) return scored;
 
@@ -555,7 +737,9 @@ function selectDiverseOutfits(scored: ScoredOutfit[], topN: number): ScoredOutfi
   const selected: ScoredOutfit[] = [];
   const productCounts = new Map<string, number>();
   const paletteCounts = new Map<string, number>();
-  const maxProductRepeat = 1;
+
+  // Dynamic: allow repeat if pool is limited relative to target
+  const maxProductRepeat = pool.length < topN * 3 ? 2 : 1;
   const maxPaletteRepeat = Math.max(1, Math.ceil(topN / 4));
 
   const getAllIds = (items: Record<string, any>) =>
@@ -588,7 +772,6 @@ function selectDiverseOutfits(scored: ScoredOutfit[], topN: number): ScoredOutfi
 
   trySelect(true);
   if (selected.length < topN) trySelect(false);
-
   if (selected.length < topN) {
     for (const candidate of pool) {
       if (selected.length >= topN) break;
@@ -665,12 +848,12 @@ Deno.serve(async (req: Request) => {
       const outfitIds: string[] = [];
       const outfitCandidates: any[] = [];
 
-      for (const { items: outfitItems, score } of selectedCombos) {
+      for (const { items: outfitItems, score, breakdown } of selectedCombos) {
         const { data: newOutfit, error: outfitErr } = await adminClient.from("outfits").insert({
           gender, body_type, vibe,
           season: season ? [season] : [],
           status: "draft", tpo: "",
-          "AI insight": `Auto-pipeline (v2) | Score: ${score}`,
+          "AI insight": `Auto-pipeline (v3) | Score: ${score}`,
           image_url_flatlay: "", image_url_on_model: "",
           flatlay_pins: [], on_model_pins: [], prompt_flatlay: "",
         }).select().single();
@@ -697,12 +880,14 @@ Deno.serve(async (req: Request) => {
           matchScore: score,
           items: candidateItems,
           scoreBreakdown: {
-            tonalHarmony: scoreTonalHarmony(outfitItems),
-            formalityCoherence: scoreFormalityCoherence(outfitItems),
-            materialCompat: scoreMaterialCompat(outfitItems),
-            vibeMatch: scoreVibeMatch(outfitItems, vibe),
-            seasonFit: scoreSeasonFit(outfitItems, season || "all"),
-            colorDepth: scoreColorDepth(outfitItems),
+            tonalHarmony: breakdown.tonalHarmony,
+            formalityCoherence: breakdown.formalityCoherence,
+            materialCompat: breakdown.materialCompat,
+            vibeMatch: breakdown.vibeMatch,
+            seasonFit: breakdown.seasonFit,
+            colorDepth: breakdown.colorDepth,
+            patternBalance: breakdown.patternBalance,
+            accessoryHarmony: breakdown.accessoryHarmony,
           },
         });
       }
@@ -860,8 +1045,9 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "submit-feedback") {
-      const { batchId, outfitId, accepted, vibe: feedbackVibe, season: feedbackSeason, matchScore } = body as {
-        batchId: string; outfitId: string; accepted: boolean; vibe: string; season: string; matchScore?: number;
+      const { batchId, outfitId, accepted, vibe: feedbackVibe, season: feedbackSeason, matchScore, keywordsUsed } = body as {
+        batchId: string; outfitId: string; accepted: boolean; vibe: string; season: string;
+        matchScore?: number; keywordsUsed?: Array<{ keyword: string; slot: string }>;
       };
 
       const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -895,9 +1081,10 @@ Deno.serve(async (req: Request) => {
               .maybeSingle();
 
             if (existing) {
+              const newCount = existing.usage_count + 1;
               await adminClient
                 .from("vibe_item_expansions")
-                .update({ usage_count: existing.usage_count + 1, score: Math.min(1.0, (existing.usage_count + 1) * 0.1) })
+                .update({ usage_count: newCount, score: Math.min(1.0, newCount * 0.1) })
                 .eq("id", existing.id);
             } else {
               await adminClient.from("vibe_item_expansions").insert({
@@ -907,6 +1094,84 @@ Deno.serve(async (req: Request) => {
                 source_batch: batchId,
                 score: 0.1,
                 usage_count: 1,
+              });
+            }
+          }
+        }
+
+        // [Issue 1] Track keyword performance: record which keywords led to accepted outfits
+        if (keywordsUsed && keywordsUsed.length > 0) {
+          for (const { keyword, slot } of keywordsUsed) {
+            if (!keyword || !slot) continue;
+
+            const vibeKey = feedbackVibe.toLowerCase().replace(/\s+/g, "_");
+            const { data: existingKw } = await adminClient
+              .from("keyword_performance")
+              .select("id, accepted_count, total_count, score")
+              .eq("keyword", keyword)
+              .eq("slot", slot)
+              .eq("vibe", vibeKey)
+              .eq("season", (feedbackSeason || "").toLowerCase())
+              .maybeSingle();
+
+            if (existingKw) {
+              const newAccepted = existingKw.accepted_count + 1;
+              const newTotal = existingKw.total_count + 1;
+              await adminClient
+                .from("keyword_performance")
+                .update({
+                  accepted_count: newAccepted,
+                  total_count: newTotal,
+                  score: newTotal > 0 ? newAccepted / newTotal : 0,
+                })
+                .eq("id", existingKw.id);
+            } else {
+              await adminClient.from("keyword_performance").insert({
+                keyword,
+                slot,
+                vibe: vibeKey,
+                season: (feedbackSeason || "").toLowerCase(),
+                accepted_count: 1,
+                total_count: 1,
+                score: 1.0,
+              });
+            }
+          }
+        }
+      } else {
+        // Track rejected outfits' keywords to decrease their score
+        if (keywordsUsed && keywordsUsed.length > 0) {
+          for (const { keyword, slot } of keywordsUsed) {
+            if (!keyword || !slot) continue;
+
+            const vibeKey = feedbackVibe.toLowerCase().replace(/\s+/g, "_");
+            const { data: existingKw } = await adminClient
+              .from("keyword_performance")
+              .select("id, accepted_count, total_count, score")
+              .eq("keyword", keyword)
+              .eq("slot", slot)
+              .eq("vibe", vibeKey)
+              .eq("season", (feedbackSeason || "").toLowerCase())
+              .maybeSingle();
+
+            if (existingKw) {
+              const newTotal = existingKw.total_count + 1;
+              await adminClient
+                .from("keyword_performance")
+                .update({
+                  total_count: newTotal,
+                  score: newTotal > 0 ? existingKw.accepted_count / newTotal : 0,
+                })
+                .eq("id", existingKw.id);
+            } else {
+              await adminClient.from("keyword_performance").insert({
+                keyword,
+                slot,
+                vibe: vibeKey,
+                season: (feedbackSeason || "").toLowerCase(),
+                accepted_count: 0,
+                total_count: 1,
+                score: 0.0,
               });
             }
           }

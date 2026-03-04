@@ -35,6 +35,8 @@ interface ScoreBreakdown {
   vibeMatch: number;
   seasonFit: number;
   colorDepth: number;
+  patternBalance?: number;
+  accessoryHarmony?: number;
 }
 
 interface OutfitCandidate {
@@ -157,6 +159,8 @@ const SCORE_LABELS: Record<string, string> = {
   vibeMatch: 'Vibe',
   seasonFit: 'Season',
   colorDepth: 'Color',
+  patternBalance: 'Pattern',
+  accessoryHarmony: 'Acc.Harm',
 };
 
 function scoreColor(val: number): string {
@@ -266,6 +270,11 @@ interface PipelineSession {
   savedCount: number; selectedOutfitIds: string[];
 }
 
+interface SlotKeyword {
+  keyword: string;
+  slot: string;
+}
+
 function loadSession(): Partial<PipelineSession> {
   try { const raw = localStorage.getItem(PIPELINE_SESSION_KEY); if (raw) return JSON.parse(raw); } catch { /**/ }
   return {};
@@ -286,6 +295,7 @@ export default function AdminAutoPipeline() {
   const [productsPerSlot, setProductsPerSlot] = useState(session.productsPerSlot ?? 5);
 
   const [running, setRunning] = useState(false);
+  const [aborting, setAborting] = useState(false);
   const [events, setEvents] = useState<PipelineEvent[]>([]);
   const [result, setResult] = useState<PipelineResult | null>(session.result ?? null);
   const [error, setError] = useState<string | null>(session.error ?? null);
@@ -298,6 +308,7 @@ export default function AdminAutoPipeline() {
 
   const logEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef(false);
+  const usedKeywordsRef = useRef<SlotKeyword[]>([]);
 
   useEffect(() => {
     saveSession({ gender, bodyType, vibe, season, outfitCount, productsPerSlot, result, error, savedCount, selectedOutfitIds: Array.from(selectedOutfitIds) });
@@ -355,6 +366,7 @@ export default function AdminAutoPipeline() {
             accepted: selectedIds.includes(c.outfitId),
             vibe, season,
             matchScore: c.matchScore,
+            keywordsUsed: usedKeywordsRef.current,
           }),
         }).catch(() => {})
       );
@@ -374,8 +386,15 @@ export default function AdminAutoPipeline() {
     }
   };
 
+  const handleAbort = () => {
+    abortRef.current = true;
+    setAborting(true);
+    addEvent(makeEvent('done', 'error', 'Pipeline aborted by user'));
+  };
+
   const handleRun = async () => {
     setRunning(true);
+    setAborting(false);
     setResult(null);
     setError(null);
     setEvents([]);
@@ -383,6 +402,7 @@ export default function AdminAutoPipeline() {
     setSavedCount(0);
     setSelectedOutfitIds(new Set());
     abortRef.current = false;
+    usedKeywordsRef.current = [];
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -417,6 +437,17 @@ export default function AdminAutoPipeline() {
       const categories: Record<string, string[]> = kwData.categories || {};
       const totalKw = Object.values(categories).reduce((a, b) => a + b.length, 0);
       addEvent(makeEvent('keywords', 'success', `${totalKw} keywords across ${Object.keys(categories).length} slots (source: ${kwData.source || 'rule-based'})`));
+
+      // Track all keywords for feedback loop (Issue 1)
+      const allSlotKeywords: SlotKeyword[] = [];
+      for (const [slot, kws] of Object.entries(categories)) {
+        for (const kw of kws as string[]) {
+          allSlotKeywords.push({ keyword: kw, slot });
+        }
+      }
+      usedKeywordsRef.current = allSlotKeywords;
+
+      if (abortRef.current) throw new Error('Aborted by user');
 
       // ── STEP 2: Amazon search (quality-filtered) ──────────────────────────
       addEvent(makeEvent('search', 'start', 'Searching Amazon with quality filters (rating>=3.5, reviews>=10)...'));
@@ -469,8 +500,10 @@ export default function AdminAutoPipeline() {
       addEvent(makeEvent('search', 'success', `Total ${totalCandidates} quality-filtered candidates found`));
       if (totalCandidates === 0) throw new Error('No products found in Amazon search');
 
+      if (abortRef.current) throw new Error('Aborted by user');
+
       // ── STEP 3: Register products (lightweight Gemini + rule engine) ─────
-      addEvent(makeEvent('register', 'start', 'Analyzing via lightweight Gemini (512 tokens) + rule engine...'));
+      addEvent(makeEvent('register', 'start', 'Analyzing via lightweight Gemini (600 tokens, auto-retry) + rule engine...'));
       const existingAsins = new Set<string>();
       const { data: existingProducts } = await supabase.from('products').select('product_link').not('product_link', 'is', null);
       if (existingProducts) {
@@ -500,6 +533,8 @@ export default function AdminAutoPipeline() {
       }
       addEvent(makeEvent('register', 'success', `Registered ${registeredCount} products total`));
       if (registeredCount === 0) throw new Error('No products were successfully registered');
+
+      if (abortRef.current) throw new Error('Aborted by user');
 
       // ── STEP 4: Background removal (parallel batches) ────────────────────
       addEvent(makeEvent('nobg', 'start', 'Starting flatlay extraction for registered products...'));
@@ -554,10 +589,13 @@ export default function AdminAutoPipeline() {
 
     } catch (err) {
       const msg = (err as Error).message;
-      setError(msg);
-      addEvent(makeEvent('done', 'error', `Pipeline failed: ${msg}`));
+      if (msg !== 'Aborted by user') {
+        setError(msg);
+        addEvent(makeEvent('done', 'error', `Pipeline failed: ${msg}`));
+      }
     } finally {
       setRunning(false);
+      setAborting(false);
     }
   };
 
@@ -659,8 +697,8 @@ export default function AdminAutoPipeline() {
               </div>
             </div>
 
-            <button onClick={handleRun} disabled={running} className={`w-full py-4 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2.5 ${running ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' : 'bg-white text-black hover:bg-zinc-100 active:scale-[0.98] shadow-lg shadow-white/5'}`}>
-              {running ? <><Loader2 className="w-4 h-4 animate-spin" />Pipeline Running...</> : <><Play className="w-4 h-4" fill="currentColor" />Run Auto Pipeline</>}
+            <button onClick={running ? handleAbort : handleRun} disabled={aborting} className={`w-full py-4 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2.5 ${aborting ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' : running ? 'bg-red-600/90 text-white hover:bg-red-500 active:scale-[0.98]' : 'bg-white text-black hover:bg-zinc-100 active:scale-[0.98] shadow-lg shadow-white/5'}`}>
+              {aborting ? <><Loader2 className="w-4 h-4 animate-spin" />Stopping...</> : running ? <><X className="w-4 h-4" />Abort Pipeline</> : <><Play className="w-4 h-4" fill="currentColor" />Run Auto Pipeline</>}
             </button>
           </div>
 

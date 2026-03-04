@@ -252,41 +252,86 @@ Return ONLY valid JSON:
   "material": "primary material"
 }`;
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: lightPrompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
-        }),
+    let core: any = null;
+    let geminiError: string | null = null;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: lightPrompt }] }],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: attempt === 1 ? 600 : 800,
+                stopSequences: ["\n\n\n"],
+              },
+            }),
+          }
+        );
+
+        if (!geminiRes.ok) {
+          geminiError = `Gemini HTTP ${geminiRes.status} (attempt ${attempt})`;
+          continue;
+        }
+
+        const geminiData = await geminiRes.json();
+        const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const finishReason = geminiData.candidates?.[0]?.finishReason;
+
+        const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+
+        if (!jsonMatch) {
+          geminiError = `No JSON in response (finishReason: ${finishReason}, attempt ${attempt})`;
+          continue;
+        }
+
+        let parsed: any;
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          if (finishReason === "MAX_TOKENS") {
+            geminiError = `JSON truncated due to MAX_TOKENS (attempt ${attempt}) — retrying with higher limit`;
+            continue;
+          }
+          geminiError = `JSON parse error (attempt ${attempt})`;
+          continue;
+        }
+
+        if (!parsed.category || !parsed.color_family) {
+          geminiError = `Incomplete Gemini response: missing required fields (attempt ${attempt})`;
+          continue;
+        }
+
+        core = parsed;
+        break;
+      } catch (fetchErr) {
+        geminiError = `Fetch error: ${(fetchErr as Error).message} (attempt ${attempt})`;
       }
-    );
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      return new Response(JSON.stringify({ error: "Gemini API error", detail: errText.slice(0, 300) }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
-    const geminiData = await geminiRes.json();
-    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!core) {
+      const adminClientForLog = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      await adminClientForLog.from("pipeline_feedback").insert({
+        batch_id: batchId || "unknown",
+        outfit_id: null,
+        accepted: false,
+        match_score: null,
+        vibe: vibe || "unknown",
+        season: season || "unknown",
+      }).catch(() => {});
 
-    if (!jsonMatch) {
-      return new Response(JSON.stringify({ error: "Failed to parse Gemini response" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    let core: any;
-    try {
-      core = JSON.parse(jsonMatch[0]);
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid JSON from Gemini" }), {
+      return new Response(JSON.stringify({
+        error: geminiError || "Failed to analyze product after retries",
+        product_title: product.title?.slice(0, 80),
+      }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
