@@ -1,10 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import {
-  Camera, Search, Check, Star, ExternalLink,
-  Loader2, AlertCircle, Tag, Zap, ChevronDown,
-  ChevronUp, ImageIcon, ArrowRight, X, Square, RefreshCw,
-  Sparkles, ShoppingBag, ArrowUpDown
-} from 'lucide-react';
+import { Camera, Search, Check, Star, ExternalLink, Loader2, AlertCircle, Tag, Zap, ChevronDown, ChevronUp, Image as ImageIcon, ArrowRight, X, Square, RefreshCw, Sparkles, ShoppingBag, ArrowUpDown } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { scoreProductForVibe, COLOR_TIER_LABELS, type ColorTier } from '../utils/vibeCompatibility';
 
