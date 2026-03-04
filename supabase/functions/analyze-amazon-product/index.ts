@@ -340,16 +340,23 @@ If a product has a very casual silhouette but vibe is ELEVATED_COOL, add other m
 
     const prompt = `You are a fashion product data specialist with deep expertise in garment classification. Analyze this Amazon product title and return precise structured metadata.
 
+CRITICAL: ALL values in the JSON must be in ENGLISH only. Never use Korean, Japanese, Chinese, or any other non-English language for any field values.
+
 Product:
 - Title: ${product.title}
 - Brand: ${product.brand || "unknown"}
 - Price: ${product.price ? `$${product.price}` : "unknown"}
 - Search context — Gender: ${gender}, Body type: ${bodyDesc}, Vibe: ${vibe}, Season: ${season || "all"}
 ${vibeGuidanceSection}
-IMPORTANT: The body type is "${body_type}". The silhouette MUST match:
-- slim → use "slim" or "fitted"
-- regular → use "regular" or "straight"
-- plus-size → use "relaxed" or "oversized"
+IMPORTANT: The body type is "${body_type}". The silhouette MUST be determined from the GARMENT CUT described in the title:
+- "slim fit", "skinny", "slim-cut", "tapered" → "slim"
+- "fitted", "form-fitting", "bodycon" → "fitted"
+- "straight leg", "straight fit", "straight cut" → "straight"
+- "relaxed fit", "easy fit", "comfort fit", "loose" → "relaxed"
+- "oversized", "boxy", "drop shoulder" → "oversized"
+- "wide leg", "wide-leg", "palazzo", "flare", "bell bottom" → "wide-leg"
+- "cropped", "crop" → "cropped"
+- Only use "regular" when NO fit/cut keyword is present in the title
 
 ━━━ SUB_CATEGORY DECISION RULES ━━━
 Read the product title carefully. Use the MOST SPECIFIC matching value:
@@ -591,16 +598,18 @@ accessory → Look for keywords:
   wallet_chain: "wallet chain", "chain wallet"
 
 ━━━ SEASON DECISION RULES ━━━
-Assign seasons based on material and garment type. Be precise — do NOT default to all seasons.
-- spring ONLY: "linen", "light cotton", "gauze", transitional layers, light jackets
-- summer ONLY: "sleeveless", "tank", "shorts", "sandals", "breathable mesh", "swimwear", "linen" (if clearly summer)
-- fall ONLY: "flannel", "corduroy", "tweed", "wool blend", "layering piece"
-- winter ONLY: "wool", "cashmere", "fleece", "down", "puffer", "thermal", "sherpa", "heavy knit", "boots" (insulated)
-- spring+summer: lightweight pieces wearable in both warm seasons
-- fall+winter: heavier pieces wearable in both cold seasons
-- spring+fall: transitional pieces (light jacket, denim jacket, trench coat, cardigan)
-- all four seasons: true year-round basics only (plain tee, classic denim, plain sneaker, basic accessories)
-- If context season is "${season || "all"}", use it as a strong hint but verify against the material/garment
+Assign seasons based on material and garment type. Return an ARRAY of season strings.
+ALLOWED VALUES: "spring", "summer", "fall", "winter" — ONLY these four words, nothing else.
+NEVER return "all four seasons", "all seasons", "year-round", or any phrase — use the individual words only.
+- ["winter"] ONLY: "wool", "cashmere", "fleece", "down", "puffer", "thermal", "sherpa", "heavy knit", insulated boots
+- ["fall", "winter"]: heavier pieces wearable in both cold seasons — tweed, flannel, corduroy, wool blend
+- ["summer"] ONLY: sleeveless, tank, shorts, sandals, breathable mesh, swimwear, clearly summer linen
+- ["spring", "summer"]: lightweight warm-weather pieces wearable in both
+- ["spring", "fall"]: transitional pieces — light jacket, denim jacket, trench coat, cardigan, chinos
+- ["spring", "summer", "fall"]: lightweight basics like plain tee, thin cotton shirt, classic sneaker
+- ["spring", "fall", "winter"]: merino/wool sweaters that can layer
+- ["spring", "summer", "fall", "winter"]: TRUE year-round basics ONLY — plain accessories (scarf, hat, belt, watch), classic denim jeans
+- Context season "${season || "all"}" is a strong hint but verify against material/garment type
 
 ━━━ COLOR_FAMILY DECISION RULES ━━━
 Map the product's dominant color to EXACTLY ONE of these values:
@@ -760,22 +769,24 @@ SPORT_MODERN: athletic, technical, utilitarian items — hoodies, joggers, puffe
 CREATIVE_LAYERED: eclectic, expressive items — band tees, combat boots, cargo pants, denim jackets, chain bags, layering pieces. Mixing textures/styles. Bold accent colors.
 
 ━━━ FORMALITY & WARMTH SCALES ━━━
-formality (1-5 integer):
-  1 = athleisure/loungewear: sports bra, leggings, joggers, hoodie, slides
-  2 = casual: t-shirt, jeans, sneakers, casual dress, sweatshirt
-  3 = smart-casual: chinos, blouse, polo, loafer, casual blazer, midi dress
-  4 = business-casual: blazer, dress shirt, trousers, heels, structured bag
-  5 = formal/evening: suit, tuxedo, evening gown, formal shoes, luxury accessories
+formality (1-5 integer) — assign the EXACT value based on the sub_category:
+  1 = athleisure/loungewear: sports_bra, leggings, jogger, track_pants, hoodie, sweatshirt, slides, biker_shorts, yoga_pants, performance_tee
+  2 = casual: tshirt, graphic_tee, jeans, denim, sneaker, runner, casual dress, sweatshirt, tank, crop_top, baggy_jeans, flared_jeans, cargo, shorts
+  3 = smart-casual: chinos, blouse, polo, loafer, cardigan, cable_knit, turtleneck_knit, midi_skirt, wrap_top, henley, oxford_shirt, derby, ankle_boot, crossbody, tote, canvas_tote, flannel_shirt
+  4 = business-casual: blazer, trench, dress_shirt, slacks, wide_leg, pleated_trousers, silk_blouse, heel, structured_bag, satchel, briefcase, oxford, monk_strap
+  5 = formal/evening: tuxedo_jacket, suit_jacket, evening_gown, necktie, bow_tie, formal_shoes, luxury_accessories
+  IMPORTANT: Do NOT default to 3 without reading the sub_category. Most casual items are 1-2. Most outerwear is 2-3.
 
-warmth (1-5 integer):
-  1 = very light: sleeveless tops, tanks, shorts, sandals, lightweight linen
-  2 = light: t-shirts, thin shirts, light blouses, lightweight trousers
-  3 = medium: sweatshirts, chinos, denim, light mid-layers, sneakers
-  4 = warm: sweaters, cardigans, jackets, wool coats, boots
-  5 = very warm: puffer coats, heavy wool coats, sherpa, down jackets, heavy knitwear
+warmth (1-5 integer) — assign based on MATERIAL and GARMENT TYPE:
+  1 = very light: sleeveless, tank, shorts, sandal, slide, mule, ballet_flat, linen top, camisole, sports_bra, mesh_top
+  2 = light: tshirt, thin_shirt, light_blouse, linen_trousers, chinos, jogger, leggings, sneaker, runner, loafer, canvas_tote
+  3 = medium: sweatshirt, hoodie, denim, jeans, cargo_pants, mid-weight cardigan, light_jacket, ankle_boot, medium_knit
+  4 = warm: sweater (wool/cashmere/cable_knit), blazer, trench, leather jacket, biker_jacket, bomber, boot, coat (mid-weight), corduroy, velvet
+  5 = very warm: puffer, down_jacket, parka, shearling, sherpa, heavy_wool_coat, fleece_jacket, duffle_coat
+  IMPORTANT: Do NOT default to 3 without reading the garment. Puffers/parkas = 5. Sweaters = 4. Tshirts = 2. Tanks = 1.
 
 body_type array MUST include "${body_type || "regular"}"
-Return ONLY the JSON object, no markdown, no explanation`;
+FINAL REMINDER: Return ONLY valid JSON. ALL string values must be in English. No Korean, no markdown, no explanation.`;
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -870,6 +881,124 @@ Return ONLY the JSON object, no markdown, no explanation`;
       return "black";
     };
 
+    const KOREAN_MATERIAL_MAP: Record<string, string> = {
+      "니트": "Knit", "혼방": "Blend", "울": "Wool", "면": "Cotton",
+      "가죽": "Leather", "나일론": "Nylon", "폴리": "Polyester",
+      "실크": "Silk", "린넨": "Linen", "데님": "Denim",
+      "캐시미어": "Cashmere", "스웨이드": "Suede", "플리스": "Fleece",
+      "벨벳": "Velvet", "코듀로이": "Corduroy", "트위드": "Tweed",
+    };
+    const normalizeMaterial = (raw: string): string => {
+      if (!raw) return "";
+      const trimmed = raw.trim();
+      if (KOREAN_MATERIAL_MAP[trimmed]) return KOREAN_MATERIAL_MAP[trimmed];
+      for (const [k, v] of Object.entries(KOREAN_MATERIAL_MAP)) {
+        if (trimmed.includes(k)) return v;
+      }
+      if (/[가-힣]/.test(trimmed)) return "Knit";
+      return trimmed;
+    };
+
+    const VALID_SEASONS = new Set(["spring", "summer", "fall", "winter"]);
+    const normalizeSeason = (raw: any): string[] => {
+      if (!Array.isArray(raw)) {
+        if (typeof raw === "string") {
+          const lower = raw.toLowerCase();
+          if (lower.includes("all") || lower.includes("year")) return ["spring", "summer", "fall", "winter"];
+          const found = ["spring", "summer", "fall", "winter"].filter(s => lower.includes(s));
+          return found.length > 0 ? found : ["spring", "fall"];
+        }
+        return ["spring", "fall"];
+      }
+      const cleaned: string[] = [];
+      for (const item of raw) {
+        if (typeof item !== "string") continue;
+        const lower = item.toLowerCase().trim();
+        if (lower.includes("all") || lower.includes("year") || lower.includes("four") || lower.includes("season")) {
+          return ["spring", "summer", "fall", "winter"];
+        }
+        const matches = ["spring", "summer", "fall", "winter"].filter(s => lower.includes(s));
+        for (const m of matches) {
+          if (!cleaned.includes(m)) cleaned.push(m);
+        }
+        if (VALID_SEASONS.has(lower) && !cleaned.includes(lower)) cleaned.push(lower);
+      }
+      return cleaned.length > 0 ? cleaned : ["spring", "fall"];
+    };
+
+    const DETERMINISTIC_COLOR_TONE: Record<string, string> = {
+      black: "neutral", white: "neutral", grey: "cool", charcoal: "cool",
+      navy: "cool", beige: "warm", cream: "warm", ivory: "warm",
+      brown: "warm", tan: "warm", camel: "warm", olive: "warm",
+      khaki: "warm", sage: "cool", rust: "warm", mustard: "warm",
+      burgundy: "warm", wine: "warm", denim: "cool",
+      red: "warm", blue: "cool", green: "cool", yellow: "warm",
+      orange: "warm", pink: "warm", purple: "cool", coral: "warm",
+      teal: "cool", mint: "cool", sky_blue: "cool", lavender: "cool",
+      metallic: "neutral", multi: "neutral",
+    };
+
+    const VAGUE_SUB_CATEGORIES: Record<string, Record<string, string>> = {
+      outer: { coat: "coat", jacket: "coat", outer: "coat" },
+      mid: { knit: "sweater", sweater: "sweater", mid: "sweater" },
+      top: { shirt: "shirt", top: "tshirt" },
+      bottom: { bottom: "denim", pants: "denim" },
+      shoes: { boot: "boot", shoe: "sneaker", shoes: "sneaker" },
+      bag: { bag: "tote" },
+    };
+
+    const refineSubCategory = (subCat: string, category: string, title: string): string => {
+      const lc = (subCat || "").toLowerCase().trim();
+      const t = title.toLowerCase();
+      const vagueMap = VAGUE_SUB_CATEGORIES[category];
+      if (!vagueMap || !vagueMap[lc]) return subCat;
+      if (category === "outer") {
+        if (/puffer|down jacket|padded/.test(t)) return "puffer";
+        if (/trench/.test(t)) return "trench";
+        if (/blazer|sport coat/.test(t)) return "blazer";
+        if (/bomber/.test(t)) return "bomber";
+        if (/biker|moto/.test(t)) return "biker_jacket";
+        if (/denim jacket|jean jacket/.test(t)) return "denim_jacket";
+        if (/shearling|sherpa jacket/.test(t)) return "shearling";
+        if (/parka/.test(t)) return "parka";
+        if (/peacoat|pea coat/.test(t)) return "peacoat";
+        if (/windbreaker/.test(t)) return "windbreaker";
+        if (/varsity|letterman/.test(t)) return "varsity_jacket";
+        if (/track jacket/.test(t)) return "track_jacket";
+        if (/leather/.test(t)) return "biker_jacket";
+        if (/wool|overcoat/.test(t)) return "coat";
+        if (/suede|fringe/.test(t)) return "field_jacket";
+      }
+      if (category === "mid") {
+        if (/quarter.?zip|half.?zip|1\/4 zip/.test(t)) return "half_zip";
+        if (/cable.?knit/.test(t)) return "cable_knit";
+        if (/mohair/.test(t)) return "mohair_knit";
+        if (/crochet/.test(t)) return "crochet_cardigan";
+        if (/cardigan/.test(t)) return "cardigan";
+        if (/mock.?neck/.test(t)) return "mock_neck";
+        if (/turtleneck/.test(t)) return "turtleneck_knit";
+        if (/cashmere/.test(t)) return "cashmere_sweater";
+        if (/hoodie|hooded/.test(t)) return "hoodie";
+        if (/sweatshirt/.test(t)) return "sweatshirt";
+      }
+      if (category === "top") {
+        if (/oxford/.test(t)) return "oxford_shirt";
+        if (/flannel/.test(t)) return "flannel_shirt";
+        if (/linen shirt/.test(t)) return "linen_shirt";
+        if (/henley/.test(t)) return "henley";
+        if (/polo/.test(t)) return "polo";
+      }
+      if (category === "shoes") {
+        if (/chelsea/.test(t)) return "chelsea_boot";
+        if (/combat/.test(t)) return "combat_boot";
+        if (/ankle/.test(t)) return "ankle_boot";
+        if (/knee.?high/.test(t)) return "knee_boot";
+        if (/hiking/.test(t)) return "hiking_boot";
+        if (/western|cowboy/.test(t)) return "western_boot";
+      }
+      return vagueMap[lc] || subCat;
+    };
+
     const VALID_CATEGORIES = new Set(["outer", "mid", "top", "bottom", "shoes", "bag", "accessory"]);
     const VALID_SILHOUETTES = new Set(["slim", "regular", "oversized", "relaxed", "fitted", "wide-leg", "straight", "cropped"]);
     const VALID_PATTERNS = new Set(["solid", "stripe", "check", "graphic", "print", "other"]);
@@ -898,64 +1027,84 @@ Return ONLY the JSON object, no markdown, no explanation`;
       }
       return "other";
     };
-    const VALID_COLOR_TONES = new Set(["warm", "cool", "neutral"]);
-
     const normalizedCategory = VALID_CATEGORIES.has(analyzed.category) ? analyzed.category : "top";
     const normalizedColorFamily = normalizeColorFamily(analyzed.color_family);
+    const normalizedMaterial = normalizeMaterial(analyzed.material || "");
+    const normalizedSeason = normalizeSeason(analyzed.season);
+    const refinedSubCategory = refineSubCategory(analyzed.sub_category || "", normalizedCategory, product.title || "");
+
+    // color_tone: always derive deterministically from color_family to prevent Gemini errors
+    const colorTone = DETERMINISTIC_COLOR_TONE[normalizedColorFamily] || "neutral";
+
+    // silhouette: re-derive from title if Gemini returned "regular" but title has keywords
+    let normalizedSilhouette = VALID_SILHOUETTES.has(analyzed.silhouette) ? analyzed.silhouette : "regular";
+    if (normalizedSilhouette === "regular") {
+      const t = (product.title || "").toLowerCase();
+      if (/slim.?fit|skinny|slim.?cut|tapered/.test(t)) normalizedSilhouette = "slim";
+      else if (/fitted|form.?fitting|bodycon/.test(t)) normalizedSilhouette = "fitted";
+      else if (/straight.?leg|straight.?fit|straight.?cut/.test(t)) normalizedSilhouette = "straight";
+      else if (/relaxed.?fit|easy.?fit|comfort.?fit|\bloose\b/.test(t)) normalizedSilhouette = "relaxed";
+      else if (/oversized|boxy|drop.?shoulder/.test(t)) normalizedSilhouette = "oversized";
+      else if (/wide.?leg|palazzo|flare|bell.?bottom/.test(t)) normalizedSilhouette = "wide-leg";
+      else if (/\bcropped\b|\bcrop\b/.test(t)) normalizedSilhouette = "cropped";
+    }
 
     let vibeArray: string[] = Array.isArray(analyzed.vibe) ? analyzed.vibe : [vibe];
 
-    // #7: Cross-validate vibe tags against VIBE_ITEM_DATABASE pools
     const VALID_VIBES = new Set(Object.keys(VIBE_DNA));
     vibeArray = vibeArray.filter(v => VALID_VIBES.has(v));
     if (vibeArray.length === 0) vibeArray = [vibe || 'EFFORTLESS_NATURAL'];
 
     const validatedVibes: string[] = [];
     for (const v of vibeArray) {
-      const isValid = validateVibeTag(v, normalizedCategory, analyzed.sub_category || '');
-      if (isValid) {
-        validatedVibes.push(v);
-      }
+      const isValid = validateVibeTag(v, normalizedCategory, refinedSubCategory);
+      if (isValid) validatedVibes.push(v);
     }
-    if (validatedVibes.length === 0) {
-      validatedVibes.push(vibe || vibeArray[0]);
-    }
+    if (validatedVibes.length === 0) validatedVibes.push(vibe || vibeArray[0]);
 
-    // #8: Validate color_family against vibe color palette
     const primaryVibe = validatedVibes[0];
     const colorValidation = validateColorForVibe(normalizedColorFamily, primaryVibe);
-    if (!colorValidation.valid) {
-      const vibeColorFamilies = getVibeColorFamilies(primaryVibe);
-      const allVibeColors = Array.from(vibeColorFamilies);
-      const closestColor = allVibeColors.find(c =>
-        normalizedColorFamily.includes(c) || c.includes(normalizedColorFamily)
-      );
-      if (closestColor && VALID_COLOR_FAMILIES.has(closestColor)) {
-        // intentionally not overriding — we keep original but flag it
-      }
-    }
 
-    // #9: Clamp formality to vibe's range
     let formality = typeof analyzed.formality === "number" ? Math.min(5, Math.max(1, analyzed.formality)) : 3;
     formality = clampFormality(formality, primaryVibe);
+
+    let warmth = typeof analyzed.warmth === "number" ? Math.min(5, Math.max(1, analyzed.warmth)) : 3;
+
+    const normalizePattern = (raw: string): string => {
+      const VALID_PATTERNS = new Set(["solid", "stripe", "check", "graphic", "print", "other"]);
+      const PATTERN_MAP: Record<string, string> = {
+        plaid: "check", floral: "print", animal: "print", geometric: "graphic",
+        abstract: "graphic", camo: "print", camouflage: "print",
+        "tie-dye": "print", tie_dye: "print", paisley: "print",
+        houndstooth: "check", tartan: "check", argyle: "check",
+      };
+      if (!raw) return "solid";
+      const lower = raw.toLowerCase().trim();
+      if (VALID_PATTERNS.has(lower)) return lower;
+      if (PATTERN_MAP[lower]) return PATTERN_MAP[lower];
+      for (const key of Object.keys(PATTERN_MAP)) {
+        if (lower.includes(key)) return PATTERN_MAP[key];
+      }
+      return "other";
+    };
 
     const result = {
       brand: analyzed.brand || product.brand || "",
       name: analyzed.name || product.title,
       category: normalizedCategory,
-      sub_category: analyzed.sub_category || "",
+      sub_category: refinedSubCategory,
       gender: ["MALE", "FEMALE", "UNISEX"].includes(analyzed.gender) ? analyzed.gender : (gender || "UNISEX"),
       color: analyzed.color || "",
       color_family: normalizedColorFamily,
-      color_tone: VALID_COLOR_TONES.has(analyzed.color_tone) ? analyzed.color_tone : "neutral",
-      silhouette: VALID_SILHOUETTES.has(analyzed.silhouette) ? analyzed.silhouette : "regular",
-      material: analyzed.material || "",
+      color_tone: colorTone,
+      silhouette: normalizedSilhouette,
+      material: normalizedMaterial,
       pattern: normalizePattern(analyzed.pattern),
       vibe: validatedVibes,
       body_type: Array.isArray(analyzed.body_type) ? analyzed.body_type : [body_type || "regular"],
-      season: Array.isArray(analyzed.season) ? analyzed.season : [season || "all"],
+      season: normalizedSeason,
       formality,
-      warmth: typeof analyzed.warmth === "number" ? Math.min(5, Math.max(1, analyzed.warmth)) : 3,
+      warmth,
       stock_status: "in_stock",
       image_url: upgradeImageResolution(product.image || ""),
       product_link: product.url || "",
