@@ -11,6 +11,8 @@ import { scoreProductForVibe, COLOR_TIER_LABELS, type ColorTier } from '../utils
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+type NobgPhase = 'idle' | 'processing' | 'done' | 'failed';
+
 interface SmartResult {
   asin: string;
   title: string;
@@ -29,6 +31,9 @@ interface SmartResult {
   analyzed?: AnalyzedData;
   analyzing?: boolean;
   analyzeError?: string;
+  productId?: string;
+  nobgUrl?: string;
+  nobgPhase?: NobgPhase;
 }
 
 interface GeminiCategory {
@@ -200,7 +205,10 @@ export default function AdminSmartSearch() {
         vibe,
         season,
         phase: results.length > 0 ? 'done' : 'idle',
-        results: results.map(({ analyzing, ...rest }) => rest),
+        results: results.map(({ analyzing, nobgPhase, ...rest }) => ({
+          ...rest,
+          nobgPhase: nobgPhase === 'processing' ? 'idle' : nobgPhase,
+        })),
         searchLog,
         lensDirectCount,
         keywordCount,
@@ -352,6 +360,44 @@ export default function AdminSmartSearch() {
     }
   };
 
+  const pollNobgResult = useCallback((asin: string, productId: string) => {
+    const MAX_ATTEMPTS = 18;
+    const INTERVAL_MS = 5000;
+    let attempts = 0;
+
+    const tick = async () => {
+      attempts++;
+      try {
+        const { data } = await supabase
+          .from('products')
+          .select('nobg_image_url')
+          .eq('id', productId)
+          .maybeSingle();
+
+        if (data?.nobg_image_url) {
+          setResults(prev =>
+            prev.map(p =>
+              p.asin === asin
+                ? { ...p, nobgUrl: data.nobg_image_url, nobgPhase: 'done' }
+                : p
+            )
+          );
+          return;
+        }
+      } catch { /* silent */ }
+
+      if (attempts >= MAX_ATTEMPTS) {
+        setResults(prev =>
+          prev.map(p => p.asin === asin ? { ...p, nobgPhase: 'failed' } : p)
+        );
+        return;
+      }
+      setTimeout(tick, INTERVAL_MS);
+    };
+
+    setTimeout(tick, INTERVAL_MS);
+  }, []);
+
   const analyzeAndSave = async () => {
     const toSave = filteredResults.filter(p => selected.has(p.asin) && !savedAsins.has(p.asin));
     if (toSave.length === 0) return;
@@ -376,12 +422,28 @@ export default function AdminSmartSearch() {
         if (!data) throw new Error('Empty response');
         if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
 
+        const productId: string | undefined = data.result?.id;
+
         setResults(prev =>
-          prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed: data.result } : p)
+          prev.map(p =>
+            p.asin === product.asin
+              ? {
+                  ...p,
+                  analyzing: false,
+                  analyzed: data.result,
+                  productId,
+                  nobgPhase: productId ? 'processing' : 'idle',
+                }
+              : p
+          )
         );
         setSavedAsins(prev => new Set([...prev, product.asin]));
         setSelected(prev => { const next = new Set(prev); next.delete(product.asin); return next; });
-        addLog(`DB 등록 완료: ${data.result.name?.slice(0, 40)}`, 'success');
+        addLog(`DB 등록 완료: ${data.result.name?.slice(0, 40)} | 누끼 처리 중...`, 'success');
+
+        if (productId) {
+          pollNobgResult(product.asin, productId);
+        }
       } catch (err) {
         setResults(prev =>
           prev.map(p => p.asin === product.asin
@@ -952,17 +1014,45 @@ export default function AdminSmartSearch() {
                       </div>
                     )}
 
-                    <div className="aspect-square bg-white overflow-hidden">
-                      {product.image ? (
+                    <div className="aspect-square bg-white overflow-hidden relative">
+                      {product.nobgUrl ? (
+                        <img
+                          src={product.nobgUrl}
+                          alt={product.title}
+                          className="w-full h-full object-contain p-2"
+                          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : product.image ? (
                         <img
                           src={product.image}
                           alt={product.title}
-                          className="w-full h-full object-contain p-2"
+                          className={`w-full h-full object-contain p-2 transition-opacity duration-300 ${product.nobgPhase === 'processing' ? 'opacity-60' : 'opacity-100'}`}
                           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <ImageIcon className="w-8 h-8 text-gray-300" />
+                        </div>
+                      )}
+
+                      {product.nobgPhase === 'processing' && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/20 backdrop-blur-[1px]">
+                          <div className="w-7 h-7 rounded-full border-2 border-teal-400/30 border-t-teal-400 animate-spin" />
+                          <span className="text-[9px] text-teal-300 font-semibold tracking-wide px-2 py-0.5 bg-black/50 rounded-full">누끼 추출 중</span>
+                        </div>
+                      )}
+
+                      {product.nobgPhase === 'done' && product.nobgUrl && (
+                        <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 bg-emerald-500/90 rounded-full px-1.5 py-0.5">
+                          <Check className="w-2.5 h-2.5 text-white" />
+                          <span className="text-[8px] text-white font-bold">누끼</span>
+                        </div>
+                      )}
+
+                      {product.nobgPhase === 'failed' && (
+                        <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 bg-amber-500/80 rounded-full px-1.5 py-0.5">
+                          <AlertCircle className="w-2.5 h-2.5 text-white" />
+                          <span className="text-[8px] text-white font-bold">누끼 실패</span>
                         </div>
                       )}
                     </div>
