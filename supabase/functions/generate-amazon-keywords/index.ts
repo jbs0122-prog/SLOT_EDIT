@@ -462,7 +462,7 @@ SEASON: ${seasonLabel}${seasonMod ? `
       ? Object.entries(looks).map(([k, l]) => {
           const sampleItems = Object.entries(l.items)
             .filter(([cat]) => !excludedCats.has(cat))
-            .map(([cat, items]) => `    ${cat}: ${items.slice(0, 6).join(", ")}`)
+            .map(([cat, items]) => `    ${cat}: ${items.join(", ")}`)
             .join("\n");
           return `LOOK ${k} — "${l.name}"
   Mood / aesthetic: ${l.mood}
@@ -522,6 +522,7 @@ Every keyword MUST satisfy ALL of the following:
    - DO NOT generate summer items for winter, or winter items for summer` : ""}
 7. LOOK DIFFERENTIATION: The 3 Looks must produce visually distinct keywords — different item types, different materials, different aesthetics. A buyer should immediately see A/B/C as three different style directions.
 8. AMAZON-REALISTIC: Must read like a genuine Amazon search query — no poetic language, no brand names unless generic
+9. VARIATION MANDATE: Each generation must feel fresh. Rotate through the full item pool — do NOT default to the first 1–2 items listed. Spread color choices across the entire palette (primary + secondary + accent) rather than repeating the same 1–2 colors. Every call should produce a noticeably different color-item combination.
 
 ANTI-PATTERNS (never do these):
 - Do NOT repeat the same item type across different Looks for the same category
@@ -564,7 +565,7 @@ Include EVERY category listed above. Each array must contain EXACTLY 6 objects w
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.85, maxOutputTokens: 4096, responseMimeType: "application/json" },
+            generationConfig: { temperature: 1.05, maxOutputTokens: 4096, responseMimeType: "application/json" },
           }),
         }
       );
