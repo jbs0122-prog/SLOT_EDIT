@@ -321,7 +321,6 @@ const ACTIVE_CATEGORIES: Record<string, string> = {
 
 const SEASON_EXCLUDE_CATS: Record<string, string[]> = {
   summer: ["outer","mid"],
-  spring: ["mid"],
 };
 
 const SEASON_MODIFIERS: Record<string, { fabric: string[]; note: string }> = {
@@ -463,11 +462,12 @@ SEASON: ${seasonLabel}${seasonMod ? `
       ? Object.entries(looks).map(([k, l]) => {
           const sampleItems = Object.entries(l.items)
             .filter(([cat]) => !excludedCats.has(cat))
-            .map(([cat, items]) => `    ${cat}: ${items.join(", ")}`)
+            .map(([cat, items]) => `    ${cat}: ${items.slice(0, 6).join(", ")}`)
             .join("\n");
           return `LOOK ${k} — "${l.name}"
   Mood / aesthetic: ${l.mood}
   Key materials: ${l.materials.join(", ")}
+  DISTINGUISHING STYLE: Each keyword for Look ${k} MUST reflect this specific aesthetic — NOT generic fashion. The item type, material, and feel must clearly differ from Look ${k === "A" ? "B and C" : k === "B" ? "A and C" : "A and B"}.
   Item pool per category (choose specific items from here):
 ${sampleItems}`;
         }).join("\n\n")
@@ -481,12 +481,18 @@ ${sampleItems}`;
 → Generate keywords that COMPLEMENT these existing pieces (harmonizing colors and materials).`
       : "";
 
+    const winterMidNote = seasonLabel === "winter"
+      ? `\n⚠️ WINTER CRITICAL: The "mid" category is MANDATORY for winter. Mid-layer items (sweaters, knits, turtlenecks, hoodies, cardigans, cashmere) are essential cold-weather layering pieces. You MUST generate 6 mid keywords (2 per Look). Use winter-appropriate mid items: cashmere sweater, wool turtleneck, cable-knit, ribbed knit, chunky knit pullover, thermal hoodie, etc.`
+      : seasonLabel === "fall"
+      ? `\n⚠️ FALL NOTE: Mid-layer items are important for fall layering. Include sweaters, knits, and cardigans with fall fabrics (wool, flannel, corduroy).`
+      : "";
+
     const prompt = `You are a professional fashion buyer who sources ${genderLabel}'s clothing on Amazon. Your task is to generate precise Amazon search keywords that real shoppers would type.
 
 ═══════════════════════════════════════
 SHOPPER PROFILE
 ═══════════════════════════════════════
-${profileBlock}
+${profileBlock}${winterMidNote}
 
 ═══════════════════════════════════════
 STYLE VIBE DNA
@@ -494,7 +500,7 @@ STYLE VIBE DNA
 ${dnaBlock}
 
 ═══════════════════════════════════════
-LOOK VARIANTS — use ALL THREE as distinct creative directions
+LOOK VARIANTS — THREE DISTINCT AESTHETICS (treat each Look as a completely different customer)
 ═══════════════════════════════════════
 ${looksBlock}
 ${ctxBlock ? `\n═══════════════════════════════════════\n${ctxBlock}\n═══════════════════════════════════════` : ""}
@@ -510,11 +516,16 @@ Every keyword MUST satisfy ALL of the following:
 3. ITEM SPECIFICITY: Reference a specific item type from that Look's item pool — each of the 2 keywords within the same Look must reference a DIFFERENT item type
 4. COLOR or MATERIAL: Include at least one color from the vibe palette OR one material from that Look's key materials
 5. FIT / SILHOUETTE: Embed a fit word that matches the body type preference for this category (e.g., "${bodyFit.top}" for tops, "${bodyFit.bottom}" for bottoms, "${bodyFit.outer}" for outerwear)
-6. SEASON-AWARE: For ${seasonLabel} — keywords must reflect appropriate fabric weight and layering${seasonMod ? ` (prioritize: ${seasonMod.fabric.slice(0, 3).join(", ")})` : ""}
-7. AMAZON-REALISTIC: Must read like a genuine Amazon search query — no poetic language, no brand names unless generic
+6. SEASON-CRITICAL: Season is "${seasonLabel}". Every keyword MUST use season-appropriate fabrics and item types.${seasonMod ? `
+   - Required fabrics for ${seasonLabel}: ${seasonMod.fabric.join(", ")}
+   - Styling note: ${seasonMod.note}
+   - DO NOT generate summer items for winter, or winter items for summer` : ""}
+7. LOOK DIFFERENTIATION: The 3 Looks must produce visually distinct keywords — different item types, different materials, different aesthetics. A buyer should immediately see A/B/C as three different style directions.
+8. AMAZON-REALISTIC: Must read like a genuine Amazon search query — no poetic language, no brand names unless generic
 
 ANTI-PATTERNS (never do these):
-- Do NOT repeat the same item type twice within one Look's 2 keywords
+- Do NOT repeat the same item type across different Looks for the same category
+- Do NOT use season-inappropriate items (e.g., no "linen" or "tank" for winter; no "cashmere coat" for summer)
 - Do NOT use vague terms like "nice top" or "cool jacket"
 - Do NOT ignore the body type fit guidance
 - Do NOT use colors outside the vibe palette
@@ -526,16 +537,17 @@ ${activeCats}
 OUTPUT FORMAT
 ═══════════════════════════════════════
 Return ONLY valid JSON — no markdown fences, no comments, no explanation.
-Each category value is an array of EXACTLY 6 objects (2 per Look: A×2, B×2, C×2):
+Each category value is an array of EXACTLY 6 objects (2 per Look: A×2, B×2, C×2).
+ORDER MUST BE: A, A, B, B, C, C (first two objects are Look A, next two are Look B, last two are Look C).
 
 {
   "outer": [
-    { "kw": "${genderLabel}'s [Look A item1 + color/material + fit]", "look": "A", "color": "navy", "material": "wool", "fit": "oversized" },
-    { "kw": "${genderLabel}'s [Look A item2 + color/material + fit]", "look": "A", "color": "black", "material": "leather", "fit": "relaxed" },
-    { "kw": "${genderLabel}'s [Look B item1...]", "look": "B", "color": "...", "material": "...", "fit": "..." },
-    { "kw": "${genderLabel}'s [Look B item2...]", "look": "B", "color": "...", "material": "...", "fit": "..." },
-    { "kw": "${genderLabel}'s [Look C item1...]", "look": "C", "color": "...", "material": "...", "fit": "..." },
-    { "kw": "${genderLabel}'s [Look C item2...]", "look": "C", "color": "...", "material": "...", "fit": "..." }
+    { "kw": "${genderLabel}'s [Look A item1 + color/material + fit + ${seasonLabel} fabric]", "look": "A", "color": "navy", "material": "wool", "fit": "oversized" },
+    { "kw": "${genderLabel}'s [Look A item2 — DIFFERENT item type than above]", "look": "A", "color": "black", "material": "cashmere", "fit": "relaxed" },
+    { "kw": "${genderLabel}'s [Look B item1 — DIFFERENT aesthetic than Look A]", "look": "B", "color": "...", "material": "...", "fit": "..." },
+    { "kw": "${genderLabel}'s [Look B item2 — DIFFERENT item type than Look B item1]", "look": "B", "color": "...", "material": "...", "fit": "..." },
+    { "kw": "${genderLabel}'s [Look C item1 — DIFFERENT aesthetic than Look A and B]", "look": "C", "color": "...", "material": "...", "fit": "..." },
+    { "kw": "${genderLabel}'s [Look C item2 — DIFFERENT item type than Look C item1]", "look": "C", "color": "...", "material": "...", "fit": "..." }
   ],
   "top": [...],
   ...
