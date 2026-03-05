@@ -287,6 +287,23 @@ const upgradeImageResolution = (url: string): string => {
     .replace(/\._[A-Z0-9,_]+_\./g, "._AC_SL1500_.");
 };
 
+async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; mimeType: string } | null> {
+  try {
+    const res = await fetch(imageUrl, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    const mimeType = contentType.split(";")[0].trim();
+    const buffer = await res.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const base64 = btoa(binary);
+    return { base64, mimeType };
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -308,6 +325,12 @@ Deno.serve(async (req: Request) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const imageUrl = upgradeImageResolution(product.image || "");
+    let imageData: { base64: string; mimeType: string } | null = null;
+    if (imageUrl) {
+      imageData = await fetchImageAsBase64(imageUrl);
     }
 
     const bodyTypeMap: Record<string, string> = {
@@ -337,9 +360,14 @@ If a product has a very casual silhouette but vibe is ELEVATED_COOL, add other m
 `;
     }
 
-    const prompt = `You are a fashion product data specialist with deep expertise in garment classification. Analyze this Amazon product title and return precise structured metadata.
+    const hasImage = !!imageData;
+    const prompt = `You are a fashion product data specialist with deep expertise in garment classification. Analyze this Amazon product using ${hasImage ? "BOTH the product image AND the title" : "the product title"}. Return precise structured metadata.
 
-CRITICAL: ALL values in the JSON must be in ENGLISH only. Never use Korean, Japanese, Chinese, or any other non-English language for any field values.
+CRITICAL RULES:
+1. ALL values in the JSON must be in ENGLISH only. Never use Korean, Japanese, Chinese, or any other non-English language.
+2. ${hasImage ? "The product IMAGE is the PRIMARY source of truth for color, pattern, silhouette, and material texture. The title is secondary — use it for brand, specific model names, and to confirm visual observations." : "Use the title as the primary source."}
+3. For COLOR: ${hasImage ? "Look at the actual color in the image. Do NOT rely solely on the title — many Amazon titles omit or misstate the color. Describe what you SEE." : "Extract from title keywords. If no color keyword exists, infer from common product defaults."} NEVER return "No Color" — always determine a color from the image or make a reasonable inference.
+4. For COLOR_FAMILY: Must be derived from the actual product color you identified, not defaulted to "multi" unless the product genuinely has multiple distinct colors.
 
 Product:
 - Title: ${product.title}
@@ -787,14 +815,20 @@ warmth (1-5 integer) — assign based on MATERIAL and GARMENT TYPE:
 body_type array MUST include "${body_type || "regular"}"
 FINAL REMINDER: Return ONLY valid JSON. ALL string values must be in English. No Korean, no markdown, no explanation.`;
 
+    const parts: any[] = [];
+    if (imageData) {
+      parts.push({ inline_data: { mime_type: imageData.mimeType, data: imageData.base64 } });
+    }
+    parts.push({ text: prompt });
+
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+          contents: [{ parts }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
         }),
       }
     );
@@ -946,11 +980,8 @@ FINAL REMINDER: Return ONLY valid JSON. ALL string values must be in English. No
       bag: { bag: "tote" },
     };
 
-    const refineSubCategory = (subCat: string, category: string, title: string): string => {
-      const lc = (subCat || "").toLowerCase().trim();
+    const titleBasedSubCategory = (category: string, title: string): string | null => {
       const t = title.toLowerCase();
-      const vagueMap = VAGUE_SUB_CATEGORIES[category];
-      if (!vagueMap || !vagueMap[lc]) return subCat;
       if (category === "outer") {
         if (/puffer|down jacket|padded/.test(t)) return "puffer";
         if (/trench/.test(t)) return "trench";
@@ -964,38 +995,93 @@ FINAL REMINDER: Return ONLY valid JSON. ALL string values must be in English. No
         if (/windbreaker/.test(t)) return "windbreaker";
         if (/varsity|letterman/.test(t)) return "varsity_jacket";
         if (/track jacket/.test(t)) return "track_jacket";
+        if (/chore/.test(t)) return "chore_coat";
+        if (/field jacket|utility jacket|m.?65/.test(t)) return "field_jacket";
+        if (/coach/.test(t)) return "coach_jacket";
+        if (/harrington/.test(t)) return "harrington";
+        if (/quilted/.test(t)) return "quilted_jacket";
+        if (/corduroy/.test(t)) return "corduroy_jacket";
         if (/leather/.test(t)) return "biker_jacket";
         if (/wool|overcoat/.test(t)) return "coat";
         if (/suede|fringe/.test(t)) return "field_jacket";
       }
       if (category === "mid") {
         if (/quarter.?zip|half.?zip|1\/4 zip/.test(t)) return "half_zip";
-        if (/cable.?knit/.test(t)) return "cable_knit";
+        if (/cable.?knit|cable knit|fisherman/.test(t)) return "cable_knit";
         if (/mohair/.test(t)) return "mohair_knit";
         if (/crochet/.test(t)) return "crochet_cardigan";
+        if (/fair isle|nordic/.test(t)) return "fair_isle";
+        if (/argyle/.test(t)) return "argyle_sweater";
         if (/cardigan/.test(t)) return "cardigan";
         if (/mock.?neck/.test(t)) return "mock_neck";
-        if (/turtleneck/.test(t)) return "turtleneck_knit";
+        if (/turtleneck|turtle.?neck/.test(t)) return "turtleneck_knit";
         if (/cashmere/.test(t)) return "cashmere_sweater";
         if (/hoodie|hooded/.test(t)) return "hoodie";
-        if (/sweatshirt/.test(t)) return "sweatshirt";
+        if (/sweatshirt|crew.?neck sweat/.test(t)) return "sweatshirt";
+        if (/zip.?up|zip.?knit|full.?zip/.test(t)) return "zip_knit";
+        if (/vest|gilet/.test(t)) return "knitted_vest";
+        if (/twist|textured|waffle/.test(t) && /knit|sweater|pullover/.test(t)) return "cable_knit";
       }
       if (category === "top") {
         if (/oxford/.test(t)) return "oxford_shirt";
         if (/flannel/.test(t)) return "flannel_shirt";
         if (/linen shirt/.test(t)) return "linen_shirt";
+        if (/chambray/.test(t)) return "chambray";
         if (/henley/.test(t)) return "henley";
         if (/polo/.test(t)) return "polo";
+        if (/graphic|band tee|print tee/.test(t)) return "graphic_tee";
+        if (/rugby/.test(t)) return "rugby_shirt";
+        if (/breton|sailor stripe/.test(t)) return "breton_stripe";
+        if (/crop/.test(t)) return "crop_top";
+        if (/tank/.test(t)) return "tank";
+      }
+      if (category === "bottom") {
+        if (/flare|bell.?bottom/.test(t) && /jean|denim/.test(t)) return "flared_jeans";
+        if (/baggy|wide.?leg/.test(t) && /jean|denim/.test(t)) return "baggy_jeans";
+        if (/carpenter/.test(t)) return "carpenter_pants";
+        if (/corduroy|cord/.test(t)) return "corduroy_pants";
+        if (/cargo/.test(t)) return "cargo";
+        if (/jogger/.test(t)) return "jogger";
+        if (/chino/.test(t)) return "chinos";
+        if (/pleated/.test(t)) return "pleated_trousers";
+        if (/linen/.test(t)) return "linen_trousers";
       }
       if (category === "shoes") {
         if (/chelsea/.test(t)) return "chelsea_boot";
         if (/combat/.test(t)) return "combat_boot";
         if (/ankle/.test(t)) return "ankle_boot";
         if (/knee.?high/.test(t)) return "knee_boot";
-        if (/hiking/.test(t)) return "hiking_boot";
+        if (/hiking|trekking/.test(t)) return "hiking_boot";
         if (/western|cowboy/.test(t)) return "western_boot";
+        if (/desert|chukka/.test(t)) return "desert_boot";
+        if (/loafer/.test(t)) return "loafer";
+        if (/derby/.test(t)) return "derby";
+        if (/oxford/.test(t)) return "oxford";
+        if (/trail/.test(t)) return "trail_runner";
+        if (/running/.test(t)) return "runner";
+        if (/slide/.test(t)) return "slide";
+        if (/sandal/.test(t)) return "sandal";
+        if (/mule/.test(t)) return "mule";
       }
-      return vagueMap[lc] || subCat;
+      return null;
+    };
+
+    const refineSubCategory = (subCat: string, category: string, title: string): string => {
+      const lc = (subCat || "").toLowerCase().trim();
+      const vagueMap = VAGUE_SUB_CATEGORIES[category];
+      const isVague = vagueMap && vagueMap[lc];
+      if (isVague) {
+        const titleBased = titleBasedSubCategory(category, title);
+        if (titleBased) return titleBased;
+        return vagueMap[lc] || subCat;
+      }
+      const titleBased = titleBasedSubCategory(category, title);
+      if (titleBased && titleBased !== lc) {
+        const titleSpecificity = titleBased.includes("_") ? 2 : 1;
+        const geminiSpecificity = lc.includes("_") ? 2 : 1;
+        if (titleSpecificity >= geminiSpecificity) return titleBased;
+      }
+      return subCat;
     };
 
     const VALID_CATEGORIES = new Set(["outer", "mid", "top", "bottom", "shoes", "bag", "accessory"]);
@@ -1029,13 +1115,11 @@ FINAL REMINDER: Return ONLY valid JSON. ALL string values must be in English. No
     const normalizedCategory = VALID_CATEGORIES.has(analyzed.category) ? analyzed.category : "top";
     const normalizedColorFamily = normalizeColorFamily(analyzed.color_family);
     const normalizedMaterial = normalizeMaterial(analyzed.material || "");
-    const normalizedSeason = normalizeSeason(analyzed.season);
+    let normalizedSeason = normalizeSeason(analyzed.season);
     const refinedSubCategory = refineSubCategory(analyzed.sub_category || "", normalizedCategory, product.title || "");
 
-    // color_tone: always derive deterministically from color_family to prevent Gemini errors
     const colorTone = DETERMINISTIC_COLOR_TONE[normalizedColorFamily] || "neutral";
 
-    // silhouette: re-derive from title if Gemini returned "regular" but title has keywords
     let normalizedSilhouette = VALID_SILHOUETTES.has(analyzed.silhouette) ? analyzed.silhouette : "regular";
     if (normalizedSilhouette === "regular") {
       const t = (product.title || "").toLowerCase();
@@ -1046,6 +1130,27 @@ FINAL REMINDER: Return ONLY valid JSON. ALL string values must be in English. No
       else if (/oversized|boxy|drop.?shoulder/.test(t)) normalizedSilhouette = "oversized";
       else if (/wide.?leg|palazzo|flare|bell.?bottom/.test(t)) normalizedSilhouette = "wide-leg";
       else if (/\bcropped\b|\bcrop\b/.test(t)) normalizedSilhouette = "cropped";
+    }
+
+    const WARM_SUB_CATS = new Set(["puffer", "parka", "shearling", "duffle_coat", "cable_knit", "cashmere_sweater", "turtleneck_knit", "mohair_knit", "fair_isle", "fleece"]);
+    const COOL_SUB_CATS = new Set(["tank", "shorts", "sandal", "slide", "sports_bra", "crop_top", "camisole", "biker_shorts", "linen_shirt"]);
+    const MEDIUM_SUB_CATS = new Set(["sweater", "hoodie", "sweatshirt", "cardigan", "denim", "cargo", "ankle_boot", "combat_boot", "chelsea_boot"]);
+    const matLower = normalizedMaterial.toLowerCase();
+    const isWoolLike = /wool|cashmere|fleece|sherpa|down|mohair|tweed|shearling/.test(matLower);
+    const isLightweight = /linen|mesh|silk|chiffon/.test(matLower);
+
+    if (normalizedSeason.length === 4) {
+      if (WARM_SUB_CATS.has(refinedSubCategory) || isWoolLike) {
+        normalizedSeason = ["fall", "winter"];
+      } else if (COOL_SUB_CATS.has(refinedSubCategory) || isLightweight) {
+        normalizedSeason = ["spring", "summer"];
+      } else if (MEDIUM_SUB_CATS.has(refinedSubCategory)) {
+        normalizedSeason = ["spring", "fall", "winter"];
+      } else if (normalizedCategory === "accessory" || refinedSubCategory === "denim" || refinedSubCategory === "sneaker") {
+        // truly year-round items, keep all four
+      } else if (normalizedCategory === "mid") {
+        normalizedSeason = ["fall", "winter"];
+      }
     }
 
     let vibeArray: string[] = Array.isArray(analyzed.vibe) ? analyzed.vibe : [vibe];
@@ -1067,7 +1172,44 @@ FINAL REMINDER: Return ONLY valid JSON. ALL string values must be in English. No
     let formality = typeof analyzed.formality === "number" ? Math.min(5, Math.max(1, analyzed.formality)) : 3;
     formality = clampFormality(formality, primaryVibe);
 
+    const FORMALITY_BY_SUB: Record<string, number> = {
+      sports_bra: 1, leggings: 1, jogger: 1, track_pants: 1, hoodie: 1, slides: 1, biker_shorts: 1, yoga_pants: 1, performance_tee: 1, sweatshirt: 1,
+      tshirt: 2, graphic_tee: 2, denim: 2, sneaker: 2, runner: 2, tank: 2, crop_top: 2, baggy_jeans: 2, flared_jeans: 2, cargo: 2, shorts: 2, band_tee: 2,
+      cable_knit: 3, turtleneck_knit: 3, cardigan: 3, polo: 3, chinos: 3, loafer: 3, henley: 3, oxford_shirt: 3, derby: 3, flannel_shirt: 3, ankle_boot: 3, sweater: 3, half_zip: 3,
+      blazer: 4, trench: 4, slacks: 4, pleated_trousers: 4, silk_blouse: 4, oxford: 4, monk_strap: 4, satchel: 4,
+      necktie: 5, bow_tie: 5,
+    };
+    if (FORMALITY_BY_SUB[refinedSubCategory] !== undefined) {
+      formality = FORMALITY_BY_SUB[refinedSubCategory];
+      formality = clampFormality(formality, primaryVibe);
+    }
+
     let warmth = typeof analyzed.warmth === "number" ? Math.min(5, Math.max(1, analyzed.warmth)) : 3;
+
+    const WARMTH_BY_SUB: Record<string, number> = {
+      tank: 1, shorts: 1, sandal: 1, slide: 1, mule: 1, ballet_flat: 1, sports_bra: 1, camisole: 1, crop_top: 1, biker_shorts: 1,
+      tshirt: 2, graphic_tee: 2, chinos: 2, jogger: 2, leggings: 2, sneaker: 2, runner: 2, loafer: 2, polo: 2, linen_shirt: 2,
+      sweatshirt: 3, hoodie: 3, denim: 3, cargo: 3, cardigan: 3, ankle_boot: 3, half_zip: 3,
+      sweater: 4, cable_knit: 4, turtleneck_knit: 4, cashmere_sweater: 4, fair_isle: 4, blazer: 4, trench: 4, biker_jacket: 4, bomber: 4, chelsea_boot: 4, combat_boot: 4, corduroy_pants: 4, mohair_knit: 4, coat: 4,
+      puffer: 5, parka: 5, shearling: 5, duffle_coat: 5, fleece: 5, down_vest: 5,
+    };
+    if (WARMTH_BY_SUB[refinedSubCategory] !== undefined) {
+      warmth = WARMTH_BY_SUB[refinedSubCategory];
+    }
+
+    let analyzedColor = analyzed.color || "";
+    if (!analyzedColor || analyzedColor.toLowerCase() === "no color" || analyzedColor.toLowerCase() === "unknown") {
+      const cfMap: Record<string, string> = {
+        black: "Black", white: "White", grey: "Grey", charcoal: "Charcoal", navy: "Navy Blue",
+        beige: "Beige", cream: "Cream", ivory: "Ivory", brown: "Brown", tan: "Tan",
+        camel: "Camel", olive: "Olive", khaki: "Khaki", sage: "Sage Green", rust: "Rust",
+        mustard: "Mustard", burgundy: "Burgundy", wine: "Wine", denim: "Denim Blue",
+        red: "Red", blue: "Blue", green: "Green", yellow: "Yellow", orange: "Orange",
+        pink: "Pink", purple: "Purple", coral: "Coral", teal: "Teal", mint: "Mint",
+        sky_blue: "Sky Blue", lavender: "Lavender", metallic: "Metallic", multi: "Multi",
+      };
+      analyzedColor = cfMap[normalizedColorFamily] || normalizedColorFamily;
+    }
 
     const result = {
       brand: analyzed.brand || product.brand || "",
@@ -1075,7 +1217,7 @@ FINAL REMINDER: Return ONLY valid JSON. ALL string values must be in English. No
       category: normalizedCategory,
       sub_category: refinedSubCategory,
       gender: ["MALE", "FEMALE", "UNISEX"].includes(analyzed.gender) ? analyzed.gender : (gender || "UNISEX"),
-      color: analyzed.color || "",
+      color: analyzedColor,
       color_family: normalizedColorFamily,
       color_tone: colorTone,
       silhouette: normalizedSilhouette,
