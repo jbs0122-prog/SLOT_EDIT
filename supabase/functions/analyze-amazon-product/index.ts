@@ -693,8 +693,8 @@ Extract and return ONLY a valid JSON object:
   "vibe": ["array — pick ALL that genuinely match from: ELEVATED_COOL, EFFORTLESS_NATURAL, ARTISTIC_MINIMAL, RETRO_LUXE, SPORT_MODERN, CREATIVE_LAYERED"],
   "body_type": ["array from: slim, regular, plus-size — MUST include ${body_type || "regular"}"],
   "season": ["array — use the season decision rules above — be precise, do NOT default to all four"],
-  "formality": 3,
-  "warmth": 3,
+  "formality": <1-5 integer — READ the sub_category and assign the EXACT value from the formality scale above. Do NOT use 3 as default. Examples: hoodie=1, tshirt=2, cardigan=3, blazer=4, necktie=5>,
+  "warmth": <1-5 integer — READ the material/garment type and assign from the warmth scale above. Do NOT use 3 as default. Examples: tank=1, tshirt=2, hoodie=3, sweater=4, puffer=5>,
   "stock_status": "in_stock"
 }
 
