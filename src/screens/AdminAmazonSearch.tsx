@@ -3,7 +3,7 @@ import {
   ShoppingBag, Search, Sparkles, Check, Star, ExternalLink,
   ChevronLeft, ChevronRight, Loader2, AlertCircle, Tag,
   RefreshCw, Filter, Zap, Square, Play, Pause, X, Plus,
-  Palette, Layers, Ruler, Info
+  Palette, Layers, Ruler, Info, Eye, TrendingUp, Users, Thermometer
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { scoreProductForVibe } from '../utils/vibeCompatibility';
@@ -43,6 +43,7 @@ interface FitHints {
 }
 
 interface KeywordMeta {
+  look: string;
   category: string;
   subCategory: string;
   colorHint: string | null;
@@ -60,8 +61,10 @@ const COLOR_CHIP_MAP: Record<string, string> = {
   metallic: '#a8a29e', gold: '#d4a017', silver: '#9ca3af',
 };
 
-const SILHOUETTE_LABEL: Record<string, string> = {
-  I: 'Slim', V: 'Wide', X: 'Hourglass', A: 'Flare', Y: 'Top-heavy', H: 'Column',
+const LOOK_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+  A: { bg: 'bg-sky-500/15', text: 'text-sky-300', border: 'border-sky-500/25', dot: '#38bdf8' },
+  B: { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/25', dot: '#34d399' },
+  C: { bg: 'bg-rose-500/15', text: 'text-rose-300', border: 'border-rose-500/25', dot: '#fb7185' },
 };
 
 const FORMALITY_LABEL = (range: [number, number]) => {
@@ -161,6 +164,17 @@ const CATEGORY_COLORS: Record<string, string> = {
   accessory: 'bg-white/10 text-white/50',
 };
 
+const VIBE_SCORE_LABEL = (score: number) => {
+  if (score >= 85) return { label: 'Perfect', color: 'text-emerald-400', bg: 'bg-emerald-500/20' };
+  if (score >= 70) return { label: 'Good', color: 'text-amber-400', bg: 'bg-amber-500/20' };
+  if (score >= 55) return { label: 'Fair', color: 'text-orange-400', bg: 'bg-orange-500/20' };
+  return { label: 'Low', color: 'text-red-400', bg: 'bg-red-500/15' };
+};
+
+const SEASON_ICONS: Record<string, string> = {
+  spring: '🌸', summer: '☀️', fall: '🍂', winter: '❄️',
+};
+
 function loadSession() {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
@@ -187,12 +201,16 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
 
   const [keywords, setKeywords] = useState<string[]>(saved?.keywords || []);
   const [keywordCategories, setKeywordCategories] = useState<Record<string, string[]>>(saved?.keywordCategories || {});
+  const [lookCategories, setLookCategories] = useState<Record<string, Record<string, string[]>>>(saved?.lookCategories || {});
   const [activeKeywordCategory, setActiveKeywordCategory] = useState<string>(saved?.activeKeywordCategory || 'all');
+  const [activeLookFilter, setActiveLookFilter] = useState<string>(saved?.activeLookFilter || 'all');
   const [keywordsSource, setKeywordsSource] = useState<'gemini' | 'fallback' | ''>(saved?.keywordsSource || '');
   const [colorHints, setColorHints] = useState<ColorHints | null>(saved?.colorHints || null);
   const [materialHints, setMaterialHints] = useState<MaterialHints | null>(saved?.materialHints || null);
   const [fitHints, setFitHints] = useState<FitHints | null>(saved?.fitHints || null);
   const [keywordMeta, setKeywordMeta] = useState<Record<string, KeywordMeta>>(saved?.keywordMeta || {});
+  const [lookNames, setLookNames] = useState<Record<string, string>>(saved?.lookNames || {});
+  const [lookMoods, setLookMoods] = useState<Record<string, string>>(saved?.lookMoods || {});
   const [showDnaPanel, setShowDnaPanel] = useState(false);
   const [generatingKeywords, setGeneratingKeywords] = useState(false);
   const [keywordsError, setKeywordsError] = useState('');
@@ -217,7 +235,6 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
   const [filtersChanged, setFiltersChanged] = useState(false);
   const savedFiltersRef = useRef({ gender: saved?.gender || '', bodyType: saved?.bodyType || '', vibe: saved?.vibe || '', season: saved?.season || '' });
 
-  // Auto mode
   const [autoMode, setAutoMode] = useState(false);
   const [autoRunning, setAutoRunning] = useState(false);
   const [autoLog, setAutoLog] = useState<string[]>([]);
@@ -239,26 +256,21 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
     if (generatingKeywords || autoRunning) return;
     try {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify({
-        step,
-        gender,
-        bodyType,
-        vibe,
-        season,
-        keywords,
-        keywordCategories,
-        activeKeywordCategory,
-        keywordsSource,
-        activeKeyword,
-        userKeyword,
+        step, gender, bodyType, vibe, season,
+        keywords, keywordCategories, lookCategories,
+        activeKeywordCategory, activeLookFilter,
+        keywordsSource, activeKeyword, userKeyword,
         products: products.map(p => ({ ...p, analyzing: false, analyzeError: undefined })),
-        page,
-        total,
-        categoryFilter,
-        savedAsins: [...savedAsins],
-        sortBy,
+        page, total, categoryFilter, savedAsins: [...savedAsins], sortBy,
+        colorHints, materialHints, fitHints, keywordMeta,
+        lookNames, lookMoods,
       }));
     } catch { /* ignore */ }
-  }, [step, gender, bodyType, vibe, season, keywords, keywordCategories, activeKeywordCategory, keywordsSource, activeKeyword, userKeyword, products, page, total, categoryFilter, savedAsins, sortBy, generatingKeywords, autoRunning]);
+  }, [step, gender, bodyType, vibe, season, keywords, keywordCategories, lookCategories,
+      activeKeywordCategory, activeLookFilter, keywordsSource, activeKeyword, userKeyword,
+      products, page, total, categoryFilter, savedAsins, sortBy,
+      colorHints, materialHints, fitHints, keywordMeta, lookNames, lookMoods,
+      generatingKeywords, autoRunning]);
 
   useEffect(() => {
     const channel = supabase
@@ -276,7 +288,6 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
         ));
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 
@@ -288,12 +299,16 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
     setKeywordsError('');
     setKeywords([]);
     setKeywordCategories({});
+    setLookCategories({});
     setActiveKeywordCategory('all');
+    setActiveLookFilter('all');
     setKeywordsSource('');
     setColorHints(null);
     setMaterialHints(null);
     setFitHints(null);
     setKeywordMeta({});
+    setLookNames({});
+    setLookMoods({});
     setShowDnaPanel(false);
     setProducts([]);
     setSelected(new Set());
@@ -320,11 +335,14 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
       if (data.error) throw new Error(data.error);
       setKeywords(data.keywords || []);
       setKeywordCategories(data.categories || {});
+      setLookCategories(data.lookCategories || {});
       setKeywordsSource(data.source || 'fallback');
       setColorHints(data.colorHints || null);
       setMaterialHints(data.materialHints || null);
       setFitHints(data.fitHints || null);
       setKeywordMeta(data.keywordMeta || {});
+      setLookNames(data.lookNames || {});
+      setLookMoods(data.lookMoods || {});
     } catch (err) {
       setKeywordsError((err as Error).message);
     } finally {
@@ -352,7 +370,6 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
     if (isNewKeyword) setSortBy('default');
 
     const query = buildQuery(kw, userKeywordRef.current);
-
     try {
       const { data, error } = await supabase.functions.invoke('amazon-search', {
         body: { query, page: p },
@@ -399,16 +416,12 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
 
     for (let i = 0; i < toSave.length; i++) {
       const product = toSave[i];
-
-      setProducts(prev =>
-        prev.map(p => p.asin === product.asin ? { ...p, analyzing: true, analyzeError: undefined } : p)
-      );
+      setProducts(prev => prev.map(p => p.asin === product.asin ? { ...p, analyzing: true, analyzeError: undefined } : p));
 
       try {
         const { data, error } = await supabase.functions.invoke('analyze-amazon-product', {
           body: { product, gender, body_type: bodyType, vibe, season },
         });
-
         if (error) {
           const msg = data?.error || error.message || 'Edge function error';
           throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
@@ -417,43 +430,32 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
         if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
 
         const analyzed = data.result;
-
-        if (analyzed?.id) {
-          savedProductIdsRef.current.set(product.asin, analyzed.id);
-        }
+        if (analyzed?.id) savedProductIdsRef.current.set(product.asin, analyzed.id);
 
         let vibeScore: number | undefined;
         if (vibe && analyzed) {
-          const fakeProduct: Partial<Product> = {
+          const fp: Partial<Product> = {
             color: analyzed.color, color_family: analyzed.color_family,
             material: analyzed.material, vibe: analyzed.vibe || [],
             formality: analyzed.formality, silhouette: analyzed.silhouette,
             season: analyzed.season, body_type: analyzed.body_type,
           };
-          vibeScore = scoreProductForVibe(fakeProduct as Product, vibe).total;
+          vibeScore = scoreProductForVibe(fp as Product, vibe).total;
         }
 
-        setProducts(prev =>
-          prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed, vibeScore } : p)
-        );
+        setProducts(prev => prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed, vibeScore } : p));
         setSavedAsins(prev => new Set([...prev, product.asin]));
         setSelected(prev => { const next = new Set(prev); next.delete(product.asin); return next; });
       } catch (err) {
-        setProducts(prev =>
-          prev.map(p => p.asin === product.asin
-            ? { ...p, analyzing: false, analyzeError: (err as Error).message }
-            : p
-          )
-        );
+        setProducts(prev => prev.map(p =>
+          p.asin === product.asin ? { ...p, analyzing: false, analyzeError: (err as Error).message } : p
+        ));
       }
-
       setSaveProgress(prev => ({ ...prev, done: i + 1 }));
     }
-
     setSavingAll(false);
   };
 
-  // Auto mode: for each keyword, search top results, select all, analyze & save
   const runAutoMode = async () => {
     if (keywords.length === 0) return;
     setAutoRunning(true);
@@ -461,7 +463,6 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
     setAutoLog([]);
     setAutoSavedCount(0);
     setStep('results');
-
     let totalSaved = 0;
 
     for (const kw of keywords) {
@@ -469,9 +470,7 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
       setAutoLog(prev => [...prev, `검색 중: "${kw}"`]);
 
       try {
-        const { data, error } = await supabase.functions.invoke('amazon-search', {
-          body: { query: kw, page: 1 },
-        });
+        const { data, error } = await supabase.functions.invoke('amazon-search', { body: { query: kw, page: 1 } });
         if (error || data.error) {
           setAutoLog(prev => [...prev, `  검색 실패: ${error?.message || data.error}`]);
           continue;
@@ -484,25 +483,18 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
 
         for (const product of results) {
           if (autoAbortRef.current) break;
-
-          setProducts(prev =>
-            prev.map(p => p.asin === product.asin ? { ...p, analyzing: true, analyzeError: undefined } : p)
-          );
+          setProducts(prev => prev.map(p => p.asin === product.asin ? { ...p, analyzing: true, analyzeError: undefined } : p));
 
           try {
-            const { data: analyzeData, error: analyzeError } = await supabase.functions.invoke(
+            const { data: aData, error: aErr } = await supabase.functions.invoke(
               'analyze-amazon-product',
               { body: { product, gender, body_type: bodyType, vibe, season } }
             );
+            if (aErr) throw new Error(aData?.error || aErr.message || 'Edge function error');
+            if (!aData) throw new Error('Empty response');
+            if (aData.error) throw new Error(aData.error);
 
-            if (analyzeError) {
-              const msg = analyzeData?.error || analyzeError.message || 'Edge function error';
-              throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-            }
-            if (!analyzeData) throw new Error('Empty response from server');
-            if (analyzeData.error) throw new Error(typeof analyzeData.error === 'string' ? analyzeData.error : JSON.stringify(analyzeData.error));
-
-            const autoAnalyzed = analyzeData.result;
+            const autoAnalyzed = aData.result;
             let autoVibeScore: number | undefined;
             if (vibe && autoAnalyzed) {
               const fp: Partial<Product> = {
@@ -513,20 +505,15 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
               };
               autoVibeScore = scoreProductForVibe(fp as Product, vibe).total;
             }
-            setProducts(prev =>
-              prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed: autoAnalyzed, vibeScore: autoVibeScore } : p)
-            );
+            setProducts(prev => prev.map(p => p.asin === product.asin ? { ...p, analyzing: false, analyzed: autoAnalyzed, vibeScore: autoVibeScore } : p));
             setSavedAsins(prev => new Set([...prev, product.asin]));
             totalSaved++;
             setAutoSavedCount(totalSaved);
             setAutoLog(prev => [...prev, `  ✓ 저장: ${autoAnalyzed.name.slice(0, 40)}... (Vibe ${autoVibeScore ?? '-'})`]);
           } catch (err) {
-            setProducts(prev =>
-              prev.map(p => p.asin === product.asin
-                ? { ...p, analyzing: false, analyzeError: (err as Error).message }
-                : p
-              )
-            );
+            setProducts(prev => prev.map(p =>
+              p.asin === product.asin ? { ...p, analyzing: false, analyzeError: (err as Error).message } : p
+            ));
             setAutoLog(prev => [...prev, `  ✗ 실패: ${(err as Error).message.slice(0, 50)}`]);
           }
         }
@@ -539,37 +526,29 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
     setAutoRunning(false);
   };
 
-  const stopAutoMode = () => {
-    autoAbortRef.current = true;
+  const stopAutoMode = () => { autoAbortRef.current = true; };
+
+  const getVisibleKeywords = () => {
+    let base = activeKeywordCategory === 'all'
+      ? keywords
+      : (keywordCategories[activeKeywordCategory] || []);
+    if (activeLookFilter !== 'all') {
+      base = base.filter(kw => keywordMeta[kw]?.look === activeLookFilter);
+    }
+    return base;
   };
 
   const filteredProducts = (() => {
     const base = categoryFilter === 'all'
       ? products
       : products.filter(p => p.analyzed?.category === categoryFilter);
-    if (sortBy === 'rating') {
-      return [...base].sort((a, b) => {
-        if (a.rating == null && b.rating == null) return 0;
-        if (a.rating == null) return 1;
-        if (b.rating == null) return -1;
-        return b.rating - a.rating;
-      });
-    }
-    if (sortBy === 'reviews') {
-      return [...base].sort((a, b) => {
-        if (a.reviews_count == null && b.reviews_count == null) return 0;
-        if (a.reviews_count == null) return 1;
-        if (b.reviews_count == null) return -1;
-        return b.reviews_count - a.reviews_count;
-      });
-    }
+    if (sortBy === 'rating') return [...base].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    if (sortBy === 'reviews') return [...base].sort((a, b) => (b.reviews_count ?? 0) - (a.reviews_count ?? 0));
     return base;
   })();
 
   const categoryCounts = products.reduce((acc, p) => {
-    if (p.analyzed?.category) {
-      acc[p.analyzed.category] = (acc[p.analyzed.category] || 0) + 1;
-    }
+    if (p.analyzed?.category) acc[p.analyzed.category] = (acc[p.analyzed.category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
@@ -577,6 +556,15 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
   const visibleAvailable = filteredProducts.filter(p => !savedAsins.has(p.asin)).length;
   const visibleSelected = filteredProducts.filter(p => selected.has(p.asin)).length;
   const allVisibleSelected = visibleAvailable > 0 && visibleSelected === visibleAvailable;
+
+  const hasLooks = Object.keys(lookNames).length > 0;
+  const lookCounts = { A: 0, B: 0, C: 0 };
+  keywords.forEach(kw => {
+    const look = keywordMeta[kw]?.look as 'A' | 'B' | 'C';
+    if (look && lookCounts[look] !== undefined) lookCounts[look]++;
+  });
+
+  const activeKwMeta = activeKeyword ? keywordMeta[activeKeyword] : null;
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white flex">
@@ -596,10 +584,10 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
             {outfitContext.target_slot && (
               <p className="text-[11px] text-white/50">슬롯: <span className="text-blue-300">{outfitContext.target_slot}</span></p>
             )}
-            {outfitContext.existing_colors && outfitContext.existing_colors.length > 0 && (
+            {outfitContext.existing_colors?.length > 0 && (
               <p className="text-[11px] text-white/50">기존 컬러: <span className="text-blue-300">{outfitContext.existing_colors.join(', ')}</span></p>
             )}
-            {outfitContext.existing_materials && outfitContext.existing_materials.length > 0 && (
+            {outfitContext.existing_materials?.length > 0 && (
               <p className="text-[11px] text-white/50">기존 소재: <span className="text-blue-300">{outfitContext.existing_materials.join(', ')}</span></p>
             )}
           </div>
@@ -613,15 +601,8 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
             </label>
             <div className="space-y-1.5">
               {GENDER_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setGender(opt.value)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
-                    gender === opt.value
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                      : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
-                  }`}
-                >
+                <button key={opt.value} onClick={() => setGender(opt.value)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${gender === opt.value ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'}`}>
                   {opt.label}
                 </button>
               ))}
@@ -630,20 +611,11 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
 
           {/* Body Type */}
           <div>
-            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2.5">
-              Body Type
-            </label>
+            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2.5">Body Type</label>
             <div className="space-y-1.5">
               {BODY_TYPE_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setBodyType(prev => prev === opt.value ? '' : opt.value)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
-                    bodyType === opt.value
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                      : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
-                  }`}
-                >
+                <button key={opt.value} onClick={() => setBodyType(prev => prev === opt.value ? '' : opt.value)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${bodyType === opt.value ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'}`}>
                   {opt.label}
                 </button>
               ))}
@@ -657,15 +629,8 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
             </label>
             <div className="space-y-1.5">
               {VIBE_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setVibe(opt.value)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
-                    vibe === opt.value
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                      : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
-                  }`}
-                >
+                <button key={opt.value} onClick={() => setVibe(opt.value)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${vibe === opt.value ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'}`}>
                   {opt.label}
                 </button>
               ))}
@@ -674,20 +639,11 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
 
           {/* Season */}
           <div>
-            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2.5">
-              Season
-            </label>
+            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2.5">Season</label>
             <div className="grid grid-cols-2 gap-1.5">
               {SEASON_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setSeason(prev => prev === opt.value ? '' : opt.value)}
-                  className={`px-3 py-2 rounded-lg text-xs transition-all ${
-                    season === opt.value
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                      : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
-                  }`}
-                >
+                <button key={opt.value} onClick={() => setSeason(prev => prev === opt.value ? '' : opt.value)}
+                  className={`px-3 py-2 rounded-lg text-xs transition-all ${season === opt.value ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'}`}>
                   {opt.label}
                 </button>
               ))}
@@ -697,13 +653,9 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
           {/* Auto Mode Toggle */}
           <div className="border-t border-white/8 pt-5">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] font-semibold text-white/40 uppercase tracking-widest">
-                자동화 모드
-              </label>
-              <button
-                onClick={() => setAutoMode(prev => !prev)}
-                className={`relative w-9 h-5 rounded-full transition-colors ${autoMode ? 'bg-amber-500' : 'bg-white/15'}`}
-              >
+              <label className="text-[10px] font-semibold text-white/40 uppercase tracking-widest">자동화 모드</label>
+              <button onClick={() => setAutoMode(prev => !prev)}
+                className={`relative w-9 h-5 rounded-full transition-colors ${autoMode ? 'bg-amber-500' : 'bg-white/15'}`}>
                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${autoMode ? 'translate-x-4' : 'translate-x-0.5'}`} />
               </button>
             </div>
@@ -717,50 +669,23 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
           {/* Action Buttons */}
           <div className="pt-1 space-y-2.5">
             {filtersChanged && !generatingKeywords ? (
-              <button
-                onClick={generateKeywords}
-                disabled={!canGenerate || autoRunning}
-                className="w-full flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm ring-2 ring-amber-400/40 ring-offset-1 ring-offset-[#141414]"
-              >
+              <button onClick={generateKeywords} disabled={!canGenerate || autoRunning}
+                className="w-full flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm ring-2 ring-amber-400/40 ring-offset-1 ring-offset-[#141414]">
                 <RefreshCw className="w-4 h-4" />
                 AI 키워드 재생성
               </button>
             ) : (
-              <button
-                onClick={generateKeywords}
-                disabled={!canGenerate || generatingKeywords || autoRunning}
-                className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm"
-              >
-                {generatingKeywords ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" />
-                )}
+              <button onClick={generateKeywords} disabled={!canGenerate || generatingKeywords || autoRunning}
+                className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all text-sm">
+                {generatingKeywords ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {generatingKeywords ? 'AI 키워드 생성 중...' : 'AI 키워드 생성'}
               </button>
             )}
 
             {autoMode && keywords.length > 0 && (
-              <button
-                onClick={autoRunning ? stopAutoMode : runAutoMode}
-                disabled={generatingKeywords}
-                className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-all text-sm ${
-                  autoRunning
-                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
-                    : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'
-                }`}
-              >
-                {autoRunning ? (
-                  <>
-                    <Pause className="w-4 h-4" />
-                    자동화 중단
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4" />
-                    자동 전체 등록
-                  </>
-                )}
+              <button onClick={autoRunning ? stopAutoMode : runAutoMode} disabled={generatingKeywords}
+                className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-all text-sm ${autoRunning ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30' : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'}`}>
+                {autoRunning ? <><Pause className="w-4 h-4" />자동화 중단</> : <><Zap className="w-4 h-4" />자동 전체 등록</>}
               </button>
             )}
 
@@ -792,7 +717,7 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
               {generatingKeywords ? (
                 <div className="flex items-center gap-3 px-6 py-4">
                   <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                  <span className="text-white/50 text-sm">Gemini가 카테고리별 키워드를 생성하고 있습니다...</span>
+                  <span className="text-white/50 text-sm">Gemini가 Look별 키워드를 생성하고 있습니다...</span>
                 </div>
               ) : keywordsError ? (
                 <div className="flex items-center gap-2 text-red-400 text-sm px-6 py-4">
@@ -805,27 +730,14 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                   <div className="flex items-center justify-between px-6 pt-3 pb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">
-                        AI 생성 키워드 ({keywords.length}) — 클릭해서 검색
+                        AI 생성 키워드 ({keywords.length})
                       </span>
                       {keywordsSource === 'gemini' && (
-                        <span className="text-[10px] bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                          Gemini AI
-                        </span>
-                      )}
-                      {keywordsSource === 'fallback' && (
-                        <span className="text-[10px] bg-white/8 text-white/30 px-2 py-0.5 rounded-full">
-                          기본 키워드
-                        </span>
+                        <span className="text-[10px] bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full font-medium">Gemini AI</span>
                       )}
                       {(colorHints || materialHints || fitHints) && (
-                        <button
-                          onClick={() => setShowDnaPanel(v => !v)}
-                          className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border transition-all ${
-                            showDnaPanel
-                              ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                              : 'bg-white/5 text-white/30 border-white/10 hover:text-white/60'
-                          }`}
-                        >
+                        <button onClick={() => setShowDnaPanel(v => !v)}
+                          className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border transition-all ${showDnaPanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-white/30 border-white/10 hover:text-white/60'}`}>
                           <Info className="w-2.5 h-2.5" />
                           DNA 분석
                         </button>
@@ -835,7 +747,7 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                       {userKeyword && (
                         <span className="text-[10px] text-amber-400/70 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-full">
                           <Search className="w-2.5 h-2.5" />
-                          +{userKeyword} 필터 적용 중
+                          +{userKeyword} 적용 중
                         </span>
                       )}
                       {filtersChanged && (
@@ -873,11 +785,9 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                                 </span>
                               ))}
                             </div>
-                            <div className="flex flex-wrap gap-1">
-                              {colorHints.tonalStrategy.map(s => (
-                                <span key={s} className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 text-amber-400/70 rounded border border-amber-500/15">{s}</span>
-                              ))}
-                            </div>
+                            {colorHints.tonalStrategy?.map(s => (
+                              <span key={s} className="inline-block text-[9px] px-1.5 py-0.5 bg-amber-500/10 text-amber-400/70 rounded border border-amber-500/15">{s}</span>
+                            ))}
                           </div>
                         </div>
                       )}
@@ -889,16 +799,11 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                           </div>
                           <div className="space-y-1.5">
                             <div className="flex flex-wrap gap-1">
-                              {materialHints.preferenceGroups.map(g => (
+                              {materialHints.preferenceGroups?.slice(0, 6).map(g => (
                                 <span key={g} className="text-[9px] px-1.5 py-0.5 bg-blue-500/15 text-blue-400 rounded border border-blue-500/20 font-medium">{g}</span>
                               ))}
                             </div>
-                            <div className="flex flex-wrap gap-1">
-                              {materialHints.resolvedMaterials.slice(0, 8).map(m => (
-                                <span key={m} className="text-[9px] px-1.5 py-0.5 bg-white/5 text-white/40 rounded">{m}</span>
-                              ))}
-                            </div>
-                            {materialHints.seasonFabrics.length > 0 && (
+                            {materialHints.seasonFabrics?.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {materialHints.seasonFabrics.map(f => (
                                   <span key={f} className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400/70 rounded border border-emerald-500/15">{f}</span>
@@ -916,23 +821,56 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                           </div>
                           <div className="space-y-1.5">
                             <div className="flex flex-wrap gap-1">
-                              {fitHints.silhouettePreference.map(s => (
-                                <span key={s} className="text-[9px] px-1.5 py-0.5 bg-sky-500/15 text-sky-400 rounded border border-sky-500/20 font-medium">
-                                  {s} · {SILHOUETTE_LABEL[s] || s}
-                                </span>
+                              {fitHints.silhouettePreference?.slice(0, 4).map(s => (
+                                <span key={s} className="text-[9px] px-1.5 py-0.5 bg-sky-500/15 text-sky-400 rounded border border-sky-500/20 font-medium">{s}</span>
                               ))}
                             </div>
                             <span className="inline-block text-[9px] px-1.5 py-0.5 bg-white/5 text-white/40 rounded">
                               {FORMALITY_LABEL(fitHints.formalityRange)} ({fitHints.formalityRange[0]}–{fitHints.formalityRange[1]})
                             </span>
                             <div className="flex flex-wrap gap-1">
-                              {fitHints.eraMoodTags.map(t => (
+                              {fitHints.eraMoodTags?.slice(0, 4).map(t => (
                                 <span key={t} className="text-[9px] px-1.5 py-0.5 bg-white/5 text-white/30 rounded italic">{t}</span>
                               ))}
                             </div>
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Look Tabs */}
+                  {hasLooks && (
+                    <div className="flex items-stretch gap-0 px-4 border-b border-white/5 overflow-x-auto">
+                      <button
+                        onClick={() => setActiveLookFilter('all')}
+                        className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium border-b-2 transition-all whitespace-nowrap ${activeLookFilter === 'all' ? 'border-amber-400 text-amber-400' : 'border-transparent text-white/30 hover:text-white/55'}`}>
+                        전체 <span className={`text-[9px] px-1 rounded ${activeLookFilter === 'all' ? 'text-amber-400/70' : 'text-white/20'}`}>{keywords.length}</span>
+                      </button>
+                      {(['A', 'B', 'C'] as const).map(look => {
+                        const lc = LOOK_COLORS[look];
+                        const count = lookCounts[look];
+                        if (count === 0) return null;
+                        return (
+                          <button key={look} onClick={() => setActiveLookFilter(activeLookFilter === look ? 'all' : look)}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium border-b-2 transition-all whitespace-nowrap ${activeLookFilter === look ? `border-current ${lc.text}` : 'border-transparent text-white/30 hover:text-white/55'}`}>
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: lc.dot }} />
+                            <span>Look {look}</span>
+                            {lookNames[look] && <span className="text-[9px] text-white/25 font-normal hidden sm:inline">· {lookNames[look]}</span>}
+                            <span className={`text-[9px] px-1 rounded ${activeLookFilter === look ? 'opacity-70' : 'text-white/20'}`}>{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Look mood strip for active look */}
+                  {activeLookFilter !== 'all' && lookMoods[activeLookFilter] && (
+                    <div className="px-6 py-1.5 bg-white/2">
+                      <p className="text-[10px] text-white/25 italic truncate">
+                        <Eye className="w-2.5 h-2.5 inline mr-1 opacity-50" />
+                        {lookMoods[activeLookFilter]}
+                      </p>
                     </div>
                   )}
 
@@ -949,24 +887,18 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                         { key: 'bag', label: 'Bag' },
                         { key: 'accessory', label: 'Acc' },
                       ].map(tab => {
-                        const count = tab.key === 'all'
-                          ? keywords.length
-                          : (keywordCategories[tab.key]?.length || 0);
-                        if (tab.key !== 'all' && count === 0) return null;
+                        const rawCount = tab.key === 'all' ? keywords.length : (keywordCategories[tab.key]?.length || 0);
+                        if (tab.key !== 'all' && rawCount === 0) return null;
+                        const count = activeLookFilter === 'all'
+                          ? rawCount
+                          : (tab.key === 'all'
+                            ? keywords.filter(kw => keywordMeta[kw]?.look === activeLookFilter).length
+                            : (keywordCategories[tab.key] || []).filter(kw => keywordMeta[kw]?.look === activeLookFilter).length);
                         return (
-                          <button
-                            key={tab.key}
-                            onClick={() => setActiveKeywordCategory(tab.key)}
-                            className={`flex items-center gap-1 px-3 py-2 text-[11px] font-medium whitespace-nowrap border-b-2 transition-all ${
-                              activeKeywordCategory === tab.key
-                                ? 'border-amber-400 text-amber-400'
-                                : 'border-transparent text-white/30 hover:text-white/55'
-                            }`}
-                          >
+                          <button key={tab.key} onClick={() => setActiveKeywordCategory(tab.key)}
+                            className={`flex items-center gap-1 px-3 py-2 text-[11px] font-medium whitespace-nowrap border-b-2 transition-all ${activeKeywordCategory === tab.key ? 'border-amber-400 text-amber-400' : 'border-transparent text-white/30 hover:text-white/55'}`}>
                             <span>{tab.label}</span>
-                            <span className={`text-[9px] px-1 rounded ${
-                              activeKeywordCategory === tab.key ? 'text-amber-400/70' : 'text-white/20'
-                            }`}>{count}</span>
+                            <span className={`text-[9px] px-1 rounded ${activeKeywordCategory === tab.key ? 'text-amber-400/70' : 'text-white/20'}`}>{count}</span>
                           </button>
                         );
                       })}
@@ -976,16 +908,13 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                   {/* User keyword filter */}
                   <div className="flex items-center gap-2 px-6 py-2 border-b border-white/5">
                     <Plus className="w-3.5 h-3.5 text-white/25 shrink-0" />
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        const val = userKeywordInput.trim();
-                        setUserKeyword(val);
-                        userKeywordRef.current = val;
-                        if (activeKeyword) searchByKeyword(activeKeyword, 1);
-                      }}
-                      className="flex items-center gap-2 flex-1"
-                    >
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      const val = userKeywordInput.trim();
+                      setUserKeyword(val);
+                      userKeywordRef.current = val;
+                      if (activeKeyword) searchByKeyword(activeKeyword, 1);
+                    }} className="flex items-center gap-2 flex-1">
                       <input
                         type="text"
                         value={userKeywordInput}
@@ -997,27 +926,18 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                       {userKeyword && (
                         <span className="flex items-center gap-1 bg-amber-500/15 text-amber-400 text-[11px] font-medium px-2.5 py-1 rounded-full shrink-0">
                           +{userKeyword}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setUserKeyword('');
-                              setUserKeywordInput('');
-                              if (activeKeyword) {
-                                userKeywordRef.current = '';
-                                searchByKeyword(activeKeyword, 1);
-                              }
-                            }}
-                            className="hover:text-amber-200 transition-colors"
-                          >
+                          <button type="button" onClick={() => {
+                            setUserKeyword('');
+                            setUserKeywordInput('');
+                            if (activeKeyword) { userKeywordRef.current = ''; searchByKeyword(activeKeyword, 1); }
+                          }} className="hover:text-amber-200 transition-colors">
                             <X className="w-3 h-3" />
                           </button>
                         </span>
                       )}
-                      <button
-                        type="submit"
+                      <button type="submit"
                         disabled={autoRunning || !userKeywordInput.trim() || userKeywordInput.trim() === userKeyword}
-                        className="shrink-0 px-3 py-1 bg-white/8 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed rounded-md text-[11px] text-white/50 font-medium transition-all"
-                      >
+                        className="shrink-0 px-3 py-1 bg-white/8 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed rounded-md text-[11px] text-white/50 font-medium transition-all">
                         적용
                       </button>
                     </form>
@@ -1025,26 +945,30 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
 
                   {/* Keyword chips */}
                   <div className="flex flex-wrap gap-2 px-6 py-3">
-                    {(activeKeywordCategory === 'all'
-                      ? keywords
-                      : (keywordCategories[activeKeywordCategory] || [])
-                    ).map(kw => {
+                    {getVisibleKeywords().map(kw => {
                       const meta = keywordMeta[kw];
                       const isActive = activeKeyword === kw;
+                      const look = meta?.look || 'A';
+                      const lc = LOOK_COLORS[look] || LOOK_COLORS['A'];
                       return (
-                        <button
-                          key={kw}
-                          onClick={() => !autoRunning && searchByKeyword(kw, 1)}
-                          disabled={autoRunning}
+                        <button key={kw} onClick={() => !autoRunning && searchByKeyword(kw, 1)} disabled={autoRunning}
                           className={`group flex flex-col items-start px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all disabled:cursor-default border ${
                             isActive
                               ? 'bg-amber-500 text-black border-amber-400'
                               : 'bg-white/5 text-white/60 hover:bg-white/12 hover:text-white border-white/8 hover:border-white/15'
-                          }`}
-                        >
-                          <span className="leading-tight">{kw}{isActive && userKeyword && <span className={`ml-1 ${isActive ? 'text-amber-800' : 'text-white/30'}`}>+{userKeyword}</span>}</span>
+                          }`}>
+                          <div className="flex items-center gap-1.5">
+                            {/* Look badge */}
+                            <span className={`inline-flex items-center gap-0.5 text-[8px] px-1.5 py-0 rounded-full font-bold border ${
+                              isActive ? 'bg-black/20 text-black/70 border-black/15' : `${lc.bg} ${lc.text} ${lc.border}`
+                            }`}>
+                              <span className="w-1 h-1 rounded-full" style={{ backgroundColor: isActive ? 'rgba(0,0,0,0.4)' : lc.dot }} />
+                              {look}
+                            </span>
+                            <span className="leading-tight">{kw}{isActive && userKeyword && <span className="ml-1 text-amber-800">+{userKeyword}</span>}</span>
+                          </div>
                           {meta && (meta.colorHint || meta.materialHint || meta.fitHint) && (
-                            <div className="flex items-center gap-1 mt-0.5">
+                            <div className="flex items-center gap-1 mt-0.5 ml-4">
                               {meta.colorHint && (
                                 <span className={`inline-flex items-center gap-0.5 text-[8px] px-1 py-0 rounded-full ${isActive ? 'bg-black/20 text-black/70' : 'bg-white/8 text-white/30'}`}>
                                   <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLOR_CHIP_MAP[meta.colorHint] || '#888' }} />
@@ -1071,27 +995,52 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
               ) : null}
             </div>
 
+            {/* Active keyword context bar */}
+            {activeKeyword && activeKwMeta && (
+              <div className="border-b border-white/5 px-6 py-2 bg-white/2 flex items-center gap-3 flex-wrap">
+                <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">현재 검색</span>
+                <span className="text-[11px] text-white/70 font-medium">"{activeKeyword}"</span>
+                {(() => {
+                  const look = activeKwMeta.look;
+                  const lc = LOOK_COLORS[look] || LOOK_COLORS['A'];
+                  return (
+                    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${lc.bg} ${lc.text} ${lc.border}`}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: lc.dot }} />
+                      Look {look}{lookNames[look] ? ` · ${lookNames[look]}` : ''}
+                    </span>
+                  );
+                })()}
+                {activeKwMeta.colorHint && (
+                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40">
+                    <Palette className="w-2.5 h-2.5" />
+                    {activeKwMeta.colorHint}
+                  </span>
+                )}
+                {activeKwMeta.materialHint && (
+                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40">
+                    <Layers className="w-2.5 h-2.5" />
+                    {activeKwMeta.materialHint}
+                  </span>
+                )}
+                {activeKwMeta.fitHint && (
+                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40">
+                    <Ruler className="w-2.5 h-2.5" />
+                    {activeKwMeta.fitHint}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Auto Mode Log */}
             {autoMode && autoLog.length > 0 && (
               <div className="border-b border-white/8 px-6 py-3 bg-white/2">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    {autoRunning ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                    ) : (
-                      <Play className="w-3.5 h-3.5 text-emerald-400" />
-                    )}
-                    <span className="text-xs text-white/50 font-medium">
-                      자동화 진행 {autoRunning ? '중' : '완료'} — {autoSavedCount}개 등록됨
-                    </span>
+                    {autoRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
+                    <span className="text-xs text-white/50 font-medium">자동화 진행 {autoRunning ? '중' : '완료'} — {autoSavedCount}개 등록됨</span>
                   </div>
                   {!autoRunning && (
-                    <button
-                      onClick={() => setAutoLog([])}
-                      className="text-[10px] text-white/25 hover:text-white/50 transition-colors"
-                    >
-                      닫기
-                    </button>
+                    <button onClick={() => setAutoLog([])} className="text-[10px] text-white/25 hover:text-white/50 transition-colors">닫기</button>
                   )}
                 </div>
                 <div className="max-h-24 overflow-y-auto space-y-0.5">
@@ -1099,41 +1048,25 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                     <p key={i} className={`text-[11px] font-mono ${
                       line.includes('✓') ? 'text-emerald-400' :
                       line.includes('✗') || line.includes('실패') || line.includes('오류') ? 'text-red-400' :
-                      line.includes('완료') ? 'text-amber-400' :
-                      'text-white/35'
-                    }`}>
-                      {line}
-                    </p>
+                      line.includes('완료') ? 'text-amber-400' : 'text-white/35'
+                    }`}>{line}</p>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Category Tabs (shown after some products are analyzed) */}
+            {/* Category Tabs (product results) */}
             {products.length > 0 && (
               <div className="border-b border-white/8 px-6 flex items-center gap-1 overflow-x-auto">
                 {CATEGORY_TABS.map(tab => {
-                  const count = tab.value === 'all'
-                    ? products.length
-                    : categoryCounts[tab.value] || 0;
+                  const count = tab.value === 'all' ? products.length : categoryCounts[tab.value] || 0;
                   if (tab.value !== 'all' && count === 0) return null;
                   return (
-                    <button
-                      key={tab.value}
-                      onClick={() => setCategoryFilter(tab.value)}
-                      className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-all ${
-                        categoryFilter === tab.value
-                          ? 'border-amber-400 text-amber-400'
-                          : 'border-transparent text-white/35 hover:text-white/60'
-                      }`}
-                    >
+                    <button key={tab.value} onClick={() => setCategoryFilter(tab.value)}
+                      className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-all ${categoryFilter === tab.value ? 'border-amber-400 text-amber-400' : 'border-transparent text-white/35 hover:text-white/60'}`}>
                       {tab.label}
                       {count > 0 && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                          categoryFilter === tab.value
-                            ? 'bg-amber-500/20 text-amber-400'
-                            : 'bg-white/8 text-white/30'
-                        }`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${categoryFilter === tab.value ? 'bg-amber-500/20 text-amber-400' : 'bg-white/8 text-white/30'}`}>
                           {count}
                         </span>
                       )}
@@ -1147,25 +1080,14 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
             {filteredProducts.length > 0 && (
               <div className="border-b border-white/8 px-6 py-3 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={toggleSelectAll}
-                    className="flex items-center gap-2 text-sm text-white/50 hover:text-white/80 transition-colors"
-                  >
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                      allVisibleSelected
-                        ? 'bg-amber-500 border-amber-500'
-                        : visibleSelected > 0
-                        ? 'bg-amber-500/40 border-amber-500/60'
-                        : 'border-white/20'
-                    }`}>
+                  <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm text-white/50 hover:text-white/80 transition-colors">
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${allVisibleSelected ? 'bg-amber-500 border-amber-500' : visibleSelected > 0 ? 'bg-amber-500/40 border-amber-500/60' : 'border-white/20'}`}>
                       {allVisibleSelected && <Check className="w-3 h-3 text-black" />}
                       {!allVisibleSelected && visibleSelected > 0 && <Square className="w-2 h-2 text-amber-400 fill-amber-400" />}
                     </div>
                     전체 선택
                   </button>
-                  {selectedCount > 0 && (
-                    <span className="text-xs text-amber-400 font-medium">{selectedCount}개 선택됨</span>
-                  )}
+                  {selectedCount > 0 && <span className="text-xs text-amber-400 font-medium">{selectedCount}개 선택됨</span>}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -1175,34 +1097,16 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                       { value: 'rating', label: '별점순' },
                       { value: 'reviews', label: '리뷰수순' },
                     ] as const).map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setSortBy(opt.value)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                          sortBy === opt.value
-                            ? 'bg-amber-500 text-black'
-                            : 'text-white/40 hover:text-white/70'
-                        }`}
-                      >
+                      <button key={opt.value} onClick={() => setSortBy(opt.value)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${sortBy === opt.value ? 'bg-amber-500 text-black' : 'text-white/40 hover:text-white/70'}`}>
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  {savingAll && (
-                    <span className="text-xs text-white/40">
-                      {saveProgress.done}/{saveProgress.total} 처리 중...
-                    </span>
-                  )}
-                  <button
-                    onClick={analyzeAndSave}
-                    disabled={selectedCount === 0 || savingAll || autoRunning}
-                    className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black text-sm font-semibold px-4 py-2 rounded-lg transition-all"
-                  >
-                    {savingAll ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Tag className="w-4 h-4" />
-                    )}
+                  {savingAll && <span className="text-xs text-white/40">{saveProgress.done}/{saveProgress.total} 처리 중...</span>}
+                  <button onClick={analyzeAndSave} disabled={selectedCount === 0 || savingAll || autoRunning}
+                    className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-black text-sm font-semibold px-4 py-2 rounded-lg transition-all">
+                    {savingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Tag className="w-4 h-4" />}
                     {savingAll ? 'AI 분석 & 등록 중...' : `${selectedCount}개 AI 분석 & DB 등록`}
                   </button>
                 </div>
@@ -1246,25 +1150,20 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                       const isSaved = savedAsins.has(product.asin);
                       const isSelected = selected.has(product.asin);
                       const isAnalyzing = product.analyzing;
+                      const vs = product.vibeScore != null ? VIBE_SCORE_LABEL(product.vibeScore) : null;
 
                       return (
-                        <div
-                          key={product.asin}
+                        <div key={product.asin}
                           onClick={() => !isSaved && !isAnalyzing && !autoRunning && toggleSelect(product.asin)}
                           className={`group relative rounded-xl overflow-hidden border transition-all cursor-pointer ${
-                            isSaved
-                              ? 'border-emerald-500/30 bg-emerald-500/5 cursor-default'
-                              : isSelected
-                              ? 'border-amber-500/60 bg-amber-500/8 ring-2 ring-amber-500/20'
-                              : 'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
-                          }`}
-                        >
+                            isSaved ? 'border-emerald-500/30 bg-emerald-500/5 cursor-default' :
+                            isSelected ? 'border-amber-500/60 bg-amber-500/8 ring-2 ring-amber-500/20' :
+                            'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
+                          }`}>
                           <div className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
-                            isSaved
-                              ? 'bg-emerald-500 border-emerald-500'
-                              : isSelected
-                              ? 'bg-amber-500 border-amber-500'
-                              : 'bg-black/40 border-white/20 group-hover:border-white/40'
+                            isSaved ? 'bg-emerald-500 border-emerald-500' :
+                            isSelected ? 'bg-amber-500 border-amber-500' :
+                            'bg-black/40 border-white/20 group-hover:border-white/40'
                           }`}>
                             {isSaved && <Check className="w-3 h-3 text-white" />}
                             {isSelected && !isSaved && <Check className="w-3 h-3 text-black" />}
@@ -1280,20 +1179,15 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                           {product.analyzeError && (
                             <div className="absolute inset-0 z-20 bg-red-900/60 flex flex-col items-center justify-center gap-1 p-2">
                               <AlertCircle className="w-5 h-5 text-red-400" />
-                              <span className="text-[10px] text-red-300 text-center leading-tight">
-                                {product.analyzeError.slice(0, 60)}
-                              </span>
+                              <span className="text-[10px] text-red-300 text-center leading-tight">{product.analyzeError.slice(0, 60)}</span>
                             </div>
                           )}
 
                           <div className="aspect-square bg-white overflow-hidden">
                             {product.image ? (
-                              <img
-                                src={product.image}
-                                alt={product.title}
+                              <img src={product.image} alt={product.title}
                                 className="w-full h-full object-contain p-2"
-                                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                              />
+                                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <ShoppingBag className="w-8 h-8 text-gray-300" />
@@ -1302,10 +1196,9 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                           </div>
 
                           <div className="p-2.5">
-                            <p className="text-white/70 text-[11px] leading-snug line-clamp-2 mb-1.5 min-h-[2.5em]">
-                              {product.title}
-                            </p>
-                            <div className="flex items-center justify-between">
+                            <p className="text-white/70 text-[11px] leading-snug line-clamp-2 mb-1.5 min-h-[2.5em]">{product.title}</p>
+
+                            <div className="flex items-center justify-between mb-1.5">
                               <span className={`font-semibold text-xs ${isSaved ? 'text-emerald-400' : 'text-amber-400'}`}>
                                 {isSaved ? '등록됨' : product.price != null ? `$${product.price.toFixed(2)}` : '-'}
                               </span>
@@ -1318,44 +1211,79 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                             </div>
 
                             {product.analyzed && (
-                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded ${CATEGORY_COLORS[product.analyzed.category] || 'bg-white/8 text-white/40'}`}>
-                                  {product.analyzed.category}
-                                </span>
-                                {product.analyzed.silhouette && (
-                                  <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded">
-                                    {product.analyzed.silhouette}
+                              <div className="space-y-1">
+                                {/* Row 1: category + silhouette */}
+                                <div className="flex flex-wrap gap-1">
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded ${CATEGORY_COLORS[product.analyzed.category] || 'bg-white/8 text-white/40'}`}>
+                                    {product.analyzed.sub_category || product.analyzed.category}
                                   </span>
+                                  {product.analyzed.silhouette && (
+                                    <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                      <Ruler className="w-2 h-2" />{product.analyzed.silhouette}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Row 2: color + pattern */}
+                                <div className="flex flex-wrap gap-1">
+                                  {product.analyzed.color_family && (
+                                    <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLOR_CHIP_MAP[product.analyzed.color_family] || '#888' }} />
+                                      {product.analyzed.color_family}
+                                    </span>
+                                  )}
+                                  {product.analyzed.pattern && product.analyzed.pattern !== 'solid' && (
+                                    <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded">{product.analyzed.pattern}</span>
+                                  )}
+                                  {product.analyzed.color_tone && (
+                                    <span className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded">{product.analyzed.color_tone}</span>
+                                  )}
+                                </div>
+
+                                {/* Row 3: season + warmth */}
+                                <div className="flex flex-wrap gap-1">
+                                  {product.analyzed.season?.slice(0, 2).map(s => (
+                                    <span key={s} className="text-[9px] bg-white/5 text-white/25 px-1 py-0.5 rounded">
+                                      {SEASON_ICONS[s]}{s}
+                                    </span>
+                                  ))}
+                                  {product.analyzed.warmth != null && (
+                                    <span className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                      <Thermometer className="w-2 h-2" />{product.analyzed.warmth}
+                                    </span>
+                                  )}
+                                  {product.analyzed.formality != null && (
+                                    <span className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                      <TrendingUp className="w-2 h-2" />{product.analyzed.formality}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Row 4: body_type tags */}
+                                {product.analyzed.body_type?.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {product.analyzed.body_type.map(bt => (
+                                      <span key={bt} className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                        <Users className="w-2 h-2" />{bt}
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
-                                {product.analyzed.color_family && (
-                                  <span className="text-[9px] bg-white/8 text-white/35 px-1.5 py-0.5 rounded">
-                                    {product.analyzed.color_family}
-                                  </span>
-                                )}
-                                {product.vibeScore != null && (
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
-                                    product.vibeScore >= 85
-                                      ? 'bg-emerald-500/20 text-emerald-400'
-                                      : product.vibeScore >= 70
-                                      ? 'bg-amber-500/20 text-amber-400'
-                                      : product.vibeScore >= 55
-                                      ? 'bg-orange-500/20 text-orange-400'
-                                      : 'bg-red-500/15 text-red-400'
-                                  }`}>
-                                    Vibe {product.vibeScore}
-                                  </span>
+
+                                {/* Row 5: vibe score */}
+                                {vs && product.vibeScore != null && (
+                                  <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${vs.bg}`}>
+                                    <Sparkles className={`w-2.5 h-2.5 ${vs.color}`} />
+                                    <span className={`text-[9px] font-semibold ${vs.color}`}>Vibe {product.vibeScore} · {vs.label}</span>
+                                  </div>
                                 )}
                               </div>
                             )}
                           </div>
 
-                          <a
-                            href={product.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <a href={product.url} target="_blank" rel="noopener noreferrer"
                             onClick={e => e.stopPropagation()}
-                            className="absolute top-2 right-2 z-10 w-6 h-6 bg-black/40 hover:bg-black/70 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                          >
+                            className="absolute top-2 right-2 z-10 w-6 h-6 bg-black/40 hover:bg-black/70 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                             <ExternalLink className="w-3 h-3 text-white/60" />
                           </a>
                         </div>
@@ -1366,22 +1294,14 @@ export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchPr
                   {/* Pagination */}
                   {categoryFilter === 'all' && (
                     <div className="flex items-center justify-center gap-3 mt-6">
-                      <button
-                        onClick={() => searchByKeyword(activeKeyword, page - 1)}
-                        disabled={page <= 1 || searchLoading || autoRunning}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-xs text-white/60 transition-all"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                        이전
+                      <button onClick={() => searchByKeyword(activeKeyword, page - 1)} disabled={page <= 1 || searchLoading || autoRunning}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-xs text-white/60 transition-all">
+                        <ChevronLeft className="w-3.5 h-3.5" />이전
                       </button>
                       <span className="text-white/30 text-xs">페이지 {page} · 총 {total.toLocaleString()}개</span>
-                      <button
-                        onClick={() => searchByKeyword(activeKeyword, page + 1)}
-                        disabled={searchLoading || autoRunning}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-xs text-white/60 transition-all"
-                      >
-                        다음
-                        <ChevronRight className="w-3.5 h-3.5" />
+                      <button onClick={() => searchByKeyword(activeKeyword, page + 1)} disabled={searchLoading || autoRunning}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-xs text-white/60 transition-all">
+                        다음<ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}

@@ -525,13 +525,22 @@ ${activeCats}
 ═══════════════════════════════════════
 OUTPUT FORMAT
 ═══════════════════════════════════════
-Return ONLY valid JSON — no markdown fences, no comments, no explanation:
+Return ONLY valid JSON — no markdown fences, no comments, no explanation.
+Each category value is an array of EXACTLY 6 objects (2 per Look: A×2, B×2, C×2):
+
 {
-  "outer": ["${genderLabel}'s [Look A item1 + color/material + fit]", "${genderLabel}'s [Look A item2 + color/material + fit]", "${genderLabel}'s [Look B item1...]", "${genderLabel}'s [Look B item2...]", "${genderLabel}'s [Look C item1...]", "${genderLabel}'s [Look C item2...]"],
-  "top": ["...", "...", "...", "...", "...", "..."],
+  "outer": [
+    { "kw": "${genderLabel}'s [Look A item1 + color/material + fit]", "look": "A", "color": "navy", "material": "wool", "fit": "oversized" },
+    { "kw": "${genderLabel}'s [Look A item2 + color/material + fit]", "look": "A", "color": "black", "material": "leather", "fit": "relaxed" },
+    { "kw": "${genderLabel}'s [Look B item1...]", "look": "B", "color": "...", "material": "...", "fit": "..." },
+    { "kw": "${genderLabel}'s [Look B item2...]", "look": "B", "color": "...", "material": "...", "fit": "..." },
+    { "kw": "${genderLabel}'s [Look C item1...]", "look": "C", "color": "...", "material": "...", "fit": "..." },
+    { "kw": "${genderLabel}'s [Look C item2...]", "look": "C", "color": "...", "material": "...", "fit": "..." }
+  ],
+  "top": [...],
   ...
 }
-Include EVERY category listed above. Each array must contain EXACTLY 6 strings.`;
+Include EVERY category listed above. Each array must contain EXACTLY 6 objects with fields: kw, look, color, material, fit.`;
 
     let geminiRes: Response | null = null;
     let lastErrText = "";
@@ -570,9 +579,12 @@ Include EVERY category listed above. Each array must contain EXACTLY 6 strings.`
       );
     }
 
-    let parsed: Record<string, string[]>;
+    type KwItem = { kw: string; look: string; color?: string; material?: string; fit?: string };
+    type ParsedCat = KwItem[] | string[];
+
+    let parsed: Record<string, ParsedCat>;
     try {
-      parsed = JSON.parse(jsonMatch[0]) as Record<string, string[]>;
+      parsed = JSON.parse(jsonMatch[0]) as Record<string, ParsedCat>;
     } catch (e) {
       return new Response(
         JSON.stringify({ error: "Failed to parse Gemini JSON", detail: (e as Error).message, raw: rawText }),
@@ -581,31 +593,99 @@ Include EVERY category listed above. Each array must contain EXACTLY 6 strings.`
     }
 
     const categories: Record<string, string[]> = {};
+    const lookCategories: Record<string, Record<string, string[]>> = { A: {}, B: {}, C: {} };
     const allKeywords: string[] = [];
-    for (const [cat, kws] of Object.entries(parsed)) {
-      if (Array.isArray(kws)) {
-        categories[cat] = kws.filter(Boolean);
-        allKeywords.push(...categories[cat]);
+    const keywordMeta: Record<string, { look: string; category: string; subCategory: string; colorHint: string | null; materialHint: string | null; fitHint: string | null }> = {};
+
+    for (const [cat, items] of Object.entries(parsed)) {
+      if (!Array.isArray(items)) continue;
+      const kwStrings: string[] = [];
+
+      for (const item of items) {
+        let kw: string;
+        let look = "A";
+        let color: string | null = null;
+        let material: string | null = null;
+        let fit: string | null = null;
+
+        if (typeof item === "string") {
+          kw = item;
+          const idx = kwStrings.length;
+          look = idx < 2 ? "A" : idx < 4 ? "B" : "C";
+        } else if (item && typeof item === "object") {
+          kw = item.kw || "";
+          look = (item.look || "A").toUpperCase();
+          color = item.color || null;
+          material = item.material || null;
+          fit = item.fit || null;
+        } else {
+          continue;
+        }
+
+        if (!kw) continue;
+
+        kwStrings.push(kw);
+        allKeywords.push(kw);
+
+        if (!lookCategories[look]) lookCategories[look] = {};
+        if (!lookCategories[look][cat]) lookCategories[look][cat] = [];
+        lookCategories[look][cat].push(kw);
+
+        keywordMeta[kw] = {
+          look,
+          category: cat,
+          subCategory: cat,
+          colorHint: color,
+          materialHint: material,
+          fitHint: fit,
+        };
       }
+      categories[cat] = kwStrings;
     }
+
+    const lookNames: Record<string, string> = looks
+      ? Object.fromEntries(Object.entries(looks).map(([k, l]) => [k, l.name]))
+      : {};
+    const lookMoods: Record<string, string> = looks
+      ? Object.fromEntries(Object.entries(looks).map(([k, l]) => [k, l.mood]))
+      : {};
+    const lookMaterials: Record<string, string[]> = looks
+      ? Object.fromEntries(Object.entries(looks).map(([k, l]) => [k, l.materials]))
+      : {};
 
     return new Response(
       JSON.stringify({
         keywords: allKeywords,
         categories,
+        lookCategories,
+        keywordMeta,
         source: "gemini",
         vibeKey,
+        lookNames,
+        lookMoods,
+        lookMaterials,
         colorHints: dna ? {
           primary: dna.colors.primary,
           secondary: dna.colors.secondary,
           accent: dna.colors.accent,
+          tonalStrategy: [dna.tonal],
         } : null,
         materialHints: looks ? {
-          lookMaterials: Object.fromEntries(
-            Object.entries(looks).map(([k, l]) => [k, l.materials])
-          ),
+          preferenceGroups: Object.values(looks).flatMap(l => l.materials.slice(0, 2)),
+          resolvedMaterials: Object.values(looks).flatMap(l => l.materials),
+          lookMaterials,
           seasonFabrics: seasonMod?.fabric || [],
         } : null,
+        fitHints: {
+          silhouettePreference: genderRules.silhouette_priority.split(",").map((s: string) => s.trim()).slice(0, 4),
+          formalityRange: dna ? (() => {
+            const m = dna.formality.match(/(\d+)[^\d]+(\d+)/);
+            return m ? [parseInt(m[1]), parseInt(m[2])] as [number, number] : [3, 7] as [number, number];
+          })() : [3, 7] as [number, number],
+          proportionStyle: bodyFit.shape_goal,
+          bodyTypeFit: { top: bodyFit.top, bottom: bodyFit.bottom, outer: bodyFit.outer },
+          eraMoodTags: dna ? dna.era : [],
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
