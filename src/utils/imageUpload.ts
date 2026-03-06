@@ -6,17 +6,71 @@ export interface ImageUploadResult {
   error?: string;
 }
 
+async function compressToWebP(file: File, maxPx: number, targetKB: number): Promise<{ blob: Blob; ext: string }> {
+  if (file.type === 'image/gif') {
+    return { blob: file, ext: 'gif' };
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > maxPx || h > maxPx) {
+        if (w >= h) { h = Math.round((h * maxPx) / w); w = maxPx; }
+        else { w = Math.round((w * maxPx) / h); h = maxPx; }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const targetBytes = targetKB * 1024;
+      let quality = 0.88;
+      let attempts = 0;
+
+      const tryEncode = () => {
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve({ blob: file, ext: file.name.split('.').pop() || 'jpg' }); return; }
+          if (blob.size <= targetBytes || quality <= 0.5 || attempts >= 10) {
+            resolve({ blob, ext: 'webp' });
+          } else {
+            quality = Math.max(0.5, quality - 0.08);
+            attempts++;
+            tryEncode();
+          }
+        }, 'image/webp', quality);
+      };
+      tryEncode();
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ blob: file, ext: file.name.split('.').pop() || 'jpg' });
+    };
+
+    img.src = objectUrl;
+  });
+}
+
 export const uploadProductImage = async (file: File): Promise<ImageUploadResult> => {
   try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const { blob, ext } = await compressToWebP(file, 1200, 800);
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
     const filePath = `products/${fileName}`;
 
     const { data, error } = await supabase.storage
       .from('product-images')
-      .upload(filePath, file, {
+      .upload(filePath, blob, {
         cacheControl: '3600',
         upsert: false,
+        contentType: `image/${ext}`,
       });
 
     if (error) {

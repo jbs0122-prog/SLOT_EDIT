@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { Edit2, Trash2, ExternalLink, Copy, Ban, CheckSquare, Square, X } from 'lucide-react';
+import { CreditCard as Edit2, Trash2, ExternalLink, Copy, Ban, CheckSquare, Square, X } from 'lucide-react';
 import { MAX_OUTFIT_USAGE } from '../utils/outfitGenerator';
 
 interface ProductListProps {
@@ -212,6 +212,8 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
                   src={product.nobg_image_url || product.image_url}
                   alt={product.name}
                   className="absolute inset-0 w-full h-full object-contain p-1"
+                  loading="lazy"
+                  decoding="async"
                   onError={(e) => {
                     e.currentTarget.src = 'https://via.placeholder.com/300x300?text=No+Image';
                   }}

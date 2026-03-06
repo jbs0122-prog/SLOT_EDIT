@@ -115,7 +115,9 @@ Deno.serve(async (req: Request) => {
     const formData = new FormData();
     const blob = new Blob([imageBytes], { type: contentType });
     formData.append("image", blob, `image.${ext}`);
-    formData.append("output.format", "png");
+    formData.append("output.format", "webp");
+    formData.append("output.max_width", "800");
+    formData.append("output.max_height", "800");
 
     console.log(`Sending ${imageBytes.byteLength} bytes to Pixian for product ${productId || "unnamed"}`);
 
@@ -153,13 +155,13 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const fileName = productId
-      ? `nobg/${productId}.png`
-      : `nobg/${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+      ? `nobg/${productId}.webp`
+      : `nobg/${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("product-images")
       .upload(fileName, imageBuffer, {
-        contentType: "image/png",
+        contentType: "image/webp",
         upsert: true,
       });
 
@@ -172,7 +174,7 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: true,
-          image: `data:image/png;base64,${base64Image}`,
+          image: `data:image/webp;base64,${base64Image}`,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
