@@ -44,6 +44,8 @@ interface OutfitCandidate {
   items: OutfitCandidateItem[];
   matchScore?: number;
   scoreBreakdown?: ScoreBreakdown;
+  lookKey?: string;
+  lookLabel?: string;
 }
 
 interface PipelineResult {
@@ -189,7 +191,12 @@ function OutfitCandidateCard({ candidate, index, selected, onToggle }: {
         </div>
         <div className="p-4">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-bold text-zinc-300">Outfit {index + 1}</span>
+            <span className="text-xs font-bold text-zinc-300">
+              {candidate.lookKey ? `Look ${candidate.lookKey}` : `Outfit ${index + 1}`}
+            </span>
+            {candidate.lookLabel && (
+              <span className="text-[10px] text-zinc-500 font-medium">{candidate.lookLabel}</span>
+            )}
             {candidate.matchScore !== undefined && (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                 candidate.matchScore >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
@@ -309,6 +316,7 @@ export default function AdminAutoPipeline() {
   const logEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef(false);
   const usedKeywordsRef = useRef<SlotKeyword[]>([]);
+  const lookKeywordsMapRef = useRef<Record<string, SlotKeyword[]>>({});
 
   useEffect(() => {
     saveSession({ gender, bodyType, vibe, season, outfitCount: 3, productsPerSlot, result, error, savedCount, selectedOutfitIds: Array.from(selectedOutfitIds) });
@@ -356,8 +364,11 @@ export default function AdminAutoPipeline() {
       ]);
 
       const candidates = result?.outfitCandidates || [];
-      const feedbackPromises = candidates.map(c =>
-        fetch(`${supabaseUrl}/functions/v1/auto-pipeline`, {
+      const feedbackPromises = candidates.map(c => {
+        const lookKws = c.lookKey && lookKeywordsMapRef.current[c.lookKey]
+          ? lookKeywordsMapRef.current[c.lookKey]
+          : usedKeywordsRef.current;
+        return fetch(`${supabaseUrl}/functions/v1/auto-pipeline`, {
           method: 'POST', headers: feedbackHeaders,
           body: JSON.stringify({
             action: 'submit-feedback',
@@ -366,10 +377,10 @@ export default function AdminAutoPipeline() {
             accepted: selectedIds.includes(c.outfitId),
             vibe, season,
             matchScore: c.matchScore,
-            keywordsUsed: usedKeywordsRef.current,
+            keywordsUsed: lookKws,
           }),
-        }).catch(() => {})
-      );
+        }).catch(() => {});
+      });
       await Promise.allSettled(feedbackPromises);
 
       setSavedCount(selectedIds.length);
@@ -403,6 +414,7 @@ export default function AdminAutoPipeline() {
     setSelectedOutfitIds(new Set());
     abortRef.current = false;
     usedKeywordsRef.current = [];
+    lookKeywordsMapRef.current = {};
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -452,8 +464,9 @@ export default function AdminAutoPipeline() {
 
       if (abortRef.current) throw new Error('Aborted by user');
 
-      const PRIORITY_SLOTS = ['top','bottom','shoes','outer','bag','accessory','mid'];
-      const genderLabel = gender === 'MALE' ? "men's" : "women's";
+      const CORE_SLOTS = ['top','bottom','shoes','outer'];
+      const OPTIONAL_SLOTS = ['bag','accessory','mid'];
+      const PRIORITY_SLOTS = [...CORE_SLOTS, ...OPTIONAL_SLOTS];
 
       const existingAsins = new Set<string>();
       const { data: existingProducts } = await supabase.from('products').select('product_link').not('product_link', 'is', null);
@@ -464,6 +477,30 @@ export default function AdminAutoPipeline() {
         }
       }
 
+      const globalSearchedKws = new Set<string>();
+      const globalSearchCache = new Map<string, any[]>();
+      const lookSlotCandidatesMap: Record<string, Record<string, any[]>> = {};
+
+      const searchSlot = async (kw: string, fallbackRating?: number): Promise<{ results: any[]; rawCount: number; filteredCount: number }> => {
+        if (globalSearchCache.has(kw)) return { results: globalSearchCache.get(kw)!, rawCount: -1, filteredCount: -1 };
+        globalSearchedKws.add(kw);
+        try {
+          const payload: any = { query: kw, page: 1 };
+          if (fallbackRating) payload.filter = { minRating: fallbackRating };
+          const r = await fetch(`${apiBase}/auto-amazon-search`, {
+            method: 'POST', headers: authHeaders,
+            body: JSON.stringify(payload),
+          });
+          if (r.ok) {
+            const d = await r.json();
+            const results = d.results || [];
+            globalSearchCache.set(kw, results);
+            return { results, rawCount: d.total_raw ?? -1, filteredCount: d.total_filtered ?? -1 };
+          }
+        } catch { /**/ }
+        return { results: [], rawCount: 0, filteredCount: 0 };
+      };
+
       for (let lookIdx = 0; lookIdx < lookKeys.length; lookIdx++) {
         const lookKey = lookKeys[lookIdx];
         const lookLabel = lookNames[lookKey] || lookKey;
@@ -472,61 +509,121 @@ export default function AdminAutoPipeline() {
 
         if (abortRef.current) throw new Error('Aborted by user');
 
-        // ── STEP 2: Amazon search per look ────────────────────────────────
         addEvent(makeEvent('search', 'start', `[Look ${lookKey}: ${lookLabel}] Searching Amazon (rating>=4.0)...`));
         const slotCandidates: Record<string, any[]> = {};
         for (const slot of PRIORITY_SLOTS) {
-          const keywords = lookCategories[slot] || [];
-          if (keywords.length === 0) continue;
+          const isCore = CORE_SLOTS.includes(slot);
+          const slotLimit = isCore ? Math.max(productsPerSlot, 3) : Math.max(1, productsPerSlot - 1);
+          const keywords = (lookCategories[slot] || []).filter((kw: string) => !globalSearchedKws.has(kw) || globalSearchCache.has(kw));
+          const allKws = lookCategories[slot] || [];
+          if (allKws.length === 0) continue;
           const seenAsins = new Set<string>();
           const candidates: any[] = [];
-          for (const kw of keywords) {
-            try {
-              const r = await fetch(`${apiBase}/auto-amazon-search`, {
-                method: 'POST', headers: authHeaders,
-                body: JSON.stringify({ query: kw, page: 1 }),
-              });
-              if (r.ok) {
-                const d = await r.json();
-                for (const item of (d.results || [])) {
-                  if (item.asin && !seenAsins.has(item.asin) && candidates.length < productsPerSlot) {
-                    seenAsins.add(item.asin); candidates.push(item);
-                  }
-                }
-                if (d.total_raw !== undefined) {
-                  addEvent(makeEvent('search', 'progress', `[${lookKey}/${slot}] "${kw}" → ${d.total_filtered}/${d.total_raw} passed`));
-                }
+
+          for (const kw of allKws) {
+            if (candidates.length >= slotLimit) break;
+            const cached = globalSearchCache.has(kw);
+            const { results, rawCount, filteredCount } = await searchSlot(kw);
+            for (const item of results) {
+              if (item.asin && !seenAsins.has(item.asin) && candidates.length < slotLimit) {
+                seenAsins.add(item.asin); candidates.push(item);
               }
-            } catch { /**/ }
-            if (candidates.length >= productsPerSlot) break;
+            }
+            if (!cached && rawCount >= 0) {
+              addEvent(makeEvent('search', 'progress', `[${lookKey}/${slot}] "${kw}" → ${filteredCount}/${rawCount} passed`));
+            }
           }
+
+          if (isCore && candidates.length === 0) {
+            addEvent(makeEvent('search', 'progress', `[${lookKey}/${slot}] Retrying with rating>=3.5...`));
+            for (const kw of allKws.slice(0, 2)) {
+              const fallbackKey = `${kw}__fb35`;
+              const { results, rawCount, filteredCount } = await searchSlot(fallbackKey);
+              if (results.length === 0) {
+                try {
+                  const r = await fetch(`${apiBase}/auto-amazon-search`, {
+                    method: 'POST', headers: authHeaders,
+                    body: JSON.stringify({ query: kw, page: 1, filter: { minRating: 3.5 } }),
+                  });
+                  if (r.ok) {
+                    const d = await r.json();
+                    const fbResults = d.results || [];
+                    globalSearchCache.set(fallbackKey, fbResults);
+                    for (const item of fbResults) {
+                      if (item.asin && !seenAsins.has(item.asin) && candidates.length < slotLimit) {
+                        seenAsins.add(item.asin); candidates.push(item);
+                      }
+                    }
+                    addEvent(makeEvent('search', 'progress', `[${lookKey}/${slot}] fallback: ${d.total_filtered ?? 0}/${d.total_raw ?? 0} @3.5`));
+                  }
+                } catch { /**/ }
+              }
+              if (candidates.length >= slotLimit) break;
+            }
+          }
+
           if (candidates.length > 0) slotCandidates[slot] = candidates;
         }
+
+        lookSlotCandidatesMap[lookKey] = slotCandidates;
+
         const totalCandidates = Object.values(slotCandidates).reduce((a, b) => a + b.length, 0);
-        addEvent(makeEvent('search', 'progress', `[Look ${lookKey}] ${totalCandidates} candidates found`));
-        if (totalCandidates === 0) {
-          addEvent(makeEvent('search', 'error', `[Look ${lookKey}] No products found, skipping`));
+        const missingCore = CORE_SLOTS.filter(s => s !== 'outer' && !(slotCandidates[s]?.length));
+        addEvent(makeEvent('search', 'progress', `[Look ${lookKey}] ${totalCandidates} candidates` + (missingCore.length ? ` (missing: ${missingCore.join(',')})` : '')));
+      }
+
+      for (const lookKey of lookKeys) {
+        const slotCandidates = lookSlotCandidatesMap[lookKey];
+        const missingCore = ['top', 'bottom', 'shoes'].filter(s => !(slotCandidates[s]?.length));
+        if (missingCore.length > 0) {
+          for (const slot of missingCore) {
+            for (const otherLook of lookKeys) {
+              if (otherLook === lookKey) continue;
+              const otherCandidates = lookSlotCandidatesMap[otherLook]?.[slot];
+              if (otherCandidates?.length) {
+                slotCandidates[slot] = otherCandidates.slice(0, 2);
+                addEvent(makeEvent('search', 'progress', `[Look ${lookKey}/${slot}] Borrowed ${slotCandidates[slot].length} from Look ${otherLook}`));
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      addEvent(makeEvent('search', 'success', `Search complete: ${globalSearchedKws.size} unique API calls across ${lookKeys.length} looks`));
+
+      if (abortRef.current) throw new Error('Aborted by user');
+
+      const lookKeywordsMap: Record<string, SlotKeyword[]> = {};
+      for (const lookKey of lookKeys) {
+        const lookCats = byLook[lookKey] || {};
+        const kws: SlotKeyword[] = [];
+        for (const [slot, kwList] of Object.entries(lookCats as Record<string, string[]>)) {
+          for (const kw of kwList) kws.push({ keyword: kw, slot });
+        }
+        lookKeywordsMap[lookKey] = kws;
+      }
+      lookKeywordsMapRef.current = lookKeywordsMap;
+
+      for (let lookIdx = 0; lookIdx < lookKeys.length; lookIdx++) {
+        const lookKey = lookKeys[lookIdx];
+        const lookLabel = lookNames[lookKey] || lookKey;
+        const lookBatchId = `${batchId}-${lookKey}`;
+        const slotCandidates = lookSlotCandidatesMap[lookKey];
+
+        const hasCoreSlots = ['top', 'bottom'].every(s => slotCandidates[s]?.length);
+        if (!hasCoreSlots) {
+          addEvent(makeEvent('register', 'error', `[Look ${lookKey}] Missing core slots, skipping`));
           continue;
         }
 
         if (abortRef.current) throw new Error('Aborted by user');
 
-        // ── STEP 3: Register products per look ─────────────────────────────
         addEvent(makeEvent('register', 'start', `[Look ${lookKey}] Analyzing & registering products...`));
         let lookRegistered = 0;
         for (const slot of PRIORITY_SLOTS) {
           const candidates = slotCandidates[slot] || [];
           for (const product of candidates) {
-            if (product.asin && existingAsins.has(product.asin)) {
-              try {
-                const r = await fetch(`${apiBase}/auto-pipeline`, {
-                  method: 'POST', headers: authHeaders,
-                  body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId: lookBatchId }),
-                });
-                if (r.ok) { const d = await r.json(); if (d.success) { lookRegistered++; registeredCount++; } }
-              } catch { /**/ }
-              continue;
-            }
             try {
               const r = await fetch(`${apiBase}/auto-pipeline`, {
                 method: 'POST', headers: authHeaders,
@@ -543,7 +640,6 @@ export default function AdminAutoPipeline() {
 
         if (abortRef.current) throw new Error('Aborted by user');
 
-        // ── STEP 4: Background removal per look ────────────────────────────
         addEvent(makeEvent('nobg', 'start', `[Look ${lookKey}] Extracting flatlays...`));
         const { data: productsForBg } = await supabase.from('products').select('id, image_url, category, sub_category').eq('batch_id', lookBatchId).is('nobg_image_url', null);
         if (productsForBg && productsForBg.length > 0) {
@@ -568,7 +664,6 @@ export default function AdminAutoPipeline() {
 
         if (abortRef.current) throw new Error('Aborted by user');
 
-        // ── STEP 5: Generate 1 outfit per look ─────────────────────────────
         addEvent(makeEvent('outfits', 'start', `[Look ${lookKey}: ${lookLabel}] Generating best outfit...`));
         const outfitRes = await fetch(`${apiBase}/auto-pipeline`, {
           method: 'POST', headers: authHeaders,
@@ -577,8 +672,9 @@ export default function AdminAutoPipeline() {
         if (outfitRes.ok) {
           const outfitData = await outfitRes.json();
           if (!outfitData.error) {
+            const candidates = (outfitData.outfitCandidates || []).map((c: any) => ({ ...c, lookKey, lookLabel }));
             allOutfitIds.push(...(outfitData.outfitIds || []));
-            allOutfitCandidates.push(...(outfitData.outfitCandidates || []));
+            allOutfitCandidates.push(...candidates);
             addEvent(makeEvent('outfits', 'progress', `[Look ${lookKey}] Outfit generated (score: ${outfitData.outfitCandidates?.[0]?.matchScore ?? '?'})`));
           } else {
             addEvent(makeEvent('outfits', 'error', `[Look ${lookKey}] ${outfitData.error}`));
@@ -588,7 +684,6 @@ export default function AdminAutoPipeline() {
         }
       }
 
-      addEvent(makeEvent('search', 'success', `Search complete across ${lookKeys.length} looks`));
       addEvent(makeEvent('register', 'success', `Registered ${registeredCount} products total`));
       addEvent(makeEvent('nobg', 'success', `Flatlay extraction complete`));
       addEvent(makeEvent('outfits', 'success', `Generated ${allOutfitIds.length} outfits (1 per look)`));
