@@ -109,6 +109,10 @@ function getStepPhase(events: PipelineEvent[]): Record<string, EventStatus | 'id
   for (const step of PIPELINE_STEPS) {
     const stepEvents = events.filter(e => e.step === step);
     if (stepEvents.length === 0) { phases[step] = 'idle'; continue; }
+    const hasSuccess = stepEvents.some(e => e.status === 'success');
+    const hasError = stepEvents.some(e => e.status === 'error');
+    if (hasError && !hasSuccess) { phases[step] = 'error'; continue; }
+    if (hasSuccess) { phases[step] = 'success'; continue; }
     phases[step] = stepEvents[stepEvents.length - 1].status;
   }
   return phases;
