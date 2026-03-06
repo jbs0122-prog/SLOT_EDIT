@@ -1039,6 +1039,94 @@ Deno.serve(async (req: Request) => {
         await adminClient.from("products").update({ nobg_image_url: nobgUrl }).eq("id", productId);
       }
 
+      const visionUrl = nobgUrl && !nobgUrl.startsWith("data:") ? nobgUrl : null;
+      if (visionUrl) {
+        try {
+          const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+          if (GEMINI_API_KEY) {
+            const imgRes = await fetch(visionUrl);
+            if (imgRes.ok) {
+              const contentType = imgRes.headers.get("content-type") || "image/webp";
+              const mimeType = contentType.split(";")[0].trim();
+              const imgBytes = new Uint8Array(await imgRes.arrayBuffer());
+              const chunks: string[] = [];
+              for (let i = 0; i < imgBytes.length; i += 32768) {
+                chunks.push(String.fromCharCode(...imgBytes.subarray(i, i + 32768)));
+              }
+              const base64Image = btoa(chunks.join(""));
+
+              const visionPrompt = `Analyze this fashion product image (transparent background). Return ONLY valid JSON with no markdown:
+{
+  "color": "exact color in Korean e.g. 올리브, 카키, 네이비, 베이지, 차콜, 버건디",
+  "color_family": "black|white|grey|charcoal|navy|beige|cream|ivory|brown|tan|camel|olive|khaki|sage|rust|mustard|burgundy|wine|blue|sky_blue|denim|teal|green|mint|red|coral|yellow|orange|pink|lavender|purple|metallic|multi",
+  "color_tone": "warm|cool|neutral",
+  "pattern": "solid|stripe|check|floral|graphic|print|other",
+  "silhouette": "oversized|relaxed|wide|regular|straight|fitted|slim|tapered",
+  "sub_category": "most specific type e.g. cable_knit|turtleneck|blazer|puffer|trench|chelsea_boot|tote|crossbody",
+  "formality": 1-5,
+  "warmth": 1-5,
+  "season": ["spring","summer","fall","winter"],
+  "vibe": ["ELEVATED_COOL","EFFORTLESS_NATURAL","ARTISTIC_MINIMAL","RETRO_LUXE","SPORT_MODERN","CREATIVE_LAYERED"],
+  "body_type": ["slim","regular","plus-size"]
+}
+formality: 1=very casual, 3=smart casual, 5=formal. warmth: 1=summer, 3=spring/fall, 5=heavy winter.`;
+
+              const geminiRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contents: [{ parts: [
+                      { text: visionPrompt },
+                      { inline_data: { mime_type: mimeType, data: base64Image } },
+                    ]}],
+                    generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+                  }),
+                }
+              );
+
+              if (geminiRes.ok) {
+                const geminiData = await geminiRes.json();
+                const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+                const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                  const vis = JSON.parse(jsonMatch[0]);
+                  const VALID_COLOR_FAMILIES = new Set(["black","white","grey","charcoal","navy","beige","cream","ivory","brown","tan","camel","olive","khaki","sage","rust","mustard","burgundy","wine","blue","sky_blue","denim","teal","green","mint","red","coral","yellow","orange","pink","lavender","purple","metallic","multi"]);
+                  const VALID_SILHOUETTES = new Set(["oversized","relaxed","wide","regular","straight","fitted","slim","tapered"]);
+                  const VALID_PATTERNS = new Set(["solid","stripe","check","floral","graphic","print","other"]);
+                  const VALID_COLOR_TONES = new Set(["warm","cool","neutral"]);
+                  const VALID_VIBES = new Set(["ELEVATED_COOL","EFFORTLESS_NATURAL","ARTISTIC_MINIMAL","RETRO_LUXE","SPORT_MODERN","CREATIVE_LAYERED"]);
+                  const VALID_SEASONS = new Set(["spring","summer","fall","winter"]);
+                  const VALID_BODY_TYPES = new Set(["slim","regular","plus-size"]);
+
+                  const patch: Record<string, any> = {};
+                  if (vis.color) patch.color = vis.color;
+                  if (VALID_COLOR_FAMILIES.has(vis.color_family)) patch.color_family = vis.color_family;
+                  if (VALID_COLOR_TONES.has(vis.color_tone)) patch.color_tone = vis.color_tone;
+                  if (VALID_PATTERNS.has(vis.pattern)) patch.pattern = vis.pattern;
+                  if (VALID_SILHOUETTES.has(vis.silhouette)) patch.silhouette = vis.silhouette;
+                  if (vis.sub_category) patch.sub_category = vis.sub_category;
+                  if (vis.formality && vis.formality >= 1 && vis.formality <= 5) patch.formality = Math.round(vis.formality);
+                  if (vis.warmth && vis.warmth >= 1 && vis.warmth <= 5) patch.warmth = Math.round(vis.warmth);
+                  const seasons = Array.isArray(vis.season) ? vis.season.filter((s: string) => VALID_SEASONS.has(s)) : [];
+                  if (seasons.length > 0) patch.season = seasons;
+                  const vibes = Array.isArray(vis.vibe) ? vis.vibe.filter((v: string) => VALID_VIBES.has(v)) : [];
+                  if (vibes.length > 0) patch.vibe = vibes;
+                  const bodyTypes = Array.isArray(vis.body_type) ? vis.body_type.filter((b: string) => VALID_BODY_TYPES.has(b)) : [];
+                  if (bodyTypes.length > 0) patch.body_type = bodyTypes;
+
+                  if (Object.keys(patch).length > 0) {
+                    await adminClient.from("products").update(patch).eq("id", productId);
+                  }
+                }
+              }
+            }
+          }
+        } catch { /* silent — vision refinement is best-effort */ }
+      }
+
       return new Response(JSON.stringify({ success: true, nobgUrl }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
