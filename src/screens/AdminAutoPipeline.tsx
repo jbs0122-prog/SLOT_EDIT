@@ -624,10 +624,11 @@ export default function AdminAutoPipeline() {
         for (const slot of PRIORITY_SLOTS) {
           const candidates = slotCandidates[slot] || [];
           for (const product of candidates) {
+            if (product.asin && existingAsins.has(product.asin)) continue;
             try {
               const r = await fetch(`${apiBase}/auto-pipeline`, {
                 method: 'POST', headers: authHeaders,
-                body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId: lookBatchId }),
+                body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId: lookBatchId, slotHint: slot }),
               });
               if (r.ok) {
                 const d = await r.json();

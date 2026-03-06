@@ -276,7 +276,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { product, gender, body_type, vibe, season, batchId } = await req.json();
+    const { product, gender, body_type, vibe, season, batchId, slotHint } = await req.json();
 
     if (!product || !product.title) {
       return new Response(JSON.stringify({ error: "product.title is required" }), {
@@ -284,10 +284,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const VALID_CATEGORIES = new Set(["outer", "mid", "top", "bottom", "shoes", "bag", "accessory"]);
+    const validatedSlotHint = slotHint && VALID_CATEGORIES.has(slotHint) ? slotHint : null;
+
     const genderLabel = gender === "MALE" ? "men's" : gender === "FEMALE" ? "women's" : "unisex";
+    const slotContext = validatedSlotHint
+      ? `\nSearch slot context: this product was found while searching for a "${validatedSlotHint}" item — use this as a strong hint for the category field if the title is ambiguous.`
+      : "";
 
     const lightPrompt = `Analyze this fashion product and return JSON only. ALL values must be in ENGLISH only.
-Product: "${product.title}" | Brand: ${product.brand || "unknown"} | Gender hint: ${genderLabel}
+Product: "${product.title}" | Brand: ${product.brand || "unknown"} | Gender hint: ${genderLabel}${slotContext}
 
 Return ONLY valid JSON with English values:
 {
@@ -402,8 +408,9 @@ Return ONLY valid JSON with English values:
       return trimmed;
     };
 
-    const VALID_CATEGORIES = new Set(["outer", "mid", "top", "bottom", "shoes", "bag", "accessory"]);
-    const normalizedCategory = VALID_CATEGORIES.has(core.category) ? core.category : "top";
+    const normalizedCategory = VALID_CATEGORIES.has(core.category)
+      ? core.category
+      : (validatedSlotHint || "top");
     const normalizedColorFamily = normalizeColorFamily(core.color_family);
     const colorTone = COLOR_TONE_MAP[normalizedColorFamily] || "neutral";
     const title = product.title || "";
@@ -418,6 +425,9 @@ Return ONLY valid JSON with English values:
     const seasonArray = inferSeason(materialStr, normalizedCategory, subCat, season);
     const bodyTypes = [body_type || "regular"];
     if (!bodyTypes.includes("regular") && body_type !== "regular") bodyTypes.push("regular");
+
+    const productLink = product.url || "";
+    const extractedAsin = (productLink.match(/\/dp\/([A-Z0-9]{10})/)?.[1]) || null;
 
     const productData = {
       brand: core.brand || product.brand || "",
@@ -438,9 +448,10 @@ Return ONLY valid JSON with English values:
       warmth,
       stock_status: "in_stock",
       image_url: upgradeImageResolution(product.image || ""),
-      product_link: product.url || "",
+      product_link: productLink,
       price: product.price != null ? Math.round(product.price) : null,
       batch_id: batchId || null,
+      asin: extractedAsin,
     };
 
     const adminClient = createClient(
@@ -448,7 +459,6 @@ Return ONLY valid JSON with English values:
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const productLink = product.url || "";
     if (productLink) {
       const { data: existing } = await adminClient
         .from("products")
@@ -466,12 +476,11 @@ Return ONLY valid JSON with English values:
       }
     }
 
-    const asinMatch = productLink.match(/\/dp\/([A-Z0-9]{10})/);
-    if (asinMatch) {
+    if (extractedAsin) {
       const { data: existingByAsin } = await adminClient
         .from("products")
         .select("id")
-        .ilike("product_link", `%/dp/${asinMatch[1]}%`)
+        .eq("asin", extractedAsin)
         .limit(1)
         .maybeSingle();
       if (existingByAsin) {

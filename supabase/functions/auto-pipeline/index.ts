@@ -927,8 +927,8 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "register-product") {
-      const { product, gender, body_type, vibe, season, batchId } = body as {
-        product: any; gender: string; body_type: string; vibe: string; season: string; batchId: string;
+      const { product, gender, body_type, vibe, season, batchId, slotHint } = body as {
+        product: any; gender: string; body_type: string; vibe: string; season: string; batchId: string; slotHint?: string;
       };
 
       const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -954,7 +954,7 @@ Deno.serve(async (req: Request) => {
         const { data: existingByAsin } = await adminClient
           .from("products")
           .select("id")
-          .ilike("product_link", `%/dp/${asinMatch[1]}%`)
+          .eq("asin", asinMatch[1])
           .limit(1)
           .maybeSingle();
         if (existingByAsin) {
@@ -968,7 +968,7 @@ Deno.serve(async (req: Request) => {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/auto-analyze-product`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ product, gender, body_type, vibe, season, batchId }),
+        body: JSON.stringify({ product, gender, body_type, vibe, season, batchId, slotHint }),
       });
       if (!res.ok) {
         return new Response(JSON.stringify({ success: false, error: "Analysis failed" }), {
