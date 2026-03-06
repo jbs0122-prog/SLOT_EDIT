@@ -641,7 +641,7 @@ export default function AdminAutoPipeline() {
             } catch { /**/ }
           }
         }
-        addEvent(makeEvent('register', 'progress', `[Look ${lookKey}] Registered ${lookRegistered} products`));
+        addEvent(makeEvent('register', 'success', `[Look ${lookKey}] Registered ${lookRegistered} products`));
 
         if (abortRef.current) throw new Error('Aborted by user');
 
@@ -662,9 +662,9 @@ export default function AdminAutoPipeline() {
             extractedCount += results.filter(r => r.status === 'fulfilled').length;
             await new Promise(r => setTimeout(r, 300));
           }
-          addEvent(makeEvent('nobg', 'progress', `[Look ${lookKey}] ${extractedCount}/${valid.length} extracted`));
+          addEvent(makeEvent('nobg', 'success', `[Look ${lookKey}] ${extractedCount}/${valid.length} extracted`));
         } else {
-          addEvent(makeEvent('nobg', 'progress', `[Look ${lookKey}] All products have flatlays`));
+          addEvent(makeEvent('nobg', 'success', `[Look ${lookKey}] All products have flatlays`));
         }
 
         if (abortRef.current) throw new Error('Aborted by user');
@@ -680,7 +680,7 @@ export default function AdminAutoPipeline() {
             const candidates = (outfitData.outfitCandidates || []).map((c: any) => ({ ...c, lookKey, lookLabel }));
             allOutfitIds.push(...(outfitData.outfitIds || []));
             allOutfitCandidates.push(...candidates);
-            addEvent(makeEvent('outfits', 'progress', `[Look ${lookKey}] Outfit generated (score: ${outfitData.outfitCandidates?.[0]?.matchScore ?? '?'})`));
+            addEvent(makeEvent('outfits', 'success', `[Look ${lookKey}] Outfit generated (score: ${outfitData.outfitCandidates?.[0]?.matchScore ?? '?'})`));
           } else {
             addEvent(makeEvent('outfits', 'error', `[Look ${lookKey}] ${outfitData.error}`));
           }
@@ -688,10 +688,6 @@ export default function AdminAutoPipeline() {
           addEvent(makeEvent('outfits', 'error', `[Look ${lookKey}] Outfit generation failed (${outfitRes.status})`));
         }
       }
-
-      addEvent(makeEvent('register', 'success', `Registered ${registeredCount} products total`));
-      addEvent(makeEvent('nobg', 'success', `Flatlay extraction complete`));
-      addEvent(makeEvent('outfits', 'success', `Generated ${allOutfitIds.length} outfits (1 per look)`));
 
       if (registeredCount === 0) throw new Error('No products were successfully registered');
       if (allOutfitIds.length === 0) throw new Error('Could not generate any outfits');
