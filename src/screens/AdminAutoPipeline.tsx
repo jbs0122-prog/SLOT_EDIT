@@ -291,8 +291,8 @@ export default function AdminAutoPipeline() {
   const [bodyType, setBodyType] = useState<BodyType>(session.bodyType ?? 'regular');
   const [vibe, setVibe] = useState<Vibe>(session.vibe ?? 'ELEVATED_COOL');
   const [season, setSeason] = useState<Season>(session.season ?? 'winter');
-  const [outfitCount, setOutfitCount] = useState(session.outfitCount ?? 3);
-  const [productsPerSlot, setProductsPerSlot] = useState(session.productsPerSlot ?? 5);
+  const outfitCount = 3;
+  const [productsPerSlot, setProductsPerSlot] = useState(session.productsPerSlot ?? 3);
 
   const [running, setRunning] = useState(false);
   const [aborting, setAborting] = useState(false);
@@ -311,8 +311,8 @@ export default function AdminAutoPipeline() {
   const usedKeywordsRef = useRef<SlotKeyword[]>([]);
 
   useEffect(() => {
-    saveSession({ gender, bodyType, vibe, season, outfitCount, productsPerSlot, result, error, savedCount, selectedOutfitIds: Array.from(selectedOutfitIds) });
-  }, [gender, bodyType, vibe, season, outfitCount, productsPerSlot, result, error, savedCount, selectedOutfitIds]);
+    saveSession({ gender, bodyType, vibe, season, outfitCount: 3, productsPerSlot, result, error, savedCount, selectedOutfitIds: Array.from(selectedOutfitIds) });
+  }, [gender, bodyType, vibe, season, productsPerSlot, result, error, savedCount, selectedOutfitIds]);
 
   useEffect(() => {
     const saved = localStorage.getItem(PIPELINE_HISTORY_KEY);
@@ -426,84 +426,35 @@ export default function AdminAutoPipeline() {
     let registeredCount = 0;
 
     try {
-      // ── STEP 1: Generate keywords (rule-based, zero Gemini) ────────────────
-      addEvent(makeEvent('keywords', 'start', 'Generating keywords via rule engine (zero tokens)...'));
+      // ── STEP 1: Generate keywords per look (rule-based, zero Gemini) ───────
+      addEvent(makeEvent('keywords', 'start', 'Generating keywords per look via rule engine (zero tokens)...'));
       const kwRes = await fetch(`${apiBase}/auto-generate-keywords`, {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ gender, body_type: bodyType, vibe, season }),
       });
       if (!kwRes.ok) throw new Error(`Keyword generation failed (${kwRes.status})`);
       const kwData = await kwRes.json();
-      const categories: Record<string, string[]> = kwData.categories || {};
-      const totalKw = Object.values(categories).reduce((a, b) => a + b.length, 0);
-      addEvent(makeEvent('keywords', 'success', `${totalKw} keywords across ${Object.keys(categories).length} slots (source: ${kwData.source || 'rule-based'})`));
+      const byLook: Record<string, Record<string, string[]>> = kwData.byLook || {};
+      const lookNames: Record<string, string> = kwData.lookNames || {};
+      const lookKeys = Object.keys(byLook);
+      const totalKw = Object.values(kwData.categories || {}).reduce((a: number, b: any) => a + (b as string[]).length, 0);
+      addEvent(makeEvent('keywords', 'success', `${totalKw} keywords across ${lookKeys.length} looks: ${lookKeys.map(k => lookNames[k] || k).join(', ')}`));
 
-      // Track all keywords for feedback loop (Issue 1)
       const allSlotKeywords: SlotKeyword[] = [];
-      for (const [slot, kws] of Object.entries(categories)) {
-        for (const kw of kws as string[]) {
-          allSlotKeywords.push({ keyword: kw, slot });
+      for (const [, lookCats] of Object.entries(byLook)) {
+        for (const [slot, kws] of Object.entries(lookCats as Record<string, string[]>)) {
+          for (const kw of kws) {
+            allSlotKeywords.push({ keyword: kw, slot });
+          }
         }
       }
       usedKeywordsRef.current = allSlotKeywords;
 
       if (abortRef.current) throw new Error('Aborted by user');
 
-      // ── STEP 2: Amazon search (quality-filtered) ──────────────────────────
-      addEvent(makeEvent('search', 'start', 'Searching Amazon with quality filters (rating>=3.5, reviews>=10)...'));
       const PRIORITY_SLOTS = ['top','bottom','shoes','outer','bag','accessory','mid'];
-      const MAX_KW_PER_SLOT = 6;
       const genderLabel = gender === 'MALE' ? "men's" : "women's";
-      const SLOT_FALLBACK: Record<string, string[]> = {
-        bottom: [`${genderLabel} jeans`, `${genderLabel} trousers`],
-        top: [`${genderLabel} shirt`, `${genderLabel} blouse`],
-        shoes: [`${genderLabel} shoes`, `${genderLabel} sneakers`],
-        outer: [`${genderLabel} jacket`, `${genderLabel} coat`],
-        bag: [`${genderLabel} bag`, `${genderLabel} tote`],
-        accessory: [`${genderLabel} scarf`, `${genderLabel} belt`],
-        mid: [`${genderLabel} cardigan`, `${genderLabel} sweater`],
-      };
 
-      const slotCandidates: Record<string, any[]> = {};
-      for (const slot of PRIORITY_SLOTS) {
-        let keywords = categories[slot] || [];
-        if (keywords.length === 0) keywords = SLOT_FALLBACK[slot] || [];
-        if (keywords.length === 0) continue;
-        const kwToSearch = keywords.slice(0, MAX_KW_PER_SLOT);
-        const seenAsins = new Set<string>();
-        const candidates: any[] = [];
-        for (const kw of kwToSearch) {
-          try {
-            const r = await fetch(`${apiBase}/auto-amazon-search`, {
-              method: 'POST', headers: authHeaders,
-              body: JSON.stringify({ query: kw, page: 1 }),
-            });
-            if (r.ok) {
-              const d = await r.json();
-              const filtered = d.results || [];
-              for (const item of filtered) {
-                if (item.asin && !seenAsins.has(item.asin) && candidates.length < productsPerSlot) {
-                  seenAsins.add(item.asin); candidates.push(item);
-                }
-              }
-              if (d.total_raw !== undefined) {
-                addEvent(makeEvent('search', 'progress', `[${slot}] "${kw}" → ${d.total_filtered}/${d.total_raw} passed filter`));
-              }
-            }
-          } catch { /**/ }
-        }
-        if (candidates.length > 0) {
-          slotCandidates[slot] = candidates;
-        }
-      }
-      const totalCandidates = Object.values(slotCandidates).reduce((a, b) => a + b.length, 0);
-      addEvent(makeEvent('search', 'success', `Total ${totalCandidates} quality-filtered candidates found`));
-      if (totalCandidates === 0) throw new Error('No products found in Amazon search');
-
-      if (abortRef.current) throw new Error('Aborted by user');
-
-      // ── STEP 3: Register products (lightweight Gemini + rule engine) ─────
-      addEvent(makeEvent('register', 'start', 'Analyzing via lightweight Gemini (600 tokens, auto-retry) + rule engine...'));
       const existingAsins = new Set<string>();
       const { data: existingProducts } = await supabase.from('products').select('product_link').not('product_link', 'is', null);
       if (existingProducts) {
@@ -513,69 +464,137 @@ export default function AdminAutoPipeline() {
         }
       }
 
-      for (const slot of PRIORITY_SLOTS) {
-        const candidates = slotCandidates[slot] || [];
-        let slotRegistered = 0;
-        for (const product of candidates) {
-          if (product.asin && existingAsins.has(product.asin)) continue;
-          try {
-            const r = await fetch(`${apiBase}/auto-pipeline`, {
-              method: 'POST', headers: authHeaders,
-              body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId }),
-            });
-            if (r.ok) {
-              const d = await r.json();
-              if (d.success) { slotRegistered++; registeredCount++; if (product.asin) existingAsins.add(product.asin); }
+      for (let lookIdx = 0; lookIdx < lookKeys.length; lookIdx++) {
+        const lookKey = lookKeys[lookIdx];
+        const lookLabel = lookNames[lookKey] || lookKey;
+        const lookCategories = byLook[lookKey] || {};
+        const lookBatchId = `${batchId}-${lookKey}`;
+
+        if (abortRef.current) throw new Error('Aborted by user');
+
+        // ── STEP 2: Amazon search per look ────────────────────────────────
+        addEvent(makeEvent('search', 'start', `[Look ${lookKey}: ${lookLabel}] Searching Amazon (rating>=4.0)...`));
+        const slotCandidates: Record<string, any[]> = {};
+        for (const slot of PRIORITY_SLOTS) {
+          const keywords = lookCategories[slot] || [];
+          if (keywords.length === 0) continue;
+          const seenAsins = new Set<string>();
+          const candidates: any[] = [];
+          for (const kw of keywords) {
+            try {
+              const r = await fetch(`${apiBase}/auto-amazon-search`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ query: kw, page: 1 }),
+              });
+              if (r.ok) {
+                const d = await r.json();
+                for (const item of (d.results || [])) {
+                  if (item.asin && !seenAsins.has(item.asin) && candidates.length < productsPerSlot) {
+                    seenAsins.add(item.asin); candidates.push(item);
+                  }
+                }
+                if (d.total_raw !== undefined) {
+                  addEvent(makeEvent('search', 'progress', `[${lookKey}/${slot}] "${kw}" → ${d.total_filtered}/${d.total_raw} passed`));
+                }
+              }
+            } catch { /**/ }
+            if (candidates.length >= productsPerSlot) break;
+          }
+          if (candidates.length > 0) slotCandidates[slot] = candidates;
+        }
+        const totalCandidates = Object.values(slotCandidates).reduce((a, b) => a + b.length, 0);
+        addEvent(makeEvent('search', 'progress', `[Look ${lookKey}] ${totalCandidates} candidates found`));
+        if (totalCandidates === 0) {
+          addEvent(makeEvent('search', 'error', `[Look ${lookKey}] No products found, skipping`));
+          continue;
+        }
+
+        if (abortRef.current) throw new Error('Aborted by user');
+
+        // ── STEP 3: Register products per look ─────────────────────────────
+        addEvent(makeEvent('register', 'start', `[Look ${lookKey}] Analyzing & registering products...`));
+        let lookRegistered = 0;
+        for (const slot of PRIORITY_SLOTS) {
+          const candidates = slotCandidates[slot] || [];
+          for (const product of candidates) {
+            if (product.asin && existingAsins.has(product.asin)) {
+              try {
+                const r = await fetch(`${apiBase}/auto-pipeline`, {
+                  method: 'POST', headers: authHeaders,
+                  body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId: lookBatchId }),
+                });
+                if (r.ok) { const d = await r.json(); if (d.success) { lookRegistered++; registeredCount++; } }
+              } catch { /**/ }
+              continue;
             }
-          } catch { /**/ }
+            try {
+              const r = await fetch(`${apiBase}/auto-pipeline`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId: lookBatchId }),
+              });
+              if (r.ok) {
+                const d = await r.json();
+                if (d.success) { lookRegistered++; registeredCount++; if (product.asin) existingAsins.add(product.asin); }
+              }
+            } catch { /**/ }
+          }
         }
-        if (slotRegistered > 0) addEvent(makeEvent('register', 'progress', `[${slot}] Registered ${slotRegistered} products`));
+        addEvent(makeEvent('register', 'progress', `[Look ${lookKey}] Registered ${lookRegistered} products`));
+
+        if (abortRef.current) throw new Error('Aborted by user');
+
+        // ── STEP 4: Background removal per look ────────────────────────────
+        addEvent(makeEvent('nobg', 'start', `[Look ${lookKey}] Extracting flatlays...`));
+        const { data: productsForBg } = await supabase.from('products').select('id, image_url, category, sub_category').eq('batch_id', lookBatchId).is('nobg_image_url', null);
+        if (productsForBg && productsForBg.length > 0) {
+          const valid = productsForBg.filter(p => !!p.image_url);
+          const PARALLEL = 3;
+          let extractedCount = 0;
+          for (let i = 0; i < valid.length; i += PARALLEL) {
+            const batch = valid.slice(i, i + PARALLEL);
+            const results = await Promise.allSettled(batch.map(p =>
+              fetch(`${apiBase}/auto-pipeline`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ action: 'extract-nobg', productId: p.id, imageUrl: p.image_url, category: p.category || 'top', subCategory: p.sub_category || '' }),
+              })
+            ));
+            extractedCount += results.filter(r => r.status === 'fulfilled').length;
+            await new Promise(r => setTimeout(r, 300));
+          }
+          addEvent(makeEvent('nobg', 'progress', `[Look ${lookKey}] ${extractedCount}/${valid.length} extracted`));
+        } else {
+          addEvent(makeEvent('nobg', 'progress', `[Look ${lookKey}] All products have flatlays`));
+        }
+
+        if (abortRef.current) throw new Error('Aborted by user');
+
+        // ── STEP 5: Generate 1 outfit per look ─────────────────────────────
+        addEvent(makeEvent('outfits', 'start', `[Look ${lookKey}: ${lookLabel}] Generating best outfit...`));
+        const outfitRes = await fetch(`${apiBase}/auto-pipeline`, {
+          method: 'POST', headers: authHeaders,
+          body: JSON.stringify({ action: 'generate-outfits', batchId: lookBatchId, gender, body_type: bodyType, vibe, season, outfit_count: 1 }),
+        });
+        if (outfitRes.ok) {
+          const outfitData = await outfitRes.json();
+          if (!outfitData.error) {
+            allOutfitIds.push(...(outfitData.outfitIds || []));
+            allOutfitCandidates.push(...(outfitData.outfitCandidates || []));
+            addEvent(makeEvent('outfits', 'progress', `[Look ${lookKey}] Outfit generated (score: ${outfitData.outfitCandidates?.[0]?.matchScore ?? '?'})`));
+          } else {
+            addEvent(makeEvent('outfits', 'error', `[Look ${lookKey}] ${outfitData.error}`));
+          }
+        } else {
+          addEvent(makeEvent('outfits', 'error', `[Look ${lookKey}] Outfit generation failed (${outfitRes.status})`));
+        }
       }
+
+      addEvent(makeEvent('search', 'success', `Search complete across ${lookKeys.length} looks`));
       addEvent(makeEvent('register', 'success', `Registered ${registeredCount} products total`));
+      addEvent(makeEvent('nobg', 'success', `Flatlay extraction complete`));
+      addEvent(makeEvent('outfits', 'success', `Generated ${allOutfitIds.length} outfits (1 per look)`));
+
       if (registeredCount === 0) throw new Error('No products were successfully registered');
-
-      if (abortRef.current) throw new Error('Aborted by user');
-
-      // ── STEP 4: Background removal (parallel batches) ────────────────────
-      addEvent(makeEvent('nobg', 'start', 'Starting flatlay extraction for registered products...'));
-      const { data: productsForBg } = await supabase.from('products').select('id, image_url, category, sub_category').eq('batch_id', batchId).is('nobg_image_url', null);
-      if (productsForBg && productsForBg.length > 0) {
-        const valid = productsForBg.filter(p => !!p.image_url);
-        const PARALLEL = 3;
-        let extractedCount = 0;
-        for (let i = 0; i < valid.length; i += PARALLEL) {
-          const batch = valid.slice(i, i + PARALLEL);
-          addEvent(makeEvent('nobg', 'progress', `Extracting batch ${Math.floor(i / PARALLEL) + 1}/${Math.ceil(valid.length / PARALLEL)}...`));
-          const results = await Promise.allSettled(batch.map(p =>
-            fetch(`${apiBase}/auto-pipeline`, {
-              method: 'POST', headers: authHeaders,
-              body: JSON.stringify({ action: 'extract-nobg', productId: p.id, imageUrl: p.image_url, category: p.category || 'top', subCategory: p.sub_category || '' }),
-            })
-          ));
-          extractedCount += results.filter(r => r.status === 'fulfilled').length;
-          await new Promise(r => setTimeout(r, 300));
-        }
-        addEvent(makeEvent('nobg', 'success', `Flatlay extraction complete: ${extractedCount}/${valid.length} processed`));
-      } else {
-        addEvent(makeEvent('nobg', 'skip', 'All products already have flatlay images'));
-      }
-
-      // ── STEP 5: Generate outfits (8-dim matching engine) ────────────────
-      addEvent(makeEvent('outfits', 'start', `Assembling ${outfitCount} outfits via 8-dimension scoring engine...`));
-      const outfitRes = await fetch(`${apiBase}/auto-pipeline`, {
-        method: 'POST', headers: authHeaders,
-        body: JSON.stringify({ action: 'generate-outfits', batchId, gender, body_type: bodyType, vibe, season, outfit_count: outfitCount }),
-      });
-      if (!outfitRes.ok) {
-        const errText = await outfitRes.text();
-        throw new Error(`Outfit generation failed (${outfitRes.status}): ${errText.slice(0, 200)}`);
-      }
-      const outfitData = await outfitRes.json();
-      if (outfitData.error) throw new Error(outfitData.error);
-
-      allOutfitIds.push(...(outfitData.outfitIds || []));
-      allOutfitCandidates.push(...(outfitData.outfitCandidates || []));
-      addEvent(makeEvent('outfits', 'success', `Generated ${allOutfitIds.length} outfit candidates`));
+      if (allOutfitIds.length === 0) throw new Error('Could not generate any outfits');
 
       const finalResult: PipelineResult = {
         batchId, events: [],
@@ -619,7 +638,7 @@ export default function AdminAutoPipeline() {
             <h1 className="text-2xl font-bold text-white tracking-tight">Auto Pipeline</h1>
             <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-500/30">BETA</span>
           </div>
-          <p className="text-zinc-400 text-sm ml-12">룰 키워드 → 품질 필터 서칭 → 경량 분석 → 누끼 제거 → 8차원 매칭 엔진</p>
+          <p className="text-zinc-400 text-sm ml-12">Look A/B/C 별 키워드 → 품질 필터 서칭 → 경량 분석 → 누끼 제거 → 8차원 매칭 (3 outfits)</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -675,24 +694,20 @@ export default function AdminAutoPipeline() {
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">Settings</label>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-medium text-white">Outfits to generate</div>
-                  <div className="text-[10px] text-zinc-500">Number of final outfits</div>
+                  <div className="text-xs font-medium text-white">Outfits per run</div>
+                  <div className="text-[10px] text-zinc-500">3 looks per vibe (A/B/C), 1 outfit each</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setOutfitCount(c => Math.max(1, c - 1))} className="w-7 h-7 rounded-lg bg-white/10 text-white hover:bg-white/20 text-sm font-bold transition-all">−</button>
-                  <span className="text-sm font-bold text-white w-4 text-center">{outfitCount}</span>
-                  <button onClick={() => setOutfitCount(c => Math.min(10, c + 1))} className="w-7 h-7 rounded-lg bg-white/10 text-white hover:bg-white/20 text-sm font-bold transition-all">+</button>
-                </div>
+                <span className="text-sm font-bold text-white bg-white/10 px-3 py-1.5 rounded-lg">3</span>
               </div>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs font-medium text-white">Products per slot</div>
-                  <div className="text-[10px] text-zinc-500">Candidates per category</div>
+                  <div className="text-[10px] text-zinc-500">Candidates per category per look</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setProductsPerSlot(c => Math.max(2, c - 1))} className="w-7 h-7 rounded-lg bg-white/10 text-white hover:bg-white/20 text-sm font-bold transition-all">−</button>
+                  <button onClick={() => setProductsPerSlot(c => Math.max(1, c - 1))} className="w-7 h-7 rounded-lg bg-white/10 text-white hover:bg-white/20 text-sm font-bold transition-all">−</button>
                   <span className="text-sm font-bold text-white w-4 text-center">{productsPerSlot}</span>
-                  <button onClick={() => setProductsPerSlot(c => Math.min(10, c + 1))} className="w-7 h-7 rounded-lg bg-white/10 text-white hover:bg-white/20 text-sm font-bold transition-all">+</button>
+                  <button onClick={() => setProductsPerSlot(c => Math.min(5, c + 1))} className="w-7 h-7 rounded-lg bg-white/10 text-white hover:bg-white/20 text-sm font-bold transition-all">+</button>
                 </div>
               </div>
             </div>

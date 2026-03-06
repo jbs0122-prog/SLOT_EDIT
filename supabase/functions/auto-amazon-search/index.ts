@@ -29,7 +29,7 @@ interface QualityFilter {
 }
 
 const DEFAULT_FILTER: QualityFilter = {
-  minRating: 3.5,
+  minRating: 4.0,
   minReviews: 10,
   minPriceUsd: 5,
   maxPriceUsd: 500,

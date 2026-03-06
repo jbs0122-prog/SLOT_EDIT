@@ -255,17 +255,18 @@ function shuffleArray<T>(arr: T[]): T[] {
   return result;
 }
 
-function generateKeywordsForSlot(
+function generateKeywordsForSlotByLook(
   slot: string,
+  lookKey: string,
+  look: { name: string; materials: string[]; items: Record<string, string[]> },
   genderLabel: string,
   vibe: string,
   season: string,
   bodyType: string,
   topPerformers: KeywordPerformance[]
 ): string[] {
-  const vibeData = VIBE_LOOKS[vibe];
   const dna = VIBE_DNA[vibe];
-  if (!vibeData || !dna) return [];
+  if (!dna) return [];
 
   const seasonMod = SEASON_MODIFIERS[season];
   if (seasonMod?.exclude.includes(slot)) return [];
@@ -280,53 +281,48 @@ function generateKeywordsForSlot(
   const topPerformerKws = topPerformers
     .filter(p => p.score >= 0.5)
     .map(p => p.keyword);
-  for (const kw of topPerformerKws.slice(0, 2)) {
+  for (const kw of topPerformerKws.slice(0, 1)) {
     if (!seen.has(kw)) { seen.add(kw); keywords.push(kw); }
   }
 
-  const looks = Object.values(vibeData);
-  for (const look of looks) {
-    const items = look.items[slot] || [];
-    const materials = look.materials;
+  const items = look.items[slot] || [];
+  const materials = look.materials;
+  if (items.length === 0) return keywords;
 
-    if (items.length === 0) continue;
+  const selectedItems = shuffleArray(items).slice(0, 3);
+  const selectedMaterials = shuffleArray(materials).slice(0, 3);
+  const selectedColors = shuffleArray(allColors).slice(0, 3);
 
-    const selectedItems = shuffleArray(items).slice(0, 2);
-    const selectedMaterials = shuffleArray(materials).slice(0, 2);
-    const selectedColors = shuffleArray(allColors).slice(0, 2);
+  for (let i = 0; i < selectedItems.length; i++) {
+    const item = selectedItems[i];
+    const color = selectedColors[i % selectedColors.length];
+    const material = selectedMaterials[i % selectedMaterials.length];
 
-    for (let i = 0; i < selectedItems.length; i++) {
-      const item = selectedItems[i];
-      const color = selectedColors[i % selectedColors.length];
-      const material = selectedMaterials[i % selectedMaterials.length];
-
-      let keyword: string;
-      if (fitModifier && ["top", "bottom", "outer"].includes(slot)) {
-        keyword = `${genderLabel}'s ${fitModifier} ${material} ${item}`;
-      } else {
-        keyword = `${genderLabel}'s ${color} ${material} ${item}`;
-      }
-
-      keyword = keyword.replace(/\s+/g, " ").trim();
-      if (keyword.split(" ").length > 7) {
-        keyword = `${genderLabel}'s ${color} ${item}`;
-      }
-
-      if (!seen.has(keyword)) { seen.add(keyword); keywords.push(keyword); }
+    let keyword: string;
+    if (fitModifier && ["top", "bottom", "outer"].includes(slot)) {
+      keyword = `${genderLabel}'s ${fitModifier} ${material} ${item}`;
+    } else {
+      keyword = `${genderLabel}'s ${color} ${material} ${item}`;
     }
+
+    keyword = keyword.replace(/\s+/g, " ").trim();
+    if (keyword.split(" ").length > 7) {
+      keyword = `${genderLabel}'s ${color} ${item}`;
+    }
+
+    if (!seen.has(keyword)) { seen.add(keyword); keywords.push(keyword); }
   }
 
   if (seasonMod) {
     const seasonFabric = seasonMod.fabrics[0];
-    const vibeItems = looks[0]?.items[slot] || [];
-    if (vibeItems.length > 0) {
-      const baseItem = vibeItems[Math.floor(Math.random() * vibeItems.length)];
+    if (items.length > 0) {
+      const baseItem = items[Math.floor(Math.random() * items.length)];
       const seasonKw = `${genderLabel}'s ${seasonFabric} ${baseItem}`;
       if (!seen.has(seasonKw)) { seen.add(seasonKw); keywords.push(seasonKw); }
     }
   }
 
-  return keywords.slice(0, 8);
+  return keywords.slice(0, 5);
 }
 
 Deno.serve(async (req: Request) => {
@@ -374,22 +370,38 @@ Deno.serve(async (req: Request) => {
     }
 
     const SLOTS = ["top", "bottom", "shoes", "outer", "mid", "bag", "accessory"];
+    const vibeData = VIBE_LOOKS[vibeKey];
+
+    const lookKeys = vibeData ? Object.keys(vibeData) : [];
+    const byLook: Record<string, Record<string, string[]>> = {};
     const categories: Record<string, string[]> = {};
     const allKeywords: string[] = [];
 
-    for (const slot of SLOTS) {
-      const slotPerformers = topPerformers[slot] || [];
-      const kws = generateKeywordsForSlot(slot, genderLabel, vibeKey, seasonLabel, bodyTypeLabel, slotPerformers);
-      if (kws.length > 0) {
-        categories[slot] = kws;
-        allKeywords.push(...kws);
+    for (const lookKey of lookKeys) {
+      const look = vibeData[lookKey];
+      const lookCategories: Record<string, string[]> = {};
+      for (const slot of SLOTS) {
+        const slotPerformers = topPerformers[slot] || [];
+        const kws = generateKeywordsForSlotByLook(slot, lookKey, look, genderLabel, vibeKey, seasonLabel, bodyTypeLabel, slotPerformers);
+        if (kws.length > 0) {
+          lookCategories[slot] = kws;
+          if (!categories[slot]) categories[slot] = [];
+          categories[slot].push(...kws);
+          allKeywords.push(...kws);
+        }
       }
+      byLook[lookKey] = lookCategories;
     }
 
     return new Response(
       JSON.stringify({
         keywords: allKeywords,
         categories,
+        byLook,
+        lookNames: lookKeys.reduce((acc: Record<string, string>, k: string) => {
+          acc[k] = vibeData?.[k]?.name || k;
+          return acc;
+        }, {}),
         source: "rule-based",
         vibeKey,
         colorHints: VIBE_DNA[vibeKey] ? {
