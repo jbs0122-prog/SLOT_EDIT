@@ -62,53 +62,19 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
   const dragOverIndex = useRef<number | null>(null);
 
   useEffect(() => {
-    async function checkAdmin(s: Session | null) {
-      if (!s?.user) {
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const { data } = await supabase
-          .from('admin_users')
-          .select('user_id')
-          .eq('user_id', s.user.id)
-          .maybeSingle();
-
-        setIsAdmin(!!data);
-      } catch {
-        setIsAdmin(false);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    let initialChecked = false;
-
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      initialChecked = true;
-      checkAdmin(s);
+      setIsAdmin(!!s?.user);
+      setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      if (initialChecked) {
-        checkAdmin(s);
-      }
+      setIsAdmin(!!s?.user);
+      setLoading(false);
     });
 
-    const timeout = setTimeout(() => {
-      if (!initialChecked) {
-        setLoading(false);
-      }
-    }, 5000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleLogout = async () => {
