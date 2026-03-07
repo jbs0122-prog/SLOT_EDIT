@@ -247,7 +247,7 @@ IMPORTANT: For sub_category, always prefer the MOST SPECIFIC type. For example, 
       JSON.stringify({
         success: true,
         analysis,
-        model: usedModel,
+        model: "gemini-2.5-flash",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
