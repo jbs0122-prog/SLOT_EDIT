@@ -628,7 +628,6 @@ export default function AdminAutoPipeline() {
         for (const slot of PRIORITY_SLOTS) {
           const candidates = slotCandidates[slot] || [];
           for (const product of candidates) {
-            if (product.asin && existingAsins.has(product.asin)) continue;
             try {
               const r = await fetch(`${apiBase}/auto-pipeline`, {
                 method: 'POST', headers: authHeaders,

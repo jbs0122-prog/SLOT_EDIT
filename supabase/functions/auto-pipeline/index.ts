@@ -400,7 +400,6 @@ function scoreMaterialCompat(items: Record<string, any>): number {
   return Math.max(0, Math.min(100, Math.round((compatCount > 0 ? compatTotal / compatCount : 0.5) * 100)));
 }
 
-// [Issue 2] Vibe Match now uses fuzzy affinity instead of simple array includes
 function scoreVibeMatch(items: Record<string, any>, vibe: string): number {
   const all = Object.values(items).filter(Boolean);
   if (all.length === 0) return 15;
@@ -408,11 +407,14 @@ function scoreVibeMatch(items: Record<string, any>, vibe: string): number {
   let totalAffinity = 0;
   for (const p of all) {
     const affinity = getVibeItemAffinity(p, vibe);
-    if (affinity >= 0.8) totalAffinity += 1.0;
-    else if (affinity >= 0.5) totalAffinity += 0.75;
-    else if (affinity >= 0.3) totalAffinity += 0.5;
-    else if (Array.isArray(p.vibe) && p.vibe.includes(vibe)) totalAffinity += 0.4;
-    else totalAffinity += 0.1;
+    const isVibeFirst = Array.isArray(p.vibe) && p.vibe[0] === vibe;
+    const isVibeSecondary = Array.isArray(p.vibe) && p.vibe.includes(vibe);
+    if (affinity >= 0.8) totalAffinity += isVibeFirst ? 1.0 : 0.9;
+    else if (affinity >= 0.5) totalAffinity += isVibeFirst ? 0.85 : 0.7;
+    else if (affinity >= 0.3) totalAffinity += isVibeFirst ? 0.65 : 0.5;
+    else if (isVibeFirst) totalAffinity += 0.55;
+    else if (isVibeSecondary) totalAffinity += 0.3;
+    else totalAffinity += 0.05;
   }
   const avgAffinity = totalAffinity / all.length;
   return Math.max(0, Math.min(100, Math.round(avgAffinity * 100)));
@@ -568,18 +570,17 @@ function scoreAccessoryHarmony(items: Record<string, any>): number {
   return Math.max(0, Math.min(100, Math.round(totalHarmony / count)));
 }
 
-// [Issue 5] Dynamic maxProductRepeat: scales with productsPerSlot via context
 const SCORE_WEIGHTS = {
-  tonalHarmony: 0.15,
+  tonalHarmony: 0.18,
   formalityCoherence: 0.12,
   materialCompat: 0.09,
-  vibeMatch: 0.16,
-  seasonFit: 0.13,
-  warmthFit: 0.09,
-  colorDepth: 0.08,
+  vibeMatch: 0.18,
+  seasonFit: 0.12,
+  warmthFit: 0.10,
+  colorDepth: 0.07,
   proportionBalance: 0.07,
-  patternBalance: 0.07,
-  accessoryHarmony: 0.04,
+  patternBalance: 0.05,
+  accessoryHarmony: 0.02,
 };
 
 function scoreComposition(items: Record<string, any>, vibe: string, season: string): {
@@ -616,16 +617,21 @@ function quickColorCheck(product: any, existingFamilies: string[]): boolean {
   const cf = resolveColorFamily(product.color || "", product.color_family);
   if (!cf) return true;
   for (const existing of existingFamilies) {
-    if (getColorHarmonyScore(cf, existing) < 25) return false;
+    if (getColorHarmonyScore(cf, existing) < 40) return false;
   }
   return true;
 }
 
 function isSeasonAppropriateOuter(product: any, season: string): boolean {
   const warmth = typeof product.warmth === "number" ? product.warmth : 3;
+  const sub = (product.sub_category || "").toLowerCase();
   if (season === "summer") return false;
   if (season === "winter" && warmth < 3) return false;
-  if (season === "spring" && warmth > 4) return false;
+  if (season === "spring") {
+    if (warmth > 3) return false;
+    if (/parka|puffer|duffle|shearling|sherpa|heavy.?wool|down/.test(sub)) return false;
+  }
+  if (season === "fall" && warmth < 2) return false;
   return true;
 }
 
@@ -691,8 +697,9 @@ function assembleAndScore(
 
         const outerPool = bySlot["outer"].filter((o: any) => quickColorCheck(o, coreFamilies));
         const requireOuter = season === "winter" || season === "fall";
+        const recommendOuter = season === "spring";
         const outerCandidates = outerPool.length > 0
-          ? (requireOuter ? outerPool.slice(0, 2) : [null, outerPool[0]])
+          ? (requireOuter ? outerPool.slice(0, 2) : recommendOuter ? [outerPool[0], null] : [null, outerPool[0]])
           : (requireOuter ? [] : [null]);
 
         for (const outer of outerCandidates) {
@@ -723,7 +730,7 @@ function assembleAndScore(
 
           const { total, breakdown } = scoreComposition(items, vibe, season);
 
-          if (total >= 70) {
+          if (total >= 72 && breakdown.tonalHarmony >= 60 && breakdown.vibeMatch >= 45) {
             combos.push({ items, score: total, breakdown });
           }
 
@@ -1128,7 +1135,15 @@ formality: 1=very casual, 3=smart casual, 5=formal. warmth: 1=summer, 3=spring/f
                   const seasons = Array.isArray(vis.season) ? vis.season.filter((s: string) => VALID_SEASONS.has(s)) : [];
                   if (seasons.length > 0) patch.season = seasons;
                   const vibes = Array.isArray(vis.vibe) ? vis.vibe.filter((v: string) => VALID_VIBES.has(v)) : [];
-                  if (vibes.length > 0) patch.vibe = vibes;
+                  if (vibes.length > 0) {
+                    const { data: currentProduct } = await adminClient.from("products").select("vibe").eq("id", productId).maybeSingle();
+                    const contextVibe = Array.isArray(currentProduct?.vibe) && currentProduct.vibe.length > 0 ? currentProduct.vibe[0] : null;
+                    if (contextVibe && vibes[0] !== contextVibe) {
+                      patch.vibe = [contextVibe, ...vibes.filter((v: string) => v !== contextVibe)].slice(0, 3);
+                    } else {
+                      patch.vibe = vibes;
+                    }
+                  }
                   const bodyTypes = Array.isArray(vis.body_type) ? vis.body_type.filter((b: string) => VALID_BODY_TYPES.has(b)) : [];
                   if (bodyTypes.length > 0) patch.body_type = bodyTypes;
 
