@@ -333,7 +333,7 @@ function getVibeItemAffinity(product: any, vibe: string): number {
 function scoreTonalHarmony(items: Record<string, any>): number {
   const all = Object.values(items).filter(Boolean);
   const families = all.map((p: any) => resolveColorFamily(p.color || "", p.color_family)).filter(Boolean);
-  if (families.length < 2) return 50;
+  if (families.length < 2) return 20;
 
   let pairHarmony = 0, pairCount = 0;
   for (let i = 0; i < families.length; i++) {
@@ -342,7 +342,7 @@ function scoreTonalHarmony(items: Record<string, any>): number {
       pairCount++;
     }
   }
-  let score = pairCount > 0 ? pairHarmony / pairCount : 50;
+  let score = pairCount > 0 ? pairHarmony / pairCount : 20;
 
   const blackCount = families.filter(f => f === "black").length;
   if (blackCount >= 4) score -= 15;
@@ -356,7 +356,7 @@ function scoreTonalHarmony(items: Record<string, any>): number {
 
 function scoreFormalityCoherence(items: Record<string, any>): number {
   const all = Object.values(items).filter(Boolean);
-  if (all.length < 3) return 50;
+  if (all.length < 3) return 20;
 
   const formalities = all.map(getFormality);
   const styles = all.map(inferStyle);
@@ -387,7 +387,7 @@ function scoreFormalityCoherence(items: Record<string, any>): number {
 function scoreMaterialCompat(items: Record<string, any>): number {
   const coreKeys = ["outer", "mid", "top", "bottom", "shoes"];
   const coreItems = coreKeys.map(k => items[k]).filter(Boolean);
-  if (coreItems.length < 2) return 50;
+  if (coreItems.length < 2) return 20;
 
   const groups = coreItems.map((p: any) => inferMaterialGroup(p.material || "", p.name));
   let compatTotal = 0, compatCount = 0;
@@ -403,7 +403,7 @@ function scoreMaterialCompat(items: Record<string, any>): number {
 // [Issue 2] Vibe Match now uses fuzzy affinity instead of simple array includes
 function scoreVibeMatch(items: Record<string, any>, vibe: string): number {
   const all = Object.values(items).filter(Boolean);
-  if (all.length === 0) return 50;
+  if (all.length === 0) return 15;
 
   let totalAffinity = 0;
   for (const p of all) {
@@ -415,14 +415,14 @@ function scoreVibeMatch(items: Record<string, any>, vibe: string): number {
     else totalAffinity += 0.1;
   }
   const avgAffinity = totalAffinity / all.length;
-  return Math.max(0, Math.min(100, Math.round(30 + avgAffinity * 70)));
+  return Math.max(0, Math.min(100, Math.round(avgAffinity * 100)));
 }
 
 function scoreSeasonFit(items: Record<string, any>, season: string): number {
-  if (!season) return 50;
+  if (!season) return 30;
   const coreKeys = ["outer", "mid", "top", "bottom", "shoes"];
   const coreItems = coreKeys.map(k => items[k]).filter(Boolean);
-  if (coreItems.length < 2) return 50;
+  if (coreItems.length < 2) return 20;
 
   let score = 100, matchCount = 0, mismatchCount = 0;
   for (const item of coreItems) {
@@ -447,7 +447,7 @@ function scoreWarmthFit(items: Record<string, any>, season: string): number {
   const coreKeys = ["outer", "mid", "top", "bottom", "shoes"];
   const warmths = coreKeys.map(k => items[k]).filter(Boolean)
     .map((i: any) => i.warmth).filter((w: any): w is number => typeof w === "number");
-  if (warmths.length < 2 || !season) return 50;
+  if (warmths.length < 2 || !season) return 20;
 
   let score = 100;
   const avg = warmths.reduce((s: number, w: number) => s + w, 0) / warmths.length;
@@ -469,7 +469,7 @@ function scoreColorDepth(items: Record<string, any>): number {
   const coreKeys = ["outer", "mid", "top", "bottom", "shoes"];
   const colors = coreKeys.map(k => items[k]).filter(Boolean)
     .map((p: any) => resolveColorFamily(p.color || "", p.color_family)).filter(Boolean);
-  if (colors.length < 3) return 50;
+  if (colors.length < 3) return 20;
 
   let score = 70;
   const unique = new Set(colors);
@@ -486,7 +486,7 @@ function scoreColorDepth(items: Record<string, any>): number {
 
 function scoreProportionBalance(items: Record<string, any>): number {
   const top = items.top, bottom = items.bottom;
-  if (!top || !bottom) return 50;
+  if (!top || !bottom) return 20;
 
   const BALANCE: Record<string, string[]> = {
     oversized: ["slim", "fitted", "straight", "tapered"],
@@ -523,7 +523,7 @@ function scorePatternBalance(items: Record<string, any>): number {
   const patterns = coreKeys.map(k => items[k]).filter(Boolean)
     .map((p: any) => (p.pattern || "solid").toLowerCase());
 
-  if (patterns.length < 2) return 75;
+  if (patterns.length < 2) return 40;
 
   const LOUD = new Set(["stripe", "check", "graphic", "print"]);
   const loudPatterns = patterns.filter(p => LOUD.has(p));
@@ -547,10 +547,10 @@ function scoreAccessoryHarmony(items: Record<string, any>): number {
     .map(k => items[k]).filter(Boolean)
     .map((p: any) => resolveColorFamily(p.color || "", p.color_family)).filter(Boolean);
 
-  if (coreFamilies.length === 0) return 75;
+  if (coreFamilies.length === 0) return 30;
 
   const accItems = ["bag", "accessory"].map(k => items[k]).filter(Boolean);
-  if (accItems.length === 0) return 75;
+  if (accItems.length === 0) return 50;
 
   let totalHarmony = 0, count = 0;
   for (const acc of accItems) {
@@ -564,7 +564,7 @@ function scoreAccessoryHarmony(items: Record<string, any>): number {
     count++;
   }
 
-  if (count === 0) return 75;
+  if (count === 0) return 40;
   return Math.max(0, Math.min(100, Math.round(totalHarmony / count)));
 }
 
@@ -601,7 +601,7 @@ function scoreComposition(items: Record<string, any>, vibe: string, season: stri
 
   let total = 0;
   for (const [key, weight] of Object.entries(SCORE_WEIGHTS)) {
-    total += (breakdown[key as keyof typeof breakdown] || 50) * weight;
+    total += (breakdown[key as keyof typeof breakdown] || 0) * weight;
   }
 
   return { total: Math.round(total), breakdown };
@@ -681,14 +681,17 @@ function assembleAndScore(
         const coreFamilies = [topCF, bottomCF, resolveColorFamily(shoes.color || "", shoes.color_family)].filter(Boolean);
 
         const outerPool = bySlot["outer"].filter((o: any) => quickColorCheck(o, coreFamilies));
-        const outerCandidates = outerPool.length > 0 ? [null, outerPool[0]] : [null];
+        const requireOuter = season === "winter" || season === "fall";
+        const outerCandidates = outerPool.length > 0
+          ? (requireOuter ? outerPool.slice(0, 2) : [null, outerPool[0]])
+          : (requireOuter ? [] : [null]);
 
         for (const outer of outerCandidates) {
           const items: Record<string, any> = { ...coreItems };
           if (outer) items.outer = outer;
 
           const midPool = bySlot["mid"].filter((m: any) => quickColorCheck(m, coreFamilies));
-          if (midPool.length > 0 && !items.outer) items.mid = midPool[0];
+          if (midPool.length > 0 && (!items.outer || season === "winter")) items.mid = midPool[0];
 
           if (bySlot["bag"]?.length) {
             const bagIdx = Math.abs(
@@ -711,7 +714,7 @@ function assembleAndScore(
 
           const { total, breakdown } = scoreComposition(items, vibe, season);
 
-          if (total >= 40) {
+          if (total >= 70) {
             combos.push({ items, score: total, breakdown });
           }
 
@@ -898,6 +901,9 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      const outfitScoreMap = new Map<string, number>();
+      for (const c of outfitCandidates) outfitScoreMap.set(c.outfitId, c.matchScore);
+
       const insightHeaders = { "Authorization": `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" };
       EdgeRuntime.waitUntil(Promise.allSettled(outfitIds.map(async (outfitId) => {
         const { data: items } = await adminClient.from("outfit_items").select("slot_type, products(*)").eq("outfit_id", outfitId);
@@ -912,7 +918,7 @@ Deno.serve(async (req: Request) => {
         try {
           const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-outfit-insight`, {
             method: "POST", headers: insightHeaders,
-            body: JSON.stringify({ items: itemList, gender, bodyType: body_type, vibe, season, matchScore: Math.round(75 + Math.random() * 15) }),
+            body: JSON.stringify({ items: itemList, gender, bodyType: body_type, vibe, season, matchScore: outfitScoreMap.get(outfitId) || 0 }),
           });
           if (res.ok) {
             const d = await res.json();

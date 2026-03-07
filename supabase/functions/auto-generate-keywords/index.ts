@@ -289,9 +289,13 @@ function generateKeywordsForSlotByLook(
   const materials = look.materials;
   if (items.length === 0) return keywords;
 
-  const selectedItems = shuffleArray(items).slice(0, 3);
-  const selectedMaterials = shuffleArray(materials).slice(0, 3);
-  const selectedColors = shuffleArray(allColors).slice(0, 3);
+  const isCore = ["top", "bottom", "shoes", "outer"].includes(slot);
+  const maxKws = isCore ? 3 : 2;
+  const itemCount = isCore ? 2 : 1;
+
+  const selectedItems = shuffleArray(items).slice(0, itemCount);
+  const selectedMaterials = shuffleArray(materials).slice(0, itemCount);
+  const selectedColors = shuffleArray(allColors).slice(0, itemCount);
 
   for (let i = 0; i < selectedItems.length; i++) {
     const item = selectedItems[i];
@@ -313,7 +317,7 @@ function generateKeywordsForSlotByLook(
     if (!seen.has(keyword)) { seen.add(keyword); keywords.push(keyword); }
   }
 
-  if (seasonMod) {
+  if (isCore && seasonMod) {
     const seasonFabric = seasonMod.fabrics[0];
     if (items.length > 0) {
       const baseItem = items[Math.floor(Math.random() * items.length)];
@@ -322,7 +326,7 @@ function generateKeywordsForSlotByLook(
     }
   }
 
-  return keywords.slice(0, 5);
+  return keywords.slice(0, maxKws);
 }
 
 Deno.serve(async (req: Request) => {

@@ -483,6 +483,7 @@ export default function AdminAutoPipeline() {
 
       const globalSearchedKws = new Set<string>();
       const globalSearchCache = new Map<string, any[]>();
+      const globalSeenAsins = new Set<string>();
       const lookSlotCandidatesMap: Record<string, Record<string, any[]>> = {};
 
       const searchSlot = async (kw: string, fallbackRating?: number): Promise<{ results: any[]; rawCount: number; filteredCount: number }> => {
@@ -517,11 +518,10 @@ export default function AdminAutoPipeline() {
         const slotCandidates: Record<string, any[]> = {};
         for (const slot of PRIORITY_SLOTS) {
           const isCore = CORE_SLOTS.includes(slot);
-          const slotLimit = isCore ? Math.max(productsPerSlot, 3) : Math.max(1, productsPerSlot - 1);
+          const slotLimit = isCore ? productsPerSlot : Math.max(1, productsPerSlot - 1);
           const keywords = (lookCategories[slot] || []).filter((kw: string) => !globalSearchedKws.has(kw) || globalSearchCache.has(kw));
           const allKws = lookCategories[slot] || [];
           if (allKws.length === 0) continue;
-          const seenAsins = new Set<string>();
           const candidates: any[] = [];
 
           for (const kw of allKws) {
@@ -529,8 +529,8 @@ export default function AdminAutoPipeline() {
             const cached = globalSearchCache.has(kw);
             const { results, rawCount, filteredCount } = await searchSlot(kw);
             for (const item of results) {
-              if (item.asin && !seenAsins.has(item.asin) && candidates.length < slotLimit) {
-                seenAsins.add(item.asin); candidates.push(item);
+              if (item.asin && !globalSeenAsins.has(item.asin) && candidates.length < slotLimit) {
+                globalSeenAsins.add(item.asin); candidates.push(item);
               }
             }
             if (!cached && rawCount >= 0) {
@@ -554,8 +554,8 @@ export default function AdminAutoPipeline() {
                     const fbResults = d.results || [];
                     globalSearchCache.set(fallbackKey, fbResults);
                     for (const item of fbResults) {
-                      if (item.asin && !seenAsins.has(item.asin) && candidates.length < slotLimit) {
-                        seenAsins.add(item.asin); candidates.push(item);
+                      if (item.asin && !globalSeenAsins.has(item.asin) && candidates.length < slotLimit) {
+                        globalSeenAsins.add(item.asin); candidates.push(item);
                       }
                     }
                     addEvent(makeEvent('search', 'progress', `[${lookKey}/${slot}] fallback: ${d.total_filtered ?? 0}/${d.total_raw ?? 0} @3.5`));
