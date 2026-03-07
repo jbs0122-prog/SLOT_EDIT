@@ -189,56 +189,46 @@ IMPORTANT: Be precise with color_family. Use specific values like burgundy inste
 IMPORTANT: For sub_category, always prefer the MOST SPECIFIC type. For example, use "bomber" instead of generic "jacket", "chelsea_boot" instead of generic "boot", "oxford_shirt" instead of generic "shirt".`
         : `Analyze this outfit combination and provide styling insights in Korean.`;
 
-    const MODELS = [
-      "gemini-2.5-flash-preview-04-17",
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-    ];
-
-    const requestBody = JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: prompt },
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
             {
-              inline_data: {
-                mime_type: mimeType,
-                data: base64Image,
-              },
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: base64Image,
+                  },
+                },
+              ],
             },
           ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.4,
-        topK: 32,
-        topP: 1,
-        maxOutputTokens: 2048,
-      },
-    });
-
-    let geminiData: any = null;
-    let usedModel = "";
-    for (const model of MODELS) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: requestBody }
-      );
-      if (res.ok) {
-        const d = await res.json();
-        if (d.candidates?.[0]?.content?.parts?.[0]?.text) {
-          geminiData = d;
-          usedModel = model;
-          break;
-        }
+          generationConfig: {
+            temperature: 0.4,
+            topK: 32,
+            topP: 1,
+            maxOutputTokens: 2048,
+          },
+        }),
       }
+    );
+
+    if (!geminiResponse.ok) {
+      const errBody = await geminiResponse.text();
+      throw new Error(`Gemini API error ${geminiResponse.status}: ${errBody}`);
     }
 
-    if (!geminiData) {
-      throw new Error("All Gemini models failed to return a result");
-    }
+    const geminiData = await geminiResponse.json();
+    const analysisText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    const analysisText = geminiData.candidates[0].content.parts[0].text;
+    if (!analysisText) {
+      throw new Error("No analysis result from Gemini");
+    }
 
     let analysis: ProductAnalysis;
 
