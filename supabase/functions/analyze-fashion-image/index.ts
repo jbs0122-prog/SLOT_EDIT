@@ -265,8 +265,9 @@ IMPORTANT: For sub_category, always prefer the MOST SPECIFIC type. For example, 
     );
   } catch (error) {
     console.error("Error in analyze-fashion-image:", error);
+    const message = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: "Failed to analyze image" }),
+      JSON.stringify({ error: message }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
