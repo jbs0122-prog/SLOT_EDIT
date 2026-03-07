@@ -1,59 +1,175 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import ProductForm from './ProductForm';
 import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import VibeQualityDashboard from './VibeQualityDashboard';
-import { Plus, Upload } from 'lucide-react';
+import { Plus, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 40;
+
+interface Filters {
+  searchTerm: string;
+  filterCategory: string;
+  filterGender: string;
+  filterBodyType: string;
+  filterVibe: string;
+  filterSeason: string;
+}
+
+const FILTER_KEY = 'admin_products_filters';
+
+function loadSavedFilters(): Partial<Filters> | null {
+  try {
+    const raw = sessionStorage.getItem(FILTER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveFiltersToStorage(filters: Partial<Filters>) {
+  try {
+    const current = loadSavedFilters() || {};
+    sessionStorage.setItem(FILTER_KEY, JSON.stringify({ ...current, ...filters }));
+  } catch { /* ignore */ }
+}
+
+function mapRowToProduct(p: any): Product {
+  return {
+    id: p.id,
+    brand: p.brand,
+    name: p.name,
+    category: p.category,
+    gender: p.gender,
+    body_type: p.body_type || [],
+    vibe: p.vibe || [],
+    color: p.color || '',
+    season: p.season || [],
+    silhouette: p.silhouette || '',
+    image_url: p.image_url,
+    nobg_image_url: p.nobg_image_url || undefined,
+    product_link: p.product_link || '',
+    affiliate_link: p.affiliate_link || '',
+    price: p.price,
+    stock_status: p.stock_status || 'in_stock',
+    material: p.material || '',
+    color_family: p.color_family || '',
+    color_tone: p.color_tone || '',
+    sub_category: p.sub_category || '',
+    pattern: p.pattern || '',
+    formality: p.formality,
+    warmth: p.warmth,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+  } as Product;
+}
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const FILTER_KEY = 'admin_products_filters';
-
-  const loadSavedFilters = () => {
-    try {
-      const raw = sessionStorage.getItem(FILTER_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  };
-
-  const savedFilters = loadSavedFilters();
-
-  const [searchTerm, setSearchTermRaw] = useState<string>(savedFilters?.searchTerm ?? '');
-  const [filterCategory, setFilterCategoryRaw] = useState<string>(savedFilters?.filterCategory ?? 'all');
-  const [filterGender, setFilterGenderRaw] = useState<string>(savedFilters?.filterGender ?? 'all');
-  const [filterBodyType, setFilterBodyTypeRaw] = useState<string>(savedFilters?.filterBodyType ?? 'all');
-  const [filterVibe, setFilterVibeRaw] = useState<string>(savedFilters?.filterVibe ?? 'all');
-  const [filterSeason, setFilterSeasonRaw] = useState<string>(savedFilters?.filterSeason ?? 'all');
-  const [filterUnused, setFilterUnused] = useState(false);
-
-  const saveFilters = (updates: Partial<{ searchTerm: string; filterCategory: string; filterGender: string; filterBodyType: string; filterVibe: string; filterSeason: string }>) => {
-    try {
-      const current = loadSavedFilters() || {};
-      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ ...current, ...updates }));
-    } catch { /* ignore */ }
-  };
-
-  const setSearchTerm = (v: string) => { setSearchTermRaw(v); saveFilters({ searchTerm: v }); };
-  const setFilterCategory = (v: string) => { setFilterCategoryRaw(v); saveFilters({ filterCategory: v }); };
-  const setFilterGender = (v: string) => { setFilterGenderRaw(v); saveFilters({ filterGender: v }); };
-  const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); saveFilters({ filterBodyType: v }); };
-  const setFilterVibe = (v: string) => { setFilterVibeRaw(v); saveFilters({ filterVibe: v }); };
-  const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); saveFilters({ filterSeason: v }); };
+  const saved = loadSavedFilters();
+  const [searchTerm, setSearchTermRaw] = useState(saved?.searchTerm ?? '');
+  const [filterCategory, setFilterCategoryRaw] = useState(saved?.filterCategory ?? 'all');
+  const [filterGender, setFilterGenderRaw] = useState(saved?.filterGender ?? 'all');
+  const [filterBodyType, setFilterBodyTypeRaw] = useState(saved?.filterBodyType ?? 'all');
+  const [filterVibe, setFilterVibeRaw] = useState(saved?.filterVibe ?? 'all');
+  const [filterSeason, setFilterSeasonRaw] = useState(saved?.filterSeason ?? 'all');
 
   const [productUsageCounts, setProductUsageCounts] = useState<Record<string, number>>({});
 
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setSearchTerm = (v: string) => {
+    setSearchTermRaw(v);
+    saveFiltersToStorage({ searchTerm: v });
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setCurrentPage(0);
+    }, 400);
+  };
+
+  const setFilterCategory = (v: string) => { setFilterCategoryRaw(v); saveFiltersToStorage({ filterCategory: v }); setCurrentPage(0); };
+  const setFilterGender = (v: string) => { setFilterGenderRaw(v); saveFiltersToStorage({ filterGender: v }); setCurrentPage(0); };
+  const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); saveFiltersToStorage({ filterBodyType: v }); setCurrentPage(0); };
+  const setFilterVibe = (v: string) => { setFilterVibeRaw(v); saveFiltersToStorage({ filterVibe: v }); setCurrentPage(0); };
+  const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); saveFiltersToStorage({ filterSeason: v }); setCurrentPage(0); };
+
+  const loadProductUsageCounts = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_product_usage_counts');
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      (data as { product_id: string; usage_count: number }[])?.forEach(row => {
+        counts[row.product_id] = row.usage_count;
+      });
+      setProductUsageCounts(counts);
+    } catch (error) {
+      console.error('Failed to load product usage counts:', error);
+    }
+  }, []);
+
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('products')
+        .select('*', { count: 'exact' });
+
+      if (searchTerm.trim()) {
+        query = query.or(`name.ilike.%${searchTerm.trim()}%,brand.ilike.%${searchTerm.trim()}%`);
+      }
+      if (filterCategory !== 'all') {
+        query = query.eq('category', filterCategory);
+      }
+      if (filterGender !== 'all') {
+        query = query.eq('gender', filterGender);
+      }
+      if (filterBodyType !== 'all') {
+        query = query.contains('body_type', [filterBodyType]);
+      }
+      if (filterVibe !== 'all') {
+        query = query.contains('vibe', [filterVibe]);
+      }
+      if (filterSeason !== 'all') {
+        query = query.contains('season', [filterSeason]);
+      }
+
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      setProducts(data?.map(mapRowToProduct) || []);
+      setTotalCount(count ?? 0);
+    } catch (error) {
+      console.error('Failed to load products:', error);
+      alert('제품 로드 실패: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, filterCategory, filterGender, filterBodyType, filterVibe, filterSeason, currentPage]);
+
   useEffect(() => {
     loadProducts();
-    loadProductUsageCounts();
+  }, [loadProducts]);
 
+  useEffect(() => {
+    loadProductUsageCounts();
+  }, [loadProductUsageCounts]);
+
+  useEffect(() => {
     const channel = supabase
       .channel('products-nobg-updates')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'products' }, (payload) => {
@@ -69,71 +185,7 @@ export default function AdminProducts() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const loadProducts = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      setProducts(data?.map(p => ({
-        id: p.id,
-        brand: p.brand,
-        name: p.name,
-        category: p.category,
-        gender: p.gender,
-        body_type: p.body_type || [],
-        vibe: p.vibe || [],
-        color: p.color || '',
-        season: p.season || [],
-        silhouette: p.silhouette || '',
-        image_url: p.image_url,
-        nobg_image_url: p.nobg_image_url || undefined,
-        product_link: p.product_link || '',
-        affiliate_link: p.affiliate_link || '',
-        price: p.price,
-        stock_status: p.stock_status || 'in_stock',
-        material: p.material || '',
-        color_family: p.color_family || '',
-        color_tone: p.color_tone || '',
-        sub_category: p.sub_category || '',
-        pattern: p.pattern || '',
-        formality: p.formality,
-        warmth: p.warmth,
-        created_at: p.created_at,
-        updated_at: p.updated_at,
-      } as Product)) || []);
-    } catch (error) {
-      console.error('Failed to load products:', error);
-      alert('제품 로드 실패: ' + (error as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadProductUsageCounts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('outfit_items')
-        .select('product_id');
-
-      if (error) throw error;
-
-      const counts: Record<string, number> = {};
-      data?.forEach(item => {
-        if (item.product_id) {
-          counts[item.product_id] = (counts[item.product_id] || 0) + 1;
-        }
-      });
-
-      setProductUsageCounts(counts);
-    } catch (error) {
-      console.error('Failed to load product usage counts:', error);
-    }
-  };
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const handleAddProduct = () => {
     setEditingProduct(null);
@@ -152,35 +204,42 @@ export default function AdminProducts() {
 
   const handleProductSaved = () => {
     loadProducts();
+    loadProductUsageCounts();
     handleProductFormClose();
   };
 
   const handleCSVUploadComplete = () => {
     loadProducts();
+    loadProductUsageCounts();
     setShowCSVUpload(false);
   };
 
-  const filteredProducts = products.filter(product => {
-    if (filterUnused && productUsageCounts[product.id] > 0) return false;
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.brand.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || product.category === filterCategory;
-    const matchesGender = filterGender === 'all' || product.gender === filterGender;
-    const matchesBodyType = filterBodyType === 'all' ||
-                           (Array.isArray(product.body_type) && product.body_type.includes(filterBodyType));
-    const matchesVibe = filterVibe === 'all' || product.vibe.includes(filterVibe);
-    const matchesSeason = filterSeason === 'all' ||
-                         (Array.isArray(product.season) && product.season.includes(filterSeason));
-    return matchesSearch && matchesCategory && matchesGender && matchesBodyType && matchesVibe && matchesSeason;
-  });
+  const goToPage = (page: number) => {
+    if (page >= 0 && page < totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">로딩 중...</div>
-      </div>
-    );
-  }
+  const getPageNumbers = () => {
+    const pages: (number | 'ellipsis')[] = [];
+    const maxVisible = 7;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 0; i < totalPages; i++) pages.push(i);
+    } else {
+      pages.push(0);
+      if (currentPage > 3) pages.push('ellipsis');
+
+      const start = Math.max(1, currentPage - 1);
+      const end = Math.min(totalPages - 2, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+
+      if (currentPage < totalPages - 4) pages.push('ellipsis');
+      pages.push(totalPages - 1);
+    }
+    return pages;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -282,30 +341,69 @@ export default function AdminProducts() {
           <VibeQualityDashboard
             products={products}
             usageCounts={productUsageCounts}
-            onFilterUnused={() => setFilterUnused(prev => !prev)}
           />
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-bold text-gray-900">
-              제품 목록 ({filteredProducts.length})
-              {filterUnused && (
-                <button
-                  onClick={() => setFilterUnused(false)}
-                  className="ml-2 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded transition-colors"
-                >
-                  미사용 필터 해제
-                </button>
-              )}
+              제품 목록 ({totalCount}개)
             </h2>
+            {totalPages > 1 && (
+              <span className="text-sm text-gray-500">
+                {currentPage + 1} / {totalPages} 페이지
+              </span>
+            )}
           </div>
-          <ProductList
-            products={filteredProducts}
-            onProductsChange={loadProducts}
-            onEditProduct={handleEditProduct}
-            usageCounts={productUsageCounts}
-          />
+
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="text-gray-500">로딩 중...</div>
+            </div>
+          ) : (
+            <ProductList
+              products={products}
+              onProductsChange={loadProducts}
+              onEditProduct={handleEditProduct}
+              usageCounts={productUsageCounts}
+            />
+          )}
+
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-1">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 0}
+                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              {getPageNumbers().map((page, i) =>
+                page === 'ellipsis' ? (
+                  <span key={`e-${i}`} className="px-2 text-gray-400 text-sm">...</span>
+                ) : (
+                  <button
+                    key={page}
+                    onClick={() => goToPage(page)}
+                    className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors ${
+                      page === currentPage
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page + 1}
+                  </button>
+                )
+              )}
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage >= totalPages - 1}
+                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
