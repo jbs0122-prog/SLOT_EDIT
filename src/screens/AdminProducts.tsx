@@ -5,7 +5,7 @@ import ProductForm from './ProductForm';
 import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import VibeQualityDashboard from './VibeQualityDashboard';
-import { Plus, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Upload, Loader2 } from 'lucide-react';
 
 const PAGE_SIZE = 40;
 
@@ -67,8 +67,9 @@ function mapRowToProduct(p: any): Product {
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
@@ -85,21 +86,31 @@ export default function AdminProducts() {
   const [productUsageCounts, setProductUsageCounts] = useState<Record<string, number>>({});
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const filterVersionRef = useRef(0);
+
+  const resetAndReload = useCallback(() => {
+    filterVersionRef.current += 1;
+    setProducts([]);
+    setTotalCount(0);
+    setHasMore(true);
+    setInitialLoading(true);
+  }, []);
 
   const setSearchTerm = (v: string) => {
     setSearchTermRaw(v);
     saveFiltersToStorage({ searchTerm: v });
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      setCurrentPage(0);
+      resetAndReload();
     }, 400);
   };
 
-  const setFilterCategory = (v: string) => { setFilterCategoryRaw(v); saveFiltersToStorage({ filterCategory: v }); setCurrentPage(0); };
-  const setFilterGender = (v: string) => { setFilterGenderRaw(v); saveFiltersToStorage({ filterGender: v }); setCurrentPage(0); };
-  const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); saveFiltersToStorage({ filterBodyType: v }); setCurrentPage(0); };
-  const setFilterVibe = (v: string) => { setFilterVibeRaw(v); saveFiltersToStorage({ filterVibe: v }); setCurrentPage(0); };
-  const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); saveFiltersToStorage({ filterSeason: v }); setCurrentPage(0); };
+  const setFilterCategory = (v: string) => { setFilterCategoryRaw(v); saveFiltersToStorage({ filterCategory: v }); resetAndReload(); };
+  const setFilterGender = (v: string) => { setFilterGenderRaw(v); saveFiltersToStorage({ filterGender: v }); resetAndReload(); };
+  const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); saveFiltersToStorage({ filterBodyType: v }); resetAndReload(); };
+  const setFilterVibe = (v: string) => { setFilterVibeRaw(v); saveFiltersToStorage({ filterVibe: v }); resetAndReload(); };
+  const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); saveFiltersToStorage({ filterSeason: v }); resetAndReload(); };
 
   const loadProductUsageCounts = useCallback(async () => {
     try {
@@ -116,54 +127,94 @@ export default function AdminProducts() {
     }
   }, []);
 
-  const loadProducts = useCallback(async () => {
-    setLoading(true);
+  const buildQuery = useCallback(() => {
+    let query = supabase
+      .from('products')
+      .select('*', { count: 'exact' });
+
+    if (searchTerm.trim()) {
+      query = query.or(`name.ilike.%${searchTerm.trim()}%,brand.ilike.%${searchTerm.trim()}%`);
+    }
+    if (filterCategory !== 'all') {
+      query = query.eq('category', filterCategory);
+    }
+    if (filterGender !== 'all') {
+      query = query.eq('gender', filterGender);
+    }
+    if (filterBodyType !== 'all') {
+      query = query.contains('body_type', [filterBodyType]);
+    }
+    if (filterVibe !== 'all') {
+      query = query.contains('vibe', [filterVibe]);
+    }
+    if (filterSeason !== 'all') {
+      query = query.contains('season', [filterSeason]);
+    }
+
+    return query;
+  }, [searchTerm, filterCategory, filterGender, filterBodyType, filterVibe, filterSeason]);
+
+  const loadInitial = useCallback(async () => {
+    const version = filterVersionRef.current;
+    setInitialLoading(true);
     try {
-      let query = supabase
-        .from('products')
-        .select('*', { count: 'exact' });
-
-      if (searchTerm.trim()) {
-        query = query.or(`name.ilike.%${searchTerm.trim()}%,brand.ilike.%${searchTerm.trim()}%`);
-      }
-      if (filterCategory !== 'all') {
-        query = query.eq('category', filterCategory);
-      }
-      if (filterGender !== 'all') {
-        query = query.eq('gender', filterGender);
-      }
-      if (filterBodyType !== 'all') {
-        query = query.contains('body_type', [filterBodyType]);
-      }
-      if (filterVibe !== 'all') {
-        query = query.contains('vibe', [filterVibe]);
-      }
-      if (filterSeason !== 'all') {
-        query = query.contains('season', [filterSeason]);
-      }
-
-      const from = currentPage * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-
-      const { data, error, count } = await query
+      const { data, error, count } = await buildQuery()
         .order('created_at', { ascending: false })
-        .range(from, to);
+        .range(0, PAGE_SIZE - 1);
 
+      if (version !== filterVersionRef.current) return;
       if (error) throw error;
 
-      setProducts(data?.map(mapRowToProduct) || []);
+      const mapped = data?.map(mapRowToProduct) || [];
+      setProducts(mapped);
       setTotalCount(count ?? 0);
+      setHasMore(mapped.length >= PAGE_SIZE);
     } catch (error) {
+      if (version !== filterVersionRef.current) return;
       console.error('Failed to load products:', error);
       alert('제품 로드 실패: ' + (error as Error).message);
     } finally {
-      setLoading(false);
+      if (version === filterVersionRef.current) {
+        setInitialLoading(false);
+      }
     }
-  }, [searchTerm, filterCategory, filterGender, filterBodyType, filterVibe, filterSeason, currentPage]);
+  }, [buildQuery]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+
+    const version = filterVersionRef.current;
+    setLoadingMore(true);
+    try {
+      const from = products.length;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await buildQuery()
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (version !== filterVersionRef.current) return;
+      if (error) throw error;
+
+      const mapped = data?.map(mapRowToProduct) || [];
+      setProducts(prev => [...prev, ...mapped]);
+      if (count !== null) setTotalCount(count);
+      setHasMore(mapped.length >= PAGE_SIZE);
+    } catch (error) {
+      if (version !== filterVersionRef.current) return;
+      console.error('Failed to load more products:', error);
+    } finally {
+      if (version === filterVersionRef.current) {
+        setLoadingMore(false);
+      }
+    }
+  }, [buildQuery, products.length, loadingMore, hasMore]);
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    if (initialLoading) {
+      loadInitial();
+    }
+  }, [initialLoading, loadInitial]);
 
   useEffect(() => {
     loadProductUsageCounts();
@@ -185,7 +236,22 @@ export default function AdminProducts() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !initialLoading && !loadingMore && hasMore) {
+          loadMore();
+        }
+      },
+      { rootMargin: '400px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, initialLoading, loadingMore, hasMore]);
 
   const handleAddProduct = () => {
     setEditingProduct(null);
@@ -203,43 +269,21 @@ export default function AdminProducts() {
   };
 
   const handleProductSaved = () => {
-    loadProducts();
+    resetAndReload();
     loadProductUsageCounts();
     handleProductFormClose();
   };
 
   const handleCSVUploadComplete = () => {
-    loadProducts();
+    resetAndReload();
     loadProductUsageCounts();
     setShowCSVUpload(false);
   };
 
-  const goToPage = (page: number) => {
-    if (page >= 0 && page < totalPages) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const getPageNumbers = () => {
-    const pages: (number | 'ellipsis')[] = [];
-    const maxVisible = 7;
-
-    if (totalPages <= maxVisible) {
-      for (let i = 0; i < totalPages; i++) pages.push(i);
-    } else {
-      pages.push(0);
-      if (currentPage > 3) pages.push('ellipsis');
-
-      const start = Math.max(1, currentPage - 1);
-      const end = Math.min(totalPages - 2, currentPage + 1);
-      for (let i = start; i <= end; i++) pages.push(i);
-
-      if (currentPage < totalPages - 4) pages.push('ellipsis');
-      pages.push(totalPages - 1);
-    }
-    return pages;
-  };
+  const handleProductsChange = useCallback(() => {
+    resetAndReload();
+    loadProductUsageCounts();
+  }, [resetAndReload, loadProductUsageCounts]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -349,60 +393,41 @@ export default function AdminProducts() {
             <h2 className="text-xl font-bold text-gray-900">
               제품 목록 ({totalCount}개)
             </h2>
-            {totalPages > 1 && (
+            {products.length > 0 && products.length < totalCount && (
               <span className="text-sm text-gray-500">
-                {currentPage + 1} / {totalPages} 페이지
+                {products.length} / {totalCount}개 로드됨
               </span>
             )}
           </div>
 
-          {loading ? (
+          {initialLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="text-gray-500">로딩 중...</div>
             </div>
           ) : (
-            <ProductList
-              products={products}
-              onProductsChange={loadProducts}
-              onEditProduct={handleEditProduct}
-              usageCounts={productUsageCounts}
-            />
-          )}
+            <>
+              <ProductList
+                products={products}
+                onProductsChange={handleProductsChange}
+                onEditProduct={handleEditProduct}
+                usageCounts={productUsageCounts}
+              />
 
-          {totalPages > 1 && (
-            <div className="mt-6 flex items-center justify-center gap-1">
-              <button
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage === 0}
-                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              {getPageNumbers().map((page, i) =>
-                page === 'ellipsis' ? (
-                  <span key={`e-${i}`} className="px-2 text-gray-400 text-sm">...</span>
-                ) : (
-                  <button
-                    key={page}
-                    onClick={() => goToPage(page)}
-                    className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors ${
-                      page === currentPage
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {page + 1}
-                  </button>
-                )
+              <div ref={sentinelRef} className="h-1" />
+
+              {loadingMore && (
+                <div className="flex items-center justify-center py-6 gap-2">
+                  <Loader2 size={18} className="animate-spin text-blue-500" />
+                  <span className="text-sm text-gray-500">더 불러오는 중...</span>
+                </div>
               )}
-              <button
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage >= totalPages - 1}
-                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+
+              {!hasMore && products.length > 0 && products.length >= PAGE_SIZE && (
+                <div className="text-center py-4 text-sm text-gray-400">
+                  모든 제품을 불러왔습니다
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
