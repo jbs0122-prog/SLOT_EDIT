@@ -172,11 +172,11 @@ Return ONLY valid JSON (no markdown, no code blocks) with these exact fields:
     가방: tote|backpack|crossbody|duffle|clutch|shoulder_bag|satchel|messenger|bucket_bag|hobo|belt_bag|sling|baguette|box_bag|frame_bag|saddle_bag|doctor_bag|wristlet|briefcase|gym_bag|camera_bag|weekender|straw_bag|woven_bag|canvas_tote|chain_bag|phone_pouch|sacoche|vanity_case
     액세서리: necktie|belt|cap|scarf|glove|watch|sunglasses|beanie|bucket_hat|beret|headband|choker|chain_necklace|pendant|pearl_necklace|hoop_earring|stud_earring|ring|bracelet|bangle|brooch|hair_clip|bow_tie|suspenders|silk_scarf|bandana|anklet|ear_cuff|hair_stick|tights|wide_brim_hat|visor|wallet_chain",
   "gender": "남성|여성|공용",
-  "color": "exact color name in Korean like 검정, 흰색, 네이비, 베이지, 카키, 그레이, 차콜, 크림, 아이보리, 카멜, 올리브, 버건디, 와인, 러스트, 머스타드, 세이지, 민트, 코랄, 라벤더, 하늘색 etc.",
+  "color": "exact color name in English like black, white, navy, beige, khaki, grey, charcoal, cream, ivory, camel, olive, burgundy, wine, rust, mustard, sage, mint, coral, lavender, sky blue etc.",
   "color_family": "black|white|grey|charcoal|navy|beige|cream|ivory|brown|tan|camel|olive|khaki|sage|rust|mustard|burgundy|wine|blue|sky_blue|denim|teal|green|mint|red|coral|yellow|orange|pink|lavender|purple|metallic|multi",
   "color_tone": "warm|cool|neutral",
   "pattern": "solid|stripe|check|floral|graphic|print|other",
-  "material": "면|폴리에스터|울|가죽|데님|니트|시폰|린넨|혼방|나일론|캐시미어|벨벳|스웨이드|플리스|저지|텐셀|모달 etc.",
+  "material": "Cotton|Polyester|Wool|Leather|Denim|Knit|Chiffon|Linen|Blend|Nylon|Cashmere|Velvet|Suede|Fleece|Jersey|Tencel|Modal etc.",
   "silhouette": "oversized|relaxed|wide|regular|straight|fitted|slim|tapered",
   "vibe": ["ELEVATED_COOL", "EFFORTLESS_NATURAL", "ARTISTIC_MINIMAL", "RETRO_LUXE", "SPORT_MODERN", "CREATIVE_LAYERED"] (select 1-3 that apply),
   "season": ["spring", "summer", "fall", "winter"] (select applicable seasons),
