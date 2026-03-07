@@ -635,15 +635,24 @@ interface ScoredOutfit {
   breakdown: Record<string, number>;
 }
 
+function isVibeCompatible(product: any, targetVibe: string): boolean {
+  const vibeArr = Array.isArray(product.vibe) ? product.vibe : [];
+  if (vibeArr.length === 0) return false;
+  return vibeArr[0] === targetVibe;
+}
+
 function assembleAndScore(
   products: any[],
   vibe: string,
   season: string,
   outfitCount: number
 ): ScoredOutfit[] {
+  const vibeFiltered = products.filter((p: any) => isVibeCompatible(p, vibe));
+  const toUse = vibeFiltered.length >= 4 ? vibeFiltered : products;
+
   const slots = ["top", "bottom", "shoes", "bag", "accessory", "outer", "mid"];
   const bySlot: Record<string, any[]> = {};
-  for (const slot of slots) bySlot[slot] = products.filter((p: any) => p.category === slot);
+  for (const slot of slots) bySlot[slot] = toUse.filter((p: any) => p.category === slot);
 
   bySlot["outer"] = bySlot["outer"].filter((p: any) => isSeasonAppropriateOuter(p, season));
   if (season === "summer") bySlot["mid"] = [];

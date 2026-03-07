@@ -200,23 +200,20 @@ function inferSilhouette(title: string, bodyType: string, subCategory: string): 
 }
 
 function inferVibes(category: string, subCategory: string, material: string, colorFamily: string, contextVibe: string): string[] {
-  const vibes = new Set<string>();
+  const detected = new Set<string>();
   const sub = (subCategory || "").toLowerCase();
   const mat = (material || "").toLowerCase();
   const combined = sub + " " + mat;
 
-  if (/blazer|trench|leather_pant|silk|tailored|structured|tuxedo/.test(combined)) vibes.add("ELEVATED_COOL");
-  if (/linen|waffle|organic|chambray|chore|canvas_tote|suede_mule|straw/.test(combined)) vibes.add("EFFORTLESS_NATURAL");
-  if (/asymmetric|drape|cocoon|tabi|cape|mohair|boucle|culottes/.test(combined)) vibes.add("ARTISTIC_MINIMAL");
-  if (/corduroy|tweed|velvet|suede|crochet|shearling|flared_jeans|platform|saddle/.test(combined)) vibes.add("RETRO_LUXE");
-  if (/track|jogger|hoodie|performance|technical|fleece|puffer|sports_bra|biker_short/.test(combined)) vibes.add("SPORT_MODERN");
-  if (/band_tee|combat|cargo|ripped|denim_jacket|patchwork|graphic_tee/.test(combined)) vibes.add("CREATIVE_LAYERED");
+  if (/blazer|trench|leather_pant|silk|tailored|structured|tuxedo/.test(combined)) detected.add("ELEVATED_COOL");
+  if (/linen|waffle|organic|chambray|chore|canvas_tote|suede_mule|straw/.test(combined)) detected.add("EFFORTLESS_NATURAL");
+  if (/asymmetric|drape|cocoon|tabi|cape|mohair|boucle|culottes/.test(combined)) detected.add("ARTISTIC_MINIMAL");
+  if (/corduroy|tweed|velvet|suede|crochet|shearling|flared_jeans|platform|saddle/.test(combined)) detected.add("RETRO_LUXE");
+  if (/track|jogger|performance|technical|fleece|sports_bra|biker_short/.test(combined)) detected.add("SPORT_MODERN");
+  if (/band_tee|combat|ripped|denim_jacket|patchwork/.test(combined)) detected.add("CREATIVE_LAYERED");
 
-  if (vibes.size === 0) vibes.add(contextVibe);
-
-  if (!vibes.has(contextVibe) && vibes.size < 2) vibes.add(contextVibe);
-
-  return Array.from(vibes).slice(0, 3);
+  const others = Array.from(detected).filter(v => v !== contextVibe).slice(0, 2);
+  return [contextVibe, ...others];
 }
 
 function inferSeason(material: string, category: string, subCategory: string, contextSeason?: string): string[] {
@@ -292,8 +289,18 @@ Deno.serve(async (req: Request) => {
       ? `\nSearch slot context: this product was found while searching for a "${validatedSlotHint}" item — use this as a strong hint for the category field if the title is ambiguous.`
       : "";
 
+    const VIBE_STYLE_CONTEXT: Record<string, string> = {
+      ELEVATED_COOL: "minimal, city-noir, sharp tailoring — blazers, structured coats, wide-leg trousers, leather pieces, clean knits, chelsea boots, geometric bags",
+      EFFORTLESS_NATURAL: "organic, relaxed, japandi — linen shirts, wide trousers, soft cardigans, canvas totes, leather slides, natural textures",
+      ARTISTIC_MINIMAL: "avant-garde, deconstructed — asymmetric cuts, cocoon shapes, tabi shoes, sculptural accessories, muted tones",
+      RETRO_LUXE: "heritage, cinematic, old-money — tweed blazers, flared jeans, velvet pieces, platform shoes, tapestry bags, silk blouses",
+      SPORT_MODERN: "technical, functional — track jackets, joggers, performance tops, hiking boots, utility slings, athletic pieces",
+      CREATIVE_LAYERED: "eclectic, expressive — band tees, cargo pants, combat boots, ripped denim, layered chains, patchwork pieces",
+    };
+    const vibeContext = VIBE_STYLE_CONTEXT[vibe] ? `\nTarget style vibe: ${vibe} (${VIBE_STYLE_CONTEXT[vibe]}). Classify sub_category to best match this vibe's aesthetic.` : "";
+
     const lightPrompt = `Analyze this fashion product and return JSON only. ALL values must be in ENGLISH only.
-Product: "${product.title}" | Brand: ${product.brand || "unknown"} | Gender hint: ${genderLabel}${slotContext}
+Product: "${product.title}" | Brand: ${product.brand || "unknown"} | Gender hint: ${genderLabel}${slotContext}${vibeContext}
 
 Return ONLY valid JSON with English values:
 {
