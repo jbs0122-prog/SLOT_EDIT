@@ -69,27 +69,46 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
         return;
       }
 
-      const { data } = await supabase
-        .from('admin_users')
-        .select('user_id')
-        .eq('user_id', s.user.id)
-        .maybeSingle();
+      try {
+        const { data } = await supabase
+          .from('admin_users')
+          .select('user_id')
+          .eq('user_id', s.user.id)
+          .maybeSingle();
 
-      setIsAdmin(!!data);
-      setLoading(false);
+        setIsAdmin(!!data);
+      } catch {
+        setIsAdmin(false);
+      } finally {
+        setLoading(false);
+      }
     }
+
+    let initialChecked = false;
 
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
+      initialChecked = true;
       checkAdmin(s);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      checkAdmin(s);
+      if (initialChecked) {
+        checkAdmin(s);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    const timeout = setTimeout(() => {
+      if (!initialChecked) {
+        setLoading(false);
+      }
+    }, 5000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const handleLogout = async () => {
