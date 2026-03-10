@@ -583,6 +583,43 @@ const SCORE_WEIGHTS = {
   accessoryHarmony: 0.02,
 };
 
+const SEASONAL_SLOT_CONFIG: Record<string, { required: string[]; excluded: string[]; optional: string[] }> = {
+  spring: { required: ["top", "bottom", "shoes"], excluded: ["mid"], optional: ["outer", "bag", "accessory"] },
+  summer: { required: ["top", "bottom", "shoes"], excluded: ["outer", "mid"], optional: ["bag", "accessory"] },
+  fall:   { required: ["top", "bottom", "shoes"], excluded: ["mid"], optional: ["outer", "bag", "accessory"] },
+  winter: { required: ["top", "bottom", "shoes", "outer", "mid"], excluded: [], optional: ["bag", "accessory"] },
+};
+
+const MID_TOP_COMPAT: Record<string, { good: string[]; bad: string[] }> = {
+  cardigan:         { good: ["turtleneck", "shirt", "blouse", "t_shirt", "tshirt", "tee", "oxford_shirt", "button_down_shirt"], bad: ["hoodie", "sweatshirt"] },
+  knit_vest:        { good: ["turtleneck", "shirt", "blouse", "t_shirt", "tshirt", "oxford_shirt"], bad: ["hoodie", "sweatshirt"] },
+  knitted_vest:     { good: ["turtleneck", "shirt", "blouse", "t_shirt", "tshirt", "oxford_shirt"], bad: ["hoodie", "sweatshirt"] },
+  half_zip:         { good: ["t_shirt", "tshirt", "tee", "shirt", "graphic_tee"], bad: ["turtleneck", "turtleneck_knit"] },
+  sweater:          { good: ["t_shirt", "tshirt", "tee", "shirt", "graphic_tee"], bad: ["turtleneck", "hoodie"] },
+  cable_knit:       { good: ["t_shirt", "tshirt", "tee", "shirt"], bad: ["turtleneck", "hoodie", "sweatshirt"] },
+  cashmere_sweater: { good: ["t_shirt", "tshirt", "tee", "shirt", "blouse"], bad: ["turtleneck", "hoodie"] },
+  hoodie:           { good: ["t_shirt", "tshirt", "tee", "graphic_tee"], bad: ["hoodie", "sweatshirt", "turtleneck"] },
+  turtleneck_knit:  { good: ["shirt", "blouse", "t_shirt"], bad: ["turtleneck", "mock_neck"] },
+  mock_neck:        { good: ["shirt", "blouse", "t_shirt", "tshirt"], bad: ["turtleneck", "turtleneck_knit", "mock_neck"] },
+  sweatshirt:       { good: ["t_shirt", "tshirt", "tee"], bad: ["hoodie", "sweatshirt"] },
+};
+
+const VIBE_COLOR_PALETTES: Record<string, { primary: string[]; secondary: string[]; accent: string[] }> = {
+  ELEVATED_COOL:     { primary: ["black", "charcoal", "navy", "white"], secondary: ["grey", "cream", "camel"], accent: ["burgundy", "metallic", "wine"] },
+  EFFORTLESS_NATURAL:{ primary: ["beige", "cream", "ivory", "white"], secondary: ["olive", "khaki", "tan", "sage", "brown"], accent: ["rust", "mustard", "burgundy"] },
+  ARTISTIC_MINIMAL:  { primary: ["black", "white", "grey", "charcoal"], secondary: ["cream", "beige", "navy"], accent: ["rust", "olive", "burgundy"] },
+  RETRO_LUXE:        { primary: ["burgundy", "navy", "brown", "cream"], secondary: ["camel", "olive", "wine", "beige"], accent: ["rust", "mustard", "teal", "gold"] },
+  SPORT_MODERN:      { primary: ["black", "grey", "white", "navy"], secondary: ["olive", "khaki", "charcoal"], accent: ["orange", "teal", "red", "green"] },
+  CREATIVE_LAYERED:  { primary: ["black", "grey", "white", "denim"], secondary: ["burgundy", "brown", "olive", "navy"], accent: ["red", "orange", "pink", "yellow"] },
+};
+
+const WARMTH_BUDGET: Record<string, { min: number; max: number }> = {
+  spring: { min: 9, max: 16 },
+  summer: { min: 5, max: 11 },
+  fall:   { min: 12, max: 20 },
+  winter: { min: 16, max: 25 },
+};
+
 function scoreComposition(items: Record<string, any>, vibe: string, season: string): {
   total: number;
   breakdown: Record<string, number>;
@@ -628,7 +665,7 @@ function isSeasonAppropriateOuter(product: any, season: string): boolean {
   if (season === "summer") return false;
   if (season === "winter" && warmth < 3) return false;
   if (season === "spring") {
-    if (warmth > 3) return false;
+    if (warmth > 3.5) return false;
     if (/parka|puffer|duffle|shearling|sherpa|heavy.?wool|down/.test(sub)) return false;
   }
   if (season === "fall" && warmth < 2) return false;
@@ -639,99 +676,193 @@ interface ScoredOutfit {
   items: Record<string, any>;
   score: number;
   breakdown: Record<string, number>;
+  lookKey?: string;
 }
 
-function isVibeCompatible(product: any, targetVibe: string): boolean {
-  const vibeArr = Array.isArray(product.vibe) ? product.vibe : [];
-  if (vibeArr.length === 0) return false;
-  return vibeArr[0] === targetVibe;
+function isColorInPalette(colorFamily: string, vibe: string): boolean {
+  const palette = VIBE_COLOR_PALETTES[vibe];
+  if (!palette) return true;
+  const allColors = [...palette.primary, ...palette.secondary, ...palette.accent];
+  if (allColors.includes(colorFamily)) return true;
+  if (isNeutralColor(colorFamily)) return true;
+  return false;
 }
 
-function assembleAndScore(
+function paletteHarmonyScore(colorFamily: string, vibe: string): number {
+  const palette = VIBE_COLOR_PALETTES[vibe];
+  if (!palette) return 70;
+  if (palette.primary.includes(colorFamily)) return 100;
+  if (palette.secondary.includes(colorFamily)) return 85;
+  if (palette.accent.includes(colorFamily)) return 70;
+  if (isNeutralColor(colorFamily)) return 75;
+  return 40;
+}
+
+function checkMidTopCompat(midSub: string, topSub: string): { ok: boolean; bonus: number } {
+  const midKey = (midSub || "").toLowerCase().replace(/[\s-]/g, "_");
+  const topKey = (topSub || "").toLowerCase().replace(/[\s-]/g, "_");
+  const compat = MID_TOP_COMPAT[midKey];
+  if (!compat) return { ok: true, bonus: 0 };
+  if (compat.bad.some(b => topKey.includes(b) || b.includes(topKey))) return { ok: false, bonus: -20 };
+  if (compat.good.some(g => topKey.includes(g) || g.includes(topKey))) return { ok: true, bonus: 10 };
+  return { ok: true, bonus: 0 };
+}
+
+function checkWarmthBudget(items: Record<string, any>, season: string): boolean {
+  const budget = WARMTH_BUDGET[season];
+  if (!budget) return true;
+  const slotKeys = Object.keys(items);
+  let totalWarmth = 0;
+  for (const key of slotKeys) {
+    const p = items[key];
+    if (!p) continue;
+    if (key === "bag" || key === "accessory") continue;
+    totalWarmth += typeof p.warmth === "number" ? p.warmth : 2.5;
+  }
+  return totalWarmth >= budget.min && totalWarmth <= budget.max;
+}
+
+function filterByVibeScore(products: any[], vibe: string, minScore: number, isCore: boolean): any[] {
+  return products.filter((p: any) => {
+    const scores = p.vibe_scores;
+    if (scores && typeof scores === "object" && typeof scores[vibe] === "number") {
+      return scores[vibe] >= minScore;
+    }
+    const vibeArr = Array.isArray(p.vibe) ? p.vibe : [];
+    if (isCore) return vibeArr[0] === vibe;
+    return vibeArr.includes(vibe);
+  });
+}
+
+function filterByPalette(products: any[], vibe: string): any[] {
+  return products.filter((p: any) => {
+    const cf = resolveColorFamily(p.color || "", p.color_family);
+    if (!cf) return true;
+    return paletteHarmonyScore(cf, vibe) >= 60;
+  });
+}
+
+function sortByVibeAndPalette(products: any[], vibe: string): any[] {
+  return [...products].sort((a, b) => {
+    const aVibeScore = a.vibe_scores?.[vibe] ?? 0;
+    const bVibeScore = b.vibe_scores?.[vibe] ?? 0;
+    if (bVibeScore !== aVibeScore) return bVibeScore - aVibeScore;
+    const aCF = resolveColorFamily(a.color || "", a.color_family);
+    const bCF = resolveColorFamily(b.color || "", b.color_family);
+    return paletteHarmonyScore(bCF, vibe) - paletteHarmonyScore(aCF, vibe);
+  });
+}
+
+function assembleForLook(
   products: any[],
   vibe: string,
   season: string,
-  outfitCount: number
-): ScoredOutfit[] {
-  const vibeFiltered = products.filter((p: any) => isVibeCompatible(p, vibe));
-  const toUse = vibeFiltered.length >= 4 ? vibeFiltered : products;
+  lookKey: string
+): ScoredOutfit | null {
+  const slotConfig = SEASONAL_SLOT_CONFIG[season] || SEASONAL_SLOT_CONFIG["fall"];
+  const activeSlots = [...slotConfig.required, ...slotConfig.optional];
+  const excludedSet = new Set(slotConfig.excluded);
 
-  const slots = ["top", "bottom", "shoes", "bag", "accessory", "outer", "mid"];
   const bySlot: Record<string, any[]> = {};
-  for (const slot of slots) bySlot[slot] = toUse.filter((p: any) => p.category === slot);
+  for (const slot of activeSlots) {
+    if (excludedSet.has(slot)) { bySlot[slot] = []; continue; }
+    let pool = products.filter((p: any) => p.category === slot);
+    if (slot === "outer") pool = pool.filter((p: any) => isSeasonAppropriateOuter(p, season));
 
-  bySlot["outer"] = bySlot["outer"].filter((p: any) => isSeasonAppropriateOuter(p, season));
-  if (season === "summer") bySlot["mid"] = [];
+    const vibeFiltered = filterByVibeScore(pool, vibe, slot === "top" || slot === "bottom" || slot === "shoes" ? 30 : 20, slotConfig.required.includes(slot));
+    const paletteFiltered = filterByPalette(vibeFiltered.length >= 2 ? vibeFiltered : pool, vibe);
+    const sorted = sortByVibeAndPalette(paletteFiltered.length >= 2 ? paletteFiltered : (vibeFiltered.length >= 2 ? vibeFiltered : pool), vibe);
 
-  if (!bySlot["top"]?.length || !bySlot["bottom"]?.length) return [];
-
-  const MAX_PER_CORE = 10;
-  for (const slot of ["top", "bottom", "shoes"]) {
-    if (bySlot[slot].length > MAX_PER_CORE) {
-      bySlot[slot] = bySlot[slot].slice(0, MAX_PER_CORE);
-    }
+    const MAX = slotConfig.required.includes(slot) ? 10 : 6;
+    bySlot[slot] = sorted.slice(0, MAX);
   }
-  const MAX_OPT = 6;
-  for (const slot of ["outer", "mid", "bag", "accessory"]) {
-    if (bySlot[slot].length > MAX_OPT) {
-      bySlot[slot] = bySlot[slot].slice(0, MAX_OPT);
+
+  if (!bySlot["top"]?.length || !bySlot["bottom"]?.length) return null;
+  if (!bySlot["shoes"]?.length) return null;
+  for (const req of slotConfig.required) {
+    if (req !== "top" && req !== "bottom" && req !== "shoes" && (!bySlot[req] || bySlot[req].length === 0)) {
+      if (season === "winter" && (req === "outer" || req === "mid")) return null;
     }
   }
 
   const combos: ScoredOutfit[] = [];
-  const MAX_COMBOS = 3000;
+  const MAX_COMBOS = 2000;
+  const isWinter = season === "winter";
 
   for (const top of bySlot["top"]) {
     const topCF = resolveColorFamily(top.color || "", top.color_family);
     for (const bottom of bySlot["bottom"]) {
       const bottomCF = resolveColorFamily(bottom.color || "", bottom.color_family);
-      if (topCF && bottomCF && getColorHarmonyScore(topCF, bottomCF) < 30) continue;
+      if (topCF && bottomCF && getColorHarmonyScore(topCF, bottomCF) < 40) continue;
 
-      const shoesPool = bySlot["shoes"].filter((s: any) =>
-        quickColorCheck(s, [topCF, bottomCF].filter(Boolean))
-      );
-
+      const shoesPool = bySlot["shoes"].filter((s: any) => quickColorCheck(s, [topCF, bottomCF].filter(Boolean)));
       for (const shoes of (shoesPool.length > 0 ? shoesPool : bySlot["shoes"].slice(0, 2))) {
         const coreItems: Record<string, any> = { top, bottom, shoes };
         const coreFamilies = [topCF, bottomCF, resolveColorFamily(shoes.color || "", shoes.color_family)].filter(Boolean);
 
-        const outerPool = bySlot["outer"].filter((o: any) => quickColorCheck(o, coreFamilies));
-        const requireOuter = season === "winter" || season === "fall";
-        const recommendOuter = season === "spring";
+        const outerPool = excludedSet.has("outer") ? [] : (bySlot["outer"] || []).filter((o: any) => quickColorCheck(o, coreFamilies));
+        const outerRequired = slotConfig.required.includes("outer");
         const outerCandidates = outerPool.length > 0
-          ? (requireOuter ? outerPool.slice(0, 2) : recommendOuter ? [outerPool[0], null] : [null, outerPool[0]])
-          : (requireOuter ? [] : [null]);
+          ? (outerRequired ? outerPool.slice(0, 3) : [outerPool[0], null])
+          : (outerRequired ? [] : [null]);
+        if (outerRequired && outerCandidates.length === 0) continue;
 
         for (const outer of outerCandidates) {
           const items: Record<string, any> = { ...coreItems };
           if (outer) items.outer = outer;
 
-          const midPool = bySlot["mid"].filter((m: any) => quickColorCheck(m, coreFamilies));
-          if (midPool.length > 0 && (!items.outer || season === "winter")) items.mid = midPool[0];
+          if (!excludedSet.has("mid") && bySlot["mid"]?.length) {
+            const midRequired = slotConfig.required.includes("mid");
+            const midPool = bySlot["mid"].filter((m: any) => {
+              if (!quickColorCheck(m, coreFamilies)) return false;
+              if (isWinter) {
+                const { ok } = checkMidTopCompat(m.sub_category, top.sub_category);
+                return ok;
+              }
+              return true;
+            });
+            if (midPool.length > 0) {
+              let bestMid = midPool[0];
+              if (isWinter) {
+                let bestBonus = -Infinity;
+                for (const m of midPool.slice(0, 3)) {
+                  const { bonus } = checkMidTopCompat(m.sub_category, top.sub_category);
+                  if (bonus > bestBonus) { bestBonus = bonus; bestMid = m; }
+                }
+              }
+              items.mid = bestMid;
+            } else if (midRequired) continue;
+          }
 
           if (bySlot["bag"]?.length) {
-            const bagIdx = Math.abs(
-              Object.values(items).filter(Boolean).map((p: any) => p.id).join("").length
-            ) % bySlot["bag"].length;
-            items.bag = bySlot["bag"][bagIdx];
+            const bagPool = bySlot["bag"].filter((b: any) => quickColorCheck(b, coreFamilies));
+            if (bagPool.length > 0) {
+              const idx = Math.abs(Object.values(items).filter(Boolean).length * 7) % bagPool.length;
+              items.bag = bagPool[idx];
+            } else {
+              items.bag = bySlot["bag"][0];
+            }
           }
           if (bySlot["accessory"]?.length) {
-            const accIdx = Math.abs(
-              Object.values(items).filter(Boolean).map((p: any) => p.id).join("").length * 31
-            ) % bySlot["accessory"].length;
-            items.accessory = bySlot["accessory"][accIdx];
+            const accPool = bySlot["accessory"].filter((a: any) => quickColorCheck(a, coreFamilies));
+            if (accPool.length > 0) {
+              const idx = Math.abs(Object.values(items).filter(Boolean).length * 13) % accPool.length;
+              items.accessory = accPool[idx];
+            } else {
+              items.accessory = bySlot["accessory"][0];
+            }
           }
 
           const allItems = Object.values(items).filter(Boolean);
-          const blackCount = allItems
-            .map((p: any) => resolveColorFamily(p.color || "", p.color_family))
-            .filter(c => c === "black").length;
+          const blackCount = allItems.map((p: any) => resolveColorFamily(p.color || "", p.color_family)).filter(c => c === "black").length;
           if (blackCount >= 4 && allItems.length >= 5) continue;
+
+          if (!checkWarmthBudget(items, season)) continue;
 
           const { total, breakdown } = scoreComposition(items, vibe, season);
 
-          if (total >= 72 && breakdown.tonalHarmony >= 60 && breakdown.vibeMatch >= 45) {
-            combos.push({ items, score: total, breakdown });
+          if (total >= 75 && breakdown.tonalHarmony >= 65 && breakdown.vibeMatch >= 55) {
+            combos.push({ items, score: total, breakdown, lookKey });
           }
 
           if (combos.length >= MAX_COMBOS) break;
@@ -743,62 +874,87 @@ function assembleAndScore(
     if (combos.length >= MAX_COMBOS) break;
   }
 
-  combos.sort((a, b) => b.score - a.score);
+  if (combos.length === 0) {
+    const fallbackCombos: ScoredOutfit[] = [];
+    for (const top of bySlot["top"].slice(0, 5)) {
+      const topCF = resolveColorFamily(top.color || "", top.color_family);
+      for (const bottom of bySlot["bottom"].slice(0, 5)) {
+        const bottomCF = resolveColorFamily(bottom.color || "", bottom.color_family);
+        if (topCF && bottomCF && getColorHarmonyScore(topCF, bottomCF) < 30) continue;
+        for (const shoes of bySlot["shoes"].slice(0, 3)) {
+          const items: Record<string, any> = { top, bottom, shoes };
+          const coreFamilies = [topCF, bottomCF, resolveColorFamily(shoes.color || "", shoes.color_family)].filter(Boolean);
+          if (!excludedSet.has("outer") && bySlot["outer"]?.length) {
+            const oPool = bySlot["outer"].filter((o: any) => quickColorCheck(o, coreFamilies));
+            if (oPool.length > 0) items.outer = oPool[0];
+            else if (slotConfig.required.includes("outer")) continue;
+          }
+          if (!excludedSet.has("mid") && bySlot["mid"]?.length) {
+            const mPool = bySlot["mid"].filter((m: any) => quickColorCheck(m, coreFamilies));
+            if (mPool.length > 0) items.mid = mPool[0];
+            else if (slotConfig.required.includes("mid")) continue;
+          }
+          if (bySlot["bag"]?.length) items.bag = bySlot["bag"][0];
+          if (bySlot["accessory"]?.length) items.accessory = bySlot["accessory"][0];
+          const { total, breakdown } = scoreComposition(items, vibe, season);
+          if (total >= 65 && breakdown.tonalHarmony >= 50 && breakdown.vibeMatch >= 40) {
+            fallbackCombos.push({ items, score: total, breakdown, lookKey });
+          }
+          if (fallbackCombos.length >= 20) break;
+        }
+        if (fallbackCombos.length >= 20) break;
+      }
+      if (fallbackCombos.length >= 20) break;
+    }
+    if (fallbackCombos.length > 0) {
+      fallbackCombos.sort((a, b) => b.score - a.score);
+      return fallbackCombos[0];
+    }
+    return null;
+  }
 
-  return selectDiverseOutfits(combos, outfitCount);
+  combos.sort((a, b) => b.score - a.score);
+  return combos[0];
 }
 
-// [Issue 5] Dynamic maxProductRepeat: based on available products per slot
-function selectDiverseOutfits(scored: ScoredOutfit[], topN: number): ScoredOutfit[] {
-  if (scored.length <= topN) return scored;
+function assembleLookIsolated(
+  allProducts: any[],
+  vibe: string,
+  season: string,
+  lookBatchIds: { lookKey: string; batchId: string }[]
+): ScoredOutfit[] {
+  const results: ScoredOutfit[] = [];
+  const usedProductIds = new Set<string>();
 
-  const pool = scored.slice(0, Math.min(scored.length, topN * 30));
-  const selected: ScoredOutfit[] = [];
-  const productCounts = new Map<string, number>();
-  const paletteCounts = new Map<string, number>();
+  const sortedLooks = [...lookBatchIds];
 
-  // Dynamic: allow repeat if pool is limited relative to target
-  const maxProductRepeat = pool.length < topN * 3 ? 2 : 1;
-  const maxPaletteRepeat = Math.max(1, Math.ceil(topN / 4));
+  for (const { lookKey, batchId } of sortedLooks) {
+    const lookProducts = allProducts.filter((p: any) => p.batch_id === batchId);
+    const filtered = lookProducts.filter((p: any) => !usedProductIds.has(p.id));
+    const toUse = filtered.length >= 4 ? filtered : lookProducts;
 
-  const getAllIds = (items: Record<string, any>) =>
-    Object.values(items).filter(Boolean).map((p: any) => p.id);
-  const getPaletteKey = (items: Record<string, any>) =>
-    Object.values(items).filter(Boolean)
-      .map((p: any) => resolveColorFamily(p.color || "", p.color_family) || "")
-      .filter(Boolean).sort().join("-");
-
-  const trySelect = (enforceProduct: boolean) => {
-    for (const candidate of pool) {
-      if (selected.length >= topN) break;
-      if (selected.includes(candidate)) continue;
-
-      const paletteKey = getPaletteKey(candidate.items);
-      if ((paletteCounts.get(paletteKey) || 0) >= maxPaletteRepeat) continue;
-
-      if (enforceProduct) {
-        const ids = getAllIds(candidate.items);
-        if (ids.some(id => (productCounts.get(id) || 0) >= maxProductRepeat)) continue;
-      }
-
-      selected.push(candidate);
-      paletteCounts.set(paletteKey, (paletteCounts.get(paletteKey) || 0) + 1);
-      for (const id of getAllIds(candidate.items)) {
-        productCounts.set(id, (productCounts.get(id) || 0) + 1);
-      }
-    }
-  };
-
-  trySelect(true);
-  if (selected.length < topN) trySelect(false);
-  if (selected.length < topN) {
-    for (const candidate of pool) {
-      if (selected.length >= topN) break;
-      if (!selected.includes(candidate)) selected.push(candidate);
+    const outfit = assembleForLook(toUse, vibe, season, lookKey);
+    if (outfit) {
+      results.push(outfit);
+      const ids = Object.values(outfit.items).filter(Boolean).map((p: any) => p.id);
+      for (const id of ids) usedProductIds.add(id);
     }
   }
 
-  return selected;
+  return results;
+}
+
+function validateCrossLookDiversity(outfits: ScoredOutfit[]): boolean {
+  if (outfits.length <= 1) return true;
+  for (let i = 0; i < outfits.length; i++) {
+    for (let j = i + 1; j < outfits.length; j++) {
+      const idsA = new Set(Object.values(outfits[i].items).filter(Boolean).map((p: any) => p.id));
+      const idsB = Object.values(outfits[j].items).filter(Boolean).map((p: any) => p.id);
+      const overlap = idsB.filter(id => idsA.has(id)).length;
+      if (overlap > 1) return false;
+    }
+  }
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -828,8 +984,9 @@ Deno.serve(async (req: Request) => {
     const { action } = body as { action?: string };
 
     if (action === "generate-outfits") {
-      const { batchId, gender, body_type, vibe, season, outfit_count = 3 } = body as {
+      const { batchId, gender, body_type, vibe, season, outfit_count = 1, lookBatchIds } = body as {
         batchId: string; gender: string; body_type: string; vibe: string; season: string; outfit_count?: number;
+        lookBatchIds?: { lookKey: string; batchId: string }[];
       };
       if (!batchId || !gender || !body_type || !vibe) {
         return new Response(JSON.stringify({ error: "batchId, gender, body_type, vibe required" }), {
@@ -838,10 +995,12 @@ Deno.serve(async (req: Request) => {
       }
 
       const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+      const batchPrefix = batchId.replace(/-[A-C]$/, "");
       const { data: batchProducts } = await adminClient
         .from("products")
-        .select("id, name, category, sub_category, color, color_family, color_tone, vibe, season, warmth, formality, silhouette, material, pattern, image_url, nobg_image_url, price, body_type")
-        .eq("batch_id", batchId);
+        .select("id, name, category, sub_category, color, color_family, color_tone, vibe, season, warmth, formality, silhouette, material, pattern, image_url, nobg_image_url, price, body_type, batch_id, vibe_scores")
+        .like("batch_id", `${batchPrefix}%`);
 
       if (!batchProducts || batchProducts.length === 0) {
         return new Response(JSON.stringify({ error: "No products found for batch" }), {
@@ -849,30 +1008,35 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const selectedCombos = assembleAndScore(
-        batchProducts,
-        vibe,
-        season || "all",
-        outfit_count as number
-      );
+      let selectedCombos: ScoredOutfit[] = [];
+
+      if (lookBatchIds && lookBatchIds.length > 0) {
+        selectedCombos = assembleLookIsolated(batchProducts, vibe, season || "fall", lookBatchIds);
+      } else {
+        const result = assembleForLook(batchProducts, vibe, season || "fall", "A");
+        if (result) selectedCombos = [result];
+      }
 
       if (selectedCombos.length === 0) {
         const catCount: Record<string, number> = {};
         for (const p of batchProducts) catCount[p.category] = (catCount[p.category] || 0) + 1;
+        const slotConfig = SEASONAL_SLOT_CONFIG[season] || SEASONAL_SLOT_CONFIG["fall"];
         return new Response(JSON.stringify({
-          error: `Could not assemble outfits meeting quality threshold. Available: ${JSON.stringify(catCount)}`,
+          error: `Could not assemble outfits meeting quality threshold. Season: ${season}, Required slots: ${slotConfig.required.join(",")}, Excluded: ${slotConfig.excluded.join(",") || "none"}, Available: ${JSON.stringify(catCount)}`,
         }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+
+      const diversityOk = validateCrossLookDiversity(selectedCombos);
 
       const outfitIds: string[] = [];
       const outfitCandidates: any[] = [];
 
-      for (const { items: outfitItems, score, breakdown } of selectedCombos) {
+      for (const { items: outfitItems, score, breakdown, lookKey } of selectedCombos) {
         const { data: newOutfit, error: outfitErr } = await adminClient.from("outfits").insert({
           gender, body_type, vibe,
           season: season ? [season] : [],
           status: "draft", tpo: "",
-          "AI insight": `Auto-pipeline (v3) | Score: ${score}`,
+          "AI insight": `Auto-pipeline (v4) | Look ${lookKey || "?"} | Score: ${score}${!diversityOk ? " | Low diversity" : ""}`,
           image_url_flatlay: "", image_url_on_model: "",
           flatlay_pins: [], on_model_pins: [], prompt_flatlay: "",
         }).select().single();
@@ -897,6 +1061,7 @@ Deno.serve(async (req: Request) => {
         outfitCandidates.push({
           outfitId: newOutfit.id,
           matchScore: score,
+          lookKey: lookKey || undefined,
           items: candidateItems,
           scoreBreakdown: {
             tonalHarmony: breakdown.tonalHarmony,

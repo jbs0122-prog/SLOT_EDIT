@@ -104,6 +104,13 @@ const SLOT_LABEL: Record<string, string> = {
   bag: '가방', accessory: '액세서리', outer: '아우터', mid: '미드레이어',
 };
 
+const SEASON_SLOT_DISPLAY: Record<string, { required: string[]; excluded: string[] }> = {
+  spring: { required: ['top', 'bottom', 'shoes'], excluded: ['mid'] },
+  summer: { required: ['top', 'bottom', 'shoes'], excluded: ['outer', 'mid'] },
+  fall:   { required: ['top', 'bottom', 'shoes'], excluded: ['mid'] },
+  winter: { required: ['top', 'bottom', 'shoes', 'outer', 'mid'], excluded: [] },
+};
+
 function getStepPhase(events: PipelineEvent[]): Record<string, EventStatus | 'idle'> {
   const phases: Record<string, EventStatus | 'idle'> = {};
   for (const step of PIPELINE_STEPS) {
@@ -167,6 +174,8 @@ const SCORE_LABELS: Record<string, string> = {
   colorDepth: 'Color',
   patternBalance: 'Pattern',
   accessoryHarmony: 'Acc.Harm',
+  warmthFit: 'Warmth',
+  proportionBalance: 'Proportion',
 };
 
 function scoreColor(val: number): string {
@@ -666,29 +675,42 @@ export default function AdminAutoPipeline() {
           addEvent(makeEvent('nobg', 'success', `[Look ${lookKey}] All products have flatlays`));
         }
 
-        if (abortRef.current) throw new Error('Aborted by user');
-
-        addEvent(makeEvent('outfits', 'start', `[Look ${lookKey}: ${lookLabel}] Generating best outfit...`));
-        const outfitRes = await fetch(`${apiBase}/auto-pipeline`, {
-          method: 'POST', headers: authHeaders,
-          body: JSON.stringify({ action: 'generate-outfits', batchId: lookBatchId, gender, body_type: bodyType, vibe, season, outfit_count: 1 }),
-        });
-        if (outfitRes.ok) {
-          const outfitData = await outfitRes.json();
-          if (!outfitData.error) {
-            const candidates = (outfitData.outfitCandidates || []).map((c: any) => ({ ...c, lookKey, lookLabel }));
-            allOutfitIds.push(...(outfitData.outfitIds || []));
-            allOutfitCandidates.push(...candidates);
-            addEvent(makeEvent('outfits', 'success', `[Look ${lookKey}] Outfit generated (score: ${outfitData.outfitCandidates?.[0]?.matchScore ?? '?'})`));
-          } else {
-            addEvent(makeEvent('outfits', 'error', `[Look ${lookKey}] ${outfitData.error}`));
-          }
-        } else {
-          addEvent(makeEvent('outfits', 'error', `[Look ${lookKey}] Outfit generation failed (${outfitRes.status})`));
-        }
       }
 
       if (registeredCount === 0) throw new Error('No products were successfully registered');
+      if (abortRef.current) throw new Error('Aborted by user');
+
+      const lookBatchIdsList = lookKeys.map(k => ({ lookKey: k, batchId: `${batchId}-${k}` }));
+      addEvent(makeEvent('outfits', 'start', `Generating outfits for ${lookKeys.length} looks (look-isolated assembly)...`));
+      const outfitRes = await fetch(`${apiBase}/auto-pipeline`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({
+          action: 'generate-outfits',
+          batchId: `${batchId}-${lookKeys[0]}`,
+          lookBatchIds: lookBatchIdsList,
+          gender, body_type: bodyType, vibe, season, outfit_count: lookKeys.length,
+        }),
+      });
+      if (outfitRes.ok) {
+        const outfitData = await outfitRes.json();
+        if (!outfitData.error) {
+          const candidates = (outfitData.outfitCandidates || []).map((c: any) => ({
+            ...c,
+            lookKey: c.lookKey || undefined,
+            lookLabel: c.lookKey ? (lookNames[c.lookKey] || c.lookKey) : undefined,
+          }));
+          allOutfitIds.push(...(outfitData.outfitIds || []));
+          allOutfitCandidates.push(...candidates);
+          for (const c of candidates) {
+            addEvent(makeEvent('outfits', 'success', `[Look ${c.lookKey || '?'}] Outfit generated (score: ${c.matchScore ?? '?'})`));
+          }
+        } else {
+          addEvent(makeEvent('outfits', 'error', outfitData.error));
+        }
+      } else {
+        addEvent(makeEvent('outfits', 'error', `Outfit generation failed (${outfitRes.status})`));
+      }
+
       if (allOutfitIds.length === 0) throw new Error('Could not generate any outfits');
 
       const finalResult: PipelineResult = {
@@ -733,7 +755,7 @@ export default function AdminAutoPipeline() {
             <h1 className="text-2xl font-bold text-white tracking-tight">Auto Pipeline</h1>
             <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-500/30">BETA</span>
           </div>
-          <p className="text-zinc-400 text-sm ml-12">Look A/B/C 별 키워드 → 품질 필터 서칭 → 경량 분석 → 누끼 제거 → 8차원 매칭 (3 outfits)</p>
+          <p className="text-zinc-400 text-sm ml-12">Look A/B/C 격리 조합 | Vibe Score + Color Palette 필터 | Season Slot 규칙 | Warmth Budget</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -768,6 +790,28 @@ export default function AdminAutoPipeline() {
                   <button key={s} onClick={() => setSeason(s)} className={`py-2.5 rounded-xl text-xs font-semibold transition-all capitalize ${season === s ? 'bg-white text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}>{s}</button>
                 ))}
               </div>
+              {(() => {
+                const info = SEASON_SLOT_DISPLAY[season];
+                if (!info) return null;
+                return (
+                  <div className="mt-3 px-3 py-2.5 bg-white/3 rounded-xl border border-white/6">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Slot Rules</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {info.required.map(s => (
+                        <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">{SLOT_LABEL[s] || s}</span>
+                      ))}
+                      {info.excluded.map(s => (
+                        <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/20 line-through">{SLOT_LABEL[s] || s}</span>
+                      ))}
+                    </div>
+                    {season === 'winter' && (
+                      <div className="mt-1.5 text-[9px] text-zinc-500">Mid x Top 호환성 체크 적용</div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="bg-white/5 rounded-2xl p-5 border border-white/8">

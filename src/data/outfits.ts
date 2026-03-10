@@ -30,6 +30,7 @@ export interface Product {
   formality?: number;
   warmth?: number;
   nobg_image_url?: string;
+  vibe_scores?: Record<string, number>;
   image_features?: {
     dominantColors: string[];
     texture: string;

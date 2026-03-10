@@ -100,36 +100,208 @@ const SUB_CAT_FORMALITY: Record<string, number> = {
 };
 
 const MATERIAL_WARMTH: Record<string, number> = {
-  down: 5, wool: 4, cashmere: 4, fleece: 4, sherpa: 5, shearling: 5,
-  tweed: 4, corduroy: 3, flannel: 3, denim: 3, cotton: 2,
-  linen: 1, silk: 2, satin: 2, chiffon: 1, mesh: 1, nylon: 2,
-  polyester: 2, jersey: 2, leather: 3, suede: 3, velvet: 3,
-  technical: 2, canvas: 2,
+  down: 5, sherpa: 5, shearling: 5,
+  cashmere: 4.5, "heavy wool": 4.5,
+  wool: 4, fleece: 4, tweed: 4, "faux fur": 4.5,
+  flannel: 3.5, corduroy: 3, velvet: 3, leather: 3, suede: 3,
+  denim: 2.5, cotton: 2, jersey: 2, polyester: 2, nylon: 2, canvas: 2,
+  silk: 1.5, satin: 1.5, technical: 2,
+  linen: 1, chiffon: 1, mesh: 1, gauze: 1,
+};
+
+const SUB_CAT_WARMTH: Record<string, number> = {
+  puffer: 5, parka: 5, duffle_coat: 5, shearling: 5,
+  overcoat: 4.5, peacoat: 4.5, quilted_jacket: 4,
+  coat: 4, trench: 3, blazer: 3, biker_jacket: 3, bomber: 3, varsity_jacket: 3,
+  cable_knit: 4, cashmere_sweater: 4.5, turtleneck_knit: 4, mock_neck: 3.5,
+  sweater: 3.5, cardigan: 3, hoodie: 3, sweatshirt: 3, half_zip: 3.5, knit_vest: 3,
+  denim_jacket: 2.5, field_jacket: 2.5, windbreaker: 2, track_jacket: 2, coach_jacket: 2,
+  oxford_shirt: 2, shirt: 2, blouse: 2, polo: 2, henley: 2, flannel_shirt: 3,
+  tshirt: 1.5, graphic_tee: 1.5, tank: 1, camisole: 1, crop_top: 1.5,
+  sports_bra: 1, mesh_top: 1, performance_tee: 1.5,
+  jeans: 2.5, denim: 2.5, chinos: 2, dress_pants: 2, slacks: 2,
+  wide_leg: 2, cargo: 2, shorts: 1, biker_shorts: 1,
+  jogger: 2, sweatpants: 2.5, track_pants: 2, leggings: 2,
+  chelsea_boot: 3.5, ankle_boot: 3, boot: 3.5, knee_boot: 4, combat_boot: 3,
+  sneaker: 2, runner: 2, loafer: 2, derby: 2.5, oxford: 2.5,
+  sandal: 1, slide: 1, mule: 1.5, ballet_flat: 1.5, espadrille: 1.5,
+  scarf: 3.5, beanie: 4, gloves: 4, hat: 2, sunglasses: 1,
 };
 
 const CATEGORY_WARMTH_DEFAULT: Record<string, number> = {
-  outer: 4, mid: 3, top: 2, bottom: 2, shoes: 3, bag: 3, accessory: 3,
+  outer: 3.5, mid: 3, top: 2, bottom: 2, shoes: 2.5, bag: 2, accessory: 2,
 };
 
 function inferWarmth(material: string, category: string, subCategory: string, season?: string): number {
   const mat = (material || "").toLowerCase();
+  const sub = (subCategory || "").toLowerCase().replace(/[\s-]/g, "_");
+  let materialW: number | null = null;
   for (const [key, warmth] of Object.entries(MATERIAL_WARMTH)) {
-    if (mat.includes(key)) return warmth;
+    if (mat.includes(key)) { materialW = warmth; break; }
+  }
+  const subCatW: number | null = SUB_CAT_WARMTH[sub] ?? null;
+
+  if (materialW !== null && subCatW !== null) {
+    const catWeight = category === "outer" || category === "mid" ? 0.4 : 0.5;
+    return Math.round((materialW * (1 - catWeight) + subCatW * catWeight) * 2) / 2;
+  }
+  if (materialW !== null) return materialW;
+  if (subCatW !== null) return subCatW;
+
+  const base = CATEGORY_WARMTH_DEFAULT[category] || 2;
+  if (season === "summer") return Math.max(1, base - 0.5);
+  if (season === "winter") return Math.min(5, base + 0.5);
+  return base;
+}
+
+function crossValidateSeasonWarmth(season: string[], warmth: number, category: string): string[] {
+  const validated = [...season];
+  if (warmth >= 4 && validated.includes("summer")) {
+    const idx = validated.indexOf("summer");
+    validated.splice(idx, 1);
+  }
+  if (warmth <= 1.5 && validated.includes("winter") && category !== "accessory" && category !== "bag") {
+    const idx = validated.indexOf("winter");
+    validated.splice(idx, 1);
+  }
+  if (warmth >= 4.5 && !validated.includes("winter") && (category === "outer" || category === "mid")) {
+    validated.push("winter");
+  }
+  if (warmth <= 1 && !validated.includes("summer") && category !== "outer" && category !== "mid") {
+    validated.push("summer");
+  }
+  if (validated.length === 0) return season;
+  return validated;
+}
+
+const VIBE_ITEM_POOLS_ANALYZE: Record<string, Record<string, string[]>> = {
+  ELEVATED_COOL: {
+    outer: ["oversized wool coat", "structured trench", "leather blazer", "tailored jacket", "technical bomber", "biker jacket", "puffer jacket", "tweed blazer", "wool peacoat"],
+    top: ["high-neck knit", "poplin shirt", "silk button-down", "cashmere turtleneck", "oxford shirt", "cable-knit sweater", "crew-neck sweat"],
+    bottom: ["wide-leg wool trousers", "cigarette pants", "pleated trousers", "leather pants", "straight-leg jeans", "chinos"],
+    shoes: ["square-toe ankle boots", "chunky loafers", "chelsea boots", "derby shoes", "leather sneakers"],
+    bag: ["geometric tote", "box bag", "structured clutch", "briefcase", "satchel"],
+    accessory: ["silver chain necklace", "metal-frame sunglasses", "leather gloves", "minimalist watch"],
+  },
+  EFFORTLESS_NATURAL: {
+    outer: ["collarless linen coat", "robe coat", "kimono cardigan", "wool blazer", "trench coat", "chore coat", "field jacket"],
+    top: ["linen tunic", "gauze blouse", "organic cotton tee", "breton stripe tee", "cashmere crew-neck", "silk blouse", "linen shirt", "waffle henley"],
+    bottom: ["wide linen trousers", "drawstring linen pants", "culottes", "straight-leg jeans", "midi skirt"],
+    shoes: ["leather slides", "ballet flats", "loafers", "espadrilles", "suede ankle boots", "canvas sneakers"],
+    bag: ["natural canvas tote", "woven basket bag", "soft leather tote", "canvas messenger"],
+    accessory: ["wooden bead bracelet", "linen headband", "straw hat", "silk scarf", "gold hoops"],
+  },
+  ARTISTIC_MINIMAL: {
+    outer: ["collarless long coat", "cocoon coat", "longline blazer", "wrap coat", "asymmetric jacket", "draped cardigan"],
+    top: ["structured tee", "ribbed tank", "mock-neck top", "silk shell", "asymmetric knit", "cowl-neck top", "mohair knit"],
+    bottom: ["wide cropped trousers", "pleated wide pants", "maxi pencil skirt", "barrel leg pants", "wrap skirt"],
+    shoes: ["square-toe flats", "architectural mules", "derby shoes", "minimal sneakers", "tabi boots"],
+    bag: ["geometric tote", "origami bag", "structured clutch", "portfolio bag"],
+    accessory: ["sculptural bangle", "bold geometric earrings", "minimalist choker", "oversized sunglasses"],
+  },
+  RETRO_LUXE: {
+    outer: ["suede fringe jacket", "velvet blazer", "crochet cardigan", "tweed blazer", "camel overcoat", "corduroy blazer", "faux fur coat"],
+    top: ["peasant blouse", "embroidered tunic", "lace top", "cashmere turtleneck", "cable-knit sweater", "silk blouse", "satin blouse"],
+    bottom: ["flared jeans", "maxi boho skirt", "tiered skirt", "wool trousers", "corduroy pants", "velvet trousers"],
+    shoes: ["platform sandals", "suede knee boots", "leather loafers", "penny loafers", "riding boots", "kitten heel mules"],
+    bag: ["tapestry bag", "fringe suede bag", "wicker bag", "frame bag", "leather satchel"],
+    accessory: ["headscarf", "layered necklace", "turquoise jewelry", "pearl earrings", "gold signet ring"],
+  },
+  SPORT_MODERN: {
+    outer: ["gore-tex shell", "technical anorak", "fleece jacket", "insulated parka", "zip-up hoodie", "cropped track jacket", "tactical jacket"],
+    top: ["merino base layer", "half-zip fleece", "technical quarter-zip", "performance tee", "sports bra", "fitted tank"],
+    bottom: ["hiking pants", "trail shorts", "high-waist leggings", "bike shorts", "wide-leg sweatpants", "cargo trousers", "jogger cargo"],
+    shoes: ["trail running shoes", "hiking boots", "retro running shoes", "platform sneakers", "training shoes"],
+    bag: ["hiking backpack", "utility sling", "gym tote", "canvas duffel", "chest harness bag"],
+    accessory: ["bucket hat", "sports visor", "minimalist watch", "sport headband", "smart watch"],
+  },
+  CREATIVE_LAYERED: {
+    outer: ["oversized flannel shirt", "leather biker jacket", "denim jacket", "velvet blazer", "tapestry coat", "patchwork denim jacket"],
+    top: ["band tee", "ripped tee", "mesh top", "graphic tee", "floral print blouse", "lace top", "crochet vest"],
+    bottom: ["ripped jeans", "plaid mini skirt", "cargo pants", "baggy jeans", "corduroy wide-leg", "patchwork jeans"],
+    shoes: ["combat boots", "chunky platform boots", "mary janes", "vintage loafers", "platform boots", "creepers"],
+    bag: ["canvas backpack", "guitar strap bag", "tapestry bag", "studded backpack"],
+    accessory: ["choker necklace", "safety pin set", "layered chain necklace", "brooch collection", "chain belt"],
+  },
+};
+
+function normalizeTextForMatch(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+}
+
+function fuzzyMatchScoreAnalyze(productTerms: string[], itemPool: string[]): number {
+  let bestScore = 0;
+  const normalizedPool = itemPool.map(normalizeTextForMatch);
+  for (const rawTerm of productTerms) {
+    const term = normalizeTextForMatch(rawTerm);
+    if (!term) continue;
+    for (const poolItem of normalizedPool) {
+      if (term === poolItem) { bestScore = Math.max(bestScore, 1.0); continue; }
+      if (term.includes(poolItem) || poolItem.includes(term)) {
+        const shorter = term.length < poolItem.length ? term : poolItem;
+        const longer = term.length >= poolItem.length ? term : poolItem;
+        bestScore = Math.max(bestScore, 0.6 + (shorter.length / longer.length) * 0.3);
+        continue;
+      }
+      const termWords = term.split(/\s+/).filter(w => w.length >= 3);
+      const poolWords = poolItem.split(/\s+/).filter(w => w.length >= 3);
+      let matchedWords = 0;
+      for (const tw of termWords) {
+        for (const pw of poolWords) {
+          if (tw === pw || tw.includes(pw) || pw.includes(tw)) { matchedWords++; break; }
+        }
+      }
+      if (matchedWords > 0) {
+        const total = Math.max(termWords.length, poolWords.length, 1);
+        bestScore = Math.max(bestScore, 0.3 + (matchedWords / total) * 0.5);
+      }
+    }
+  }
+  return bestScore;
+}
+
+function computeVibeScores(
+  category: string,
+  subCategory: string,
+  name: string,
+  material: string,
+  colorFamily: string,
+  contextVibe: string
+): Record<string, number> {
+  const ALL_VIBES = ["ELEVATED_COOL", "EFFORTLESS_NATURAL", "ARTISTIC_MINIMAL", "RETRO_LUXE", "SPORT_MODERN", "CREATIVE_LAYERED"];
+  const scores: Record<string, number> = {};
+  const slotKey = category === "mid" ? "top" : category;
+  const terms: string[] = [];
+  if (subCategory) terms.push(subCategory);
+  if (name) terms.push(name);
+  const matLower = (material || "").toLowerCase();
+
+  for (const vibe of ALL_VIBES) {
+    const pool = VIBE_ITEM_POOLS_ANALYZE[vibe];
+    if (!pool) { scores[vibe] = 0; continue; }
+    const itemPool = pool[slotKey] || pool["top"] || [];
+    const affinityScore = terms.length > 0 ? fuzzyMatchScoreAnalyze(terms, itemPool) : 0;
+
+    const dna = VIBE_DNA[vibe];
+    let materialBonus = 0;
+    if (dna && matLower) {
+      for (const pref of dna.material_preferences) {
+        if (matLower.includes(pref)) { materialBonus = 10; break; }
+      }
+    }
+
+    let colorBonus = 0;
+    if (dna && colorFamily) {
+      const allPaletteColors = [...dna.color_palette.primary, ...dna.color_palette.secondary, ...dna.color_palette.accent];
+      if (allPaletteColors.includes(colorFamily)) colorBonus = 8;
+    }
+
+    const isContext = vibe === contextVibe ? 10 : 0;
+    const rawScore = Math.round(affinityScore * 72 + materialBonus + colorBonus + isContext);
+    scores[vibe] = Math.min(100, Math.max(0, rawScore));
   }
 
-  const sub = (subCategory || "").toLowerCase();
-  if (/puffer|parka|duffle|shearling|sherpa/.test(sub)) return 5;
-  if (/coat|trench|blazer|biker|bomber|varsity/.test(sub)) return 4;
-  if (/sweater|cardigan|cable_knit|turtleneck|hoodie|sweatshirt|fleece/.test(sub)) return 4;
-  if (/denim_jacket|field_jacket|windbreaker|track_jacket/.test(sub)) return 3;
-  if (/tshirt|tank|camisole|sports_bra|mesh_top|shorts|sandal|slide|mule/.test(sub)) return 1;
-  if (/polo|henley|blouse|shirt|linen/.test(sub)) return 2;
-  if (/chinos|jogger|leggings|sneaker|runner|loafer/.test(sub)) return 2;
-
-  const base = CATEGORY_WARMTH_DEFAULT[category] || 3;
-  if (season === "summer") return Math.max(1, base - 1);
-  if (season === "winter") return Math.min(5, base + 1);
-  return base;
+  return scores;
 }
 
 const EXTENDED_SUB_CAT_FORMALITY: Record<string, number> = {
@@ -429,7 +601,9 @@ Return ONLY valid JSON with English values:
     const formality = inferFormality(subCat, normalizedCategory, vibe);
     const warmth = inferWarmth(materialStr, normalizedCategory, subCat, season);
     const vibeArray = inferVibes(normalizedCategory, subCat, materialStr, normalizedColorFamily, vibe);
-    const seasonArray = inferSeason(materialStr, normalizedCategory, subCat, season);
+    const rawSeasonArray = inferSeason(materialStr, normalizedCategory, subCat, season);
+    const seasonArray = crossValidateSeasonWarmth(rawSeasonArray, warmth, normalizedCategory);
+    const vibeScores = computeVibeScores(normalizedCategory, subCat, core.name || product.title, materialStr, normalizedColorFamily, vibe);
     const bodyTypes = [body_type || "regular"];
     if (!bodyTypes.includes("regular") && body_type !== "regular") bodyTypes.push("regular");
 
@@ -453,6 +627,7 @@ Return ONLY valid JSON with English values:
       season: seasonArray,
       formality,
       warmth,
+      vibe_scores: vibeScores,
       stock_status: "in_stock",
       image_url: upgradeImageResolution(product.image || ""),
       product_link: productLink,
