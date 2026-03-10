@@ -708,7 +708,12 @@ export default function AdminAutoPipeline() {
           addEvent(makeEvent('outfits', 'error', outfitData.error));
         }
       } else {
-        addEvent(makeEvent('outfits', 'error', `Outfit generation failed (${outfitRes.status})`));
+        let errMsg = `Outfit generation failed (${outfitRes.status})`;
+        try {
+          const errData = await outfitRes.json();
+          if (errData.error) errMsg = errData.error;
+        } catch { /**/ }
+        addEvent(makeEvent('outfits', 'error', errMsg));
       }
 
       if (allOutfitIds.length === 0) throw new Error('Could not generate any outfits');

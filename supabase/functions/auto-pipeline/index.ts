@@ -1466,7 +1466,7 @@ formality: 1=very casual, 3=smart casual, 5=formal. warmth: 1=summer, 3=spring/f
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown action" }), {
+    return new Response(JSON.stringify({ error: `Unknown action: ${action ?? "(none)"}` }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
