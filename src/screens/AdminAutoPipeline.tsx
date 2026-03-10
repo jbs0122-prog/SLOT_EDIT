@@ -104,11 +104,11 @@ const SLOT_LABEL: Record<string, string> = {
   bag: '가방', accessory: '액세서리', outer: '아우터', mid: '미드레이어',
 };
 
-const SEASON_SLOT_DISPLAY: Record<string, { required: string[]; excluded: string[] }> = {
-  spring: { required: ['top', 'bottom', 'shoes'], excluded: ['mid'] },
-  summer: { required: ['top', 'bottom', 'shoes'], excluded: ['outer', 'mid'] },
-  fall:   { required: ['top', 'bottom', 'shoes'], excluded: ['mid'] },
-  winter: { required: ['top', 'bottom', 'shoes', 'outer', 'mid'], excluded: [] },
+const SEASON_SLOT_DISPLAY: Record<string, { required: string[]; optional: string[]; excluded: string[] }> = {
+  spring: { required: ['top', 'bottom', 'shoes'], optional: ['mid'], excluded: [] },
+  summer: { required: ['top', 'bottom', 'shoes'], optional: [], excluded: ['outer', 'mid'] },
+  fall:   { required: ['top', 'bottom', 'shoes'], optional: ['mid'], excluded: [] },
+  winter: { required: ['top', 'bottom', 'shoes', 'outer', 'mid'], optional: [], excluded: [] },
 };
 
 function getStepPhase(events: PipelineEvent[]): Record<string, EventStatus | 'idle'> {
@@ -801,6 +801,9 @@ export default function AdminAutoPipeline() {
                     <div className="flex flex-wrap gap-1.5">
                       {info.required.map(s => (
                         <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">{SLOT_LABEL[s] || s}</span>
+                      ))}
+                      {info.optional.map(s => (
+                        <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">{SLOT_LABEL[s] || s}</span>
                       ))}
                       {info.excluded.map(s => (
                         <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/20 line-through">{SLOT_LABEL[s] || s}</span>
