@@ -492,7 +492,7 @@ export default function AdminAutoPipeline() {
 
       const globalSearchedKws = new Set<string>();
       const globalSearchCache = new Map<string, any[]>();
-      const globalSeenAsins = new Set<string>();
+      const globalSeenAsinsForDedup = new Set<string>();
       const lookSlotCandidatesMap: Record<string, Record<string, any[]>> = {};
 
       const searchSlot = async (kw: string, fallbackRating?: number): Promise<{ results: any[]; rawCount: number; filteredCount: number }> => {
@@ -525,10 +525,10 @@ export default function AdminAutoPipeline() {
 
         addEvent(makeEvent('search', 'start', `[Look ${lookKey}: ${lookLabel}] Searching Amazon (rating>=4.0)...`));
         const slotCandidates: Record<string, any[]> = {};
+        const lookSeenAsins = new Set<string>();
         for (const slot of PRIORITY_SLOTS) {
           const isCore = CORE_SLOTS.includes(slot);
           const slotLimit = isCore ? productsPerSlot : Math.max(1, productsPerSlot - 1);
-          const keywords = (lookCategories[slot] || []).filter((kw: string) => !globalSearchedKws.has(kw) || globalSearchCache.has(kw));
           const allKws = lookCategories[slot] || [];
           if (allKws.length === 0) continue;
           const candidates: any[] = [];
@@ -538,8 +538,10 @@ export default function AdminAutoPipeline() {
             const cached = globalSearchCache.has(kw);
             const { results, rawCount, filteredCount } = await searchSlot(kw);
             for (const item of results) {
-              if (item.asin && !globalSeenAsins.has(item.asin) && candidates.length < slotLimit) {
-                globalSeenAsins.add(item.asin); candidates.push(item);
+              if (item.asin && !lookSeenAsins.has(item.asin) && candidates.length < slotLimit) {
+                lookSeenAsins.add(item.asin);
+                globalSeenAsinsForDedup.add(item.asin);
+                candidates.push(item);
               }
             }
             if (!cached && rawCount >= 0) {
@@ -563,8 +565,10 @@ export default function AdminAutoPipeline() {
                     const fbResults = d.results || [];
                     globalSearchCache.set(fallbackKey, fbResults);
                     for (const item of fbResults) {
-                      if (item.asin && !globalSeenAsins.has(item.asin) && candidates.length < slotLimit) {
-                        globalSeenAsins.add(item.asin); candidates.push(item);
+                      if (item.asin && !lookSeenAsins.has(item.asin) && candidates.length < slotLimit) {
+                        lookSeenAsins.add(item.asin);
+                        globalSeenAsinsForDedup.add(item.asin);
+                        candidates.push(item);
                       }
                     }
                     addEvent(makeEvent('search', 'progress', `[${lookKey}/${slot}] fallback: ${d.total_filtered ?? 0}/${d.total_raw ?? 0} @3.5`));
@@ -644,7 +648,11 @@ export default function AdminAutoPipeline() {
               });
               if (r.ok) {
                 const d = await r.json();
-                if (d.success) { lookRegistered++; registeredCount++; if (product.asin) existingAsins.add(product.asin); }
+                if (d.success) {
+                  lookRegistered++;
+                  registeredCount++;
+                  if (product.asin) existingAsins.add(product.asin);
+                }
               }
             } catch { /**/ }
           }
@@ -657,18 +665,22 @@ export default function AdminAutoPipeline() {
         const { data: productsForBg } = await supabase.from('products').select('id, image_url, category, sub_category').eq('batch_id', lookBatchId).is('nobg_image_url', null);
         if (productsForBg && productsForBg.length > 0) {
           const valid = productsForBg.filter(p => !!p.image_url);
-          const PARALLEL = 3;
+          const PARALLEL = 2;
           let extractedCount = 0;
           for (let i = 0; i < valid.length; i += PARALLEL) {
             const batch = valid.slice(i, i + PARALLEL);
-            const results = await Promise.allSettled(batch.map(p =>
-              fetch(`${apiBase}/auto-pipeline`, {
+            const results = await Promise.allSettled(batch.map(async p => {
+              const r = await fetch(`${apiBase}/auto-pipeline`, {
                 method: 'POST', headers: authHeaders,
                 body: JSON.stringify({ action: 'extract-nobg', productId: p.id, imageUrl: p.image_url, category: p.category || 'top', subCategory: p.sub_category || '' }),
-              })
-            ));
+              });
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              const d = await r.json();
+              if (!d.success || !d.nobgUrl) throw new Error('no nobg url');
+              return d;
+            }));
             extractedCount += results.filter(r => r.status === 'fulfilled').length;
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 500));
           }
           addEvent(makeEvent('nobg', 'success', `[Look ${lookKey}] ${extractedCount}/${valid.length} extracted`));
         } else {
