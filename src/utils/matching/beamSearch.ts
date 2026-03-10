@@ -151,10 +151,38 @@ function shouldIncludeOuter(season?: string, warmth?: number): boolean {
   return true;
 }
 
-function shouldIncludeMid(season?: string, warmth?: number): boolean {
-  if (season === 'summer') return false;
-  if (warmth !== undefined && warmth <= 3) return false;
+type MidTier = 'none' | 'light-only' | 'light-or-medium' | 'any';
+
+function getMidTier(season?: string, warmth?: number): MidTier {
+  if (season === 'summer') return 'none';
+  if (warmth !== undefined && warmth <= 3) return 'none';
+  if (season === 'spring') return 'light-only';
+  if (season === 'fall') return 'light-or-medium';
+  return 'any';
+}
+
+function midPassesTierFilter(product: Product, tier: MidTier): boolean {
+  if (tier === 'none') return false;
+  if (tier === 'any') return true;
+  const w = typeof product.warmth === 'number' ? product.warmth : 3;
+  if (tier === 'light-only') return w <= 2.5;
+  if (tier === 'light-or-medium') return w <= 3.5;
   return true;
+}
+
+const OUTER_MID_WARMTH_BUDGET: Record<string, { max: number }> = {
+  spring: { max: 6.0 },
+  fall:   { max: 7.5 },
+  winter: { max: 9.5 },
+};
+
+function outerMidBudgetOk(outer: Product | undefined, mid: Product | undefined, season?: string): boolean {
+  if (!outer || !mid || !season) return true;
+  const budget = OUTER_MID_WARMTH_BUDGET[season];
+  if (!budget) return true;
+  const outerW = typeof outer.warmth === 'number' ? outer.warmth : 3;
+  const midW = typeof mid.warmth === 'number' ? mid.warmth : 2.5;
+  return (outerW + midW) <= budget.max;
 }
 
 function quickColorCheck(product: Product, existingFamilies: string[]): boolean {
@@ -201,7 +229,8 @@ function buildSlotPools(
     });
 
   const needsOuter = anchor?.slotType === 'outer' || shouldIncludeOuter(context.targetSeason, context.targetWarmth);
-  const needsMid = anchor?.slotType === 'mid' || shouldIncludeMid(context.targetSeason, context.targetWarmth);
+  const midTier = anchor?.slotType === 'mid' ? 'any' as MidTier : getMidTier(context.targetSeason, context.targetWarmth);
+  const needsMid = midTier !== 'none';
 
   const MAX_CORE = 10;
   const MAX_OPT = 6;
@@ -226,7 +255,10 @@ function buildSlotPools(
     if (anchor && anchor.slotType === cfg.slot) {
       pool = [anchor.product];
     } else {
-      const raw = filter(cfg.category);
+      let raw = filter(cfg.category);
+      if (cfg.slot === 'mid' && midTier !== 'any') {
+        raw = raw.filter(p => midPassesTierFilter(p, midTier));
+      }
       pool = pickTopCandidates(raw, cfg.max, context, usageCounts);
     }
 
@@ -308,6 +340,8 @@ export async function assembleOutfits(
           const midCandidates: (Product | undefined)[] = midPool ? [undefined, ...midPool.products] : [undefined];
 
           for (const mid of midCandidates) {
+            if (!outerMidBudgetOk(outer, mid, context.targetSeason)) continue;
+
             const items: Record<string, Product> = { ...coreItems };
             if (outer) items.outer = outer;
             if (mid) items.mid = mid;

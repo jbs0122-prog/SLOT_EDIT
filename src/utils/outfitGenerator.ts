@@ -347,7 +347,11 @@ const OPTIONAL_SLOT_FILL_ORDER = ['bag', 'accessory', 'outer', 'mid', 'accessory
 
 const SEASON_EXCLUDED_SLOTS: Record<string, string[]> = {
   summer: ['outer', 'mid'],
-  spring: ['mid'],
+};
+
+const MID_TIER_MAX_WARMTH: Record<string, number> = {
+  spring: 2.5,
+  fall: 3.5,
 };
 
 async function fillEmptySlots(
@@ -359,9 +363,13 @@ async function fillEmptySlots(
   const filledSlotTypes = new Set(existingItems.map(i => i.slot_type));
   const seasonExcluded = new Set(context.targetSeason ? (SEASON_EXCLUDED_SLOTS[context.targetSeason] || []) : []);
 
-  const emptyOptionalSlots = OPTIONAL_SLOT_FILL_ORDER.filter(slot =>
-    !filledSlotTypes.has(slot) && !seasonExcluded.has(slot)
-  );
+  const hasOuter = filledSlotTypes.has('outer');
+
+  const emptyOptionalSlots = OPTIONAL_SLOT_FILL_ORDER.filter(slot => {
+    if (filledSlotTypes.has(slot) || seasonExcluded.has(slot)) return false;
+    if (slot === 'mid' && context.targetSeason === 'spring' && hasOuter) return false;
+    return true;
+  });
 
   if (emptyOptionalSlots.length === 0) return [];
 
@@ -386,10 +394,17 @@ async function fillEmptySlots(
       ? ITEM_WARMTH_LIMITS[context.targetSeason]?.[slot]
       : undefined;
 
+    const midTierMaxWarmth = (slot === 'mid' && context.targetSeason)
+      ? MID_TIER_MAX_WARMTH[context.targetSeason]
+      : undefined;
+
     const availableProducts = allProducts.filter(p => {
       if (usedProductIds.has(p.id)) return false;
       if (slotWarmthLimits && typeof p.warmth === 'number') {
         if (p.warmth < slotWarmthLimits.min - 0.5 || p.warmth > slotWarmthLimits.max + 0.5) return false;
+      }
+      if (midTierMaxWarmth !== undefined && typeof p.warmth === 'number') {
+        if (p.warmth > midTierMaxWarmth) return false;
       }
       return true;
     });
