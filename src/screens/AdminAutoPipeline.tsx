@@ -528,7 +528,8 @@ export default function AdminAutoPipeline() {
         const lookSeenAsins = new Set<string>();
         for (const slot of PRIORITY_SLOTS) {
           const isCore = CORE_SLOTS.includes(slot);
-          const slotLimit = isCore ? productsPerSlot : Math.max(1, productsPerSlot - 1);
+          const isMandatory = ['top', 'bottom', 'shoes'].includes(slot);
+          const slotLimit = isMandatory ? Math.max(2, productsPerSlot) : isCore ? productsPerSlot : Math.max(1, productsPerSlot - 1);
           const allKws = lookCategories[slot] || [];
           if (allKws.length === 0) continue;
           const candidates: any[] = [];
@@ -638,26 +639,45 @@ export default function AdminAutoPipeline() {
 
         addEvent(makeEvent('register', 'start', `[Look ${lookKey}] Analyzing & registering products...`));
         let lookRegistered = 0;
+        let lookFailed = 0;
+
+        const registerProduct = async (product: any, slot: string, attempt: number): Promise<boolean> => {
+          try {
+            const r = await fetch(`${apiBase}/auto-pipeline`, {
+              method: 'POST', headers: authHeaders,
+              body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId: lookBatchId, slotHint: slot }),
+            });
+            if (!r.ok) return false;
+            const d = await r.json();
+            if (d.success) {
+              if (product.asin) existingAsins.add(product.asin);
+              return true;
+            }
+            return false;
+          } catch {
+            return false;
+          }
+        };
+
         for (const slot of PRIORITY_SLOTS) {
           const candidates = slotCandidates[slot] || [];
           for (const product of candidates) {
-            try {
-              const r = await fetch(`${apiBase}/auto-pipeline`, {
-                method: 'POST', headers: authHeaders,
-                body: JSON.stringify({ action: 'register-product', product, gender, body_type: bodyType, vibe, season, batchId: lookBatchId, slotHint: slot }),
-              });
-              if (r.ok) {
-                const d = await r.json();
-                if (d.success) {
-                  lookRegistered++;
-                  registeredCount++;
-                  if (product.asin) existingAsins.add(product.asin);
-                }
-              }
-            } catch { /**/ }
+            let success = await registerProduct(product, slot, 1);
+            if (!success) {
+              await new Promise(r => setTimeout(r, 800));
+              success = await registerProduct(product, slot, 2);
+            }
+            if (success) {
+              lookRegistered++;
+              registeredCount++;
+            } else {
+              lookFailed++;
+            }
           }
         }
-        addEvent(makeEvent('register', 'success', `[Look ${lookKey}] Registered ${lookRegistered} products`));
+
+        const failMsg = lookFailed > 0 ? ` (${lookFailed} failed, retried once each)` : '';
+        addEvent(makeEvent('register', 'success', `[Look ${lookKey}] Registered ${lookRegistered} products${failMsg}`));
 
         if (abortRef.current) throw new Error('Aborted by user');
 
