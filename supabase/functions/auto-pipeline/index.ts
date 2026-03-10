@@ -1100,8 +1100,10 @@ function assembleForLook(
 
         const outerPool = excludedSet.has("outer") ? [] : (bySlot["outer"] || []).filter((o: any) => quickColorCheck(o, coreFamilies));
         const outerRequired = slotConfig.required.includes("outer");
+        // For optional outer: try with outer first (preferred), then without as fallback.
+        // This ensures outer-included outfits are explored before outer-less ones.
         const outerCandidates = outerPool.length > 0
-          ? (outerRequired ? outerPool.slice(0, 3) : [outerPool[0], null])
+          ? (outerRequired ? outerPool.slice(0, 3) : [...outerPool.slice(0, 2), null])
           : (outerRequired ? [] : [null]);
         if (outerRequired && outerCandidates.length === 0) continue;
 

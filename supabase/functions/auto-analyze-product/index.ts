@@ -918,6 +918,20 @@ Return ONLY valid JSON with English values:
     const productLink = product.url || "";
     const extractedAsin = (productLink.match(/\/dp\/([A-Z0-9]{10})/)?.[1]) || null;
 
+    const SEASON_WARMTH_GATE: Record<string, { maxWarmth: number; allowedSlots: string[] }> = {
+      spring: { maxWarmth: 3.5, allowedSlots: ["top", "bottom", "shoes", "bag", "accessory"] },
+      summer: { maxWarmth: 2.5, allowedSlots: ["top", "bottom", "shoes", "bag", "accessory"] },
+    };
+    const gate = season ? SEASON_WARMTH_GATE[season] : null;
+    if (gate && gate.allowedSlots.includes(normalizedCategory) && warmth > gate.maxWarmth) {
+      return new Response(JSON.stringify({
+        error: `Product warmth (${warmth}) too high for ${season} season (max ${gate.maxWarmth}) in slot '${normalizedCategory}'. Skipping registration.`,
+        warmth_rejected: true,
+      }), {
+        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const productData = {
       brand: core.brand || product.brand || "",
       name: core.name || product.title,
