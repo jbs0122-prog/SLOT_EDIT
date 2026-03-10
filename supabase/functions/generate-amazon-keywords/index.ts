@@ -461,7 +461,7 @@ SEASON: ${seasonLabel}${seasonMod ? `
 - Layering strategy: ${
   seasonLabel === "winter" ? "full layers — base + mid + outer all essential; prioritize warmth-first fabrics (cashmere, wool, down, thermal)" :
   seasonLabel === "fall" ? "2–3 layers — outer or mid always present; rich textures and warm tones" :
-  seasonLabel === "spring" ? "light layers — outer optional but present; breathable and transitional pieces" :
+  seasonLabel === "spring" ? "light layers — mid (light knit, cardigan, zip-up) is useful for cool mornings/evenings; outer optional; breathable and transitional pieces" :
   "minimal layers — no outer/mid; prioritize breathability, exposed skin acceptable"
 }` : ""}`;
 
@@ -503,6 +503,8 @@ ${sampleItems}`;
       ? `\n⚠️ WINTER CRITICAL: The "mid" category is MANDATORY for winter. Mid-layer items (sweaters, knits, turtlenecks, hoodies, cardigans, cashmere) are essential cold-weather layering pieces. You MUST generate 6 mid keywords (2 per Look). Use winter-appropriate mid items: cashmere sweater, wool turtleneck, cable-knit, ribbed knit, chunky knit pullover, thermal hoodie, etc.`
       : seasonLabel === "fall"
       ? `\n⚠️ FALL NOTE: Mid-layer items are important for fall layering. Include sweaters, knits, and cardigans with fall fabrics (wool, flannel, corduroy).`
+      : seasonLabel === "spring"
+      ? `\n⚠️ SPRING NOTE: Mid-layer items (light knits, cardigans, zip-ups) are useful for spring — cool mornings and transitional weather. Include 6 mid keywords (2 per Look) using lightweight fabrics: cotton knit, linen cardigan, fine-gauge sweater, zip-up hoodie, lightweight cardigan, etc.`
       : "";
 
     const prompt = `You are a professional fashion buyer who sources ${genderLabel}'s clothing on Amazon. Your task is to generate precise Amazon search keywords that real shoppers would type.
