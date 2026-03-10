@@ -6,12 +6,13 @@ import { MAX_OUTFIT_USAGE } from '../utils/outfitGenerator';
 
 interface ProductListProps {
   products: Product[];
-  onProductsChange: () => void;
+  onProductDeleted: (ids: string[]) => void;
+  onProductCopied: (product: Product) => void;
   onEditProduct: (product: Product) => void;
   usageCounts?: Record<string, number>;
 }
 
-export default function ProductList({ products, onProductsChange, onEditProduct, usageCounts = {} }: ProductListProps) {
+export default function ProductList({ products, onProductDeleted, onProductCopied, onEditProduct, usageCounts = {} }: ProductListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -49,8 +50,9 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
 
       if (error) throw error;
 
+      const deletedIds = ids;
       clearSelection();
-      onProductsChange();
+      onProductDeleted(deletedIds);
     } catch (error) {
       console.error('Bulk delete error:', error);
       alert('삭제 실패: ' + (error as Error).message);
@@ -70,7 +72,7 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
         .eq('id', product.id);
 
       if (error) throw error;
-      onProductsChange();
+      onProductDeleted([product.id]);
     } catch (error) {
       console.error('Delete error:', error);
       alert('삭제 실패: ' + (error as Error).message);
@@ -93,12 +95,14 @@ export default function ProductList({ products, onProductsChange, onEditProduct,
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('products')
-        .insert([newProduct]);
+        .insert([newProduct])
+        .select()
+        .maybeSingle();
 
       if (error) throw error;
-      onProductsChange();
+      if (inserted) onProductCopied(inserted as Product);
     } catch (error) {
       console.error('Copy error:', error);
       alert('복사 실패: ' + (error as Error).message);

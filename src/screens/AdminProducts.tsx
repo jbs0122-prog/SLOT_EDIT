@@ -268,22 +268,38 @@ export default function AdminProducts() {
     setEditingProduct(null);
   };
 
-  const handleProductSaved = () => {
-    resetAndReload();
+  const handleProductSaved = useCallback((savedProduct: Product | null) => {
+    if (savedProduct) {
+      if (editingProduct) {
+        setProducts(prev => prev.map(p => p.id === savedProduct.id ? savedProduct : p));
+      } else {
+        setProducts(prev => [savedProduct, ...prev]);
+        setTotalCount(prev => prev + 1);
+      }
+    } else {
+      resetAndReload();
+    }
     loadProductUsageCounts();
     handleProductFormClose();
-  };
+  }, [editingProduct, resetAndReload, loadProductUsageCounts]);
+
+  const handleProductDeleted = useCallback((ids: string[]) => {
+    setProducts(prev => prev.filter(p => !ids.includes(p.id)));
+    setTotalCount(prev => prev - ids.length);
+    loadProductUsageCounts();
+  }, [loadProductUsageCounts]);
+
+  const handleProductCopied = useCallback((newProduct: Product) => {
+    setProducts(prev => [newProduct, ...prev]);
+    setTotalCount(prev => prev + 1);
+    loadProductUsageCounts();
+  }, [loadProductUsageCounts]);
 
   const handleCSVUploadComplete = () => {
     resetAndReload();
     loadProductUsageCounts();
     setShowCSVUpload(false);
   };
-
-  const handleProductsChange = useCallback(() => {
-    resetAndReload();
-    loadProductUsageCounts();
-  }, [resetAndReload, loadProductUsageCounts]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -408,7 +424,8 @@ export default function AdminProducts() {
             <>
               <ProductList
                 products={products}
-                onProductsChange={handleProductsChange}
+                onProductDeleted={handleProductDeleted}
+                onProductCopied={handleProductCopied}
                 onEditProduct={handleEditProduct}
                 usageCounts={productUsageCounts}
               />

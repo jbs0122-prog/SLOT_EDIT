@@ -33,7 +33,7 @@ const SLOT_COLORS: Record<string, string> = {
 
 interface ProductFormProps {
   product?: Product | null;
-  onSave: () => void;
+  onSave: (savedProduct: Product | null) => void;
   onCancel: () => void;
 }
 
@@ -770,14 +770,14 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       };
 
       if (product) {
-        const { error } = await supabase.from('products').update(dataToSave).eq('id', product.id);
+        const { data: updated, error } = await supabase.from('products').update(dataToSave).eq('id', product.id).select().maybeSingle();
         if (error) throw error;
+        onSave(updated ? { ...product, ...updated } as Product : null);
       } else {
-        const { error } = await supabase.from('products').insert([dataToSave]);
+        const { data: inserted, error } = await supabase.from('products').insert([dataToSave]).select().maybeSingle();
         if (error) throw error;
+        onSave(inserted ? inserted as Product : null);
       }
-
-      onSave();
     } catch (error) {
       console.error('Save error:', error);
       alert('저장 실패: ' + (error as Error).message);
