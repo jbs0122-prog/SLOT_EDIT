@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Outfit } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
 import { outfitWarmthToTempRange } from '../utils/weather';
-import { Sparkles, Trash2, CheckSquare, Square, XSquare, Link2, Thermometer, Snowflake, Sun, Leaf, Wind } from 'lucide-react';
+import { Sparkles, Trash2, CheckSquare, Square, XSquare, Link2, Thermometer, Snowflake, Sun, Leaf, Wind, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -13,6 +13,7 @@ const SEASON_LABELS: Record<string, string> = {
   winter: '겨울',
 };
 
+const PAGE_SIZE = 30;
 
 const OUTFIT_FILTER_KEY = 'admin_outfit_filters';
 
@@ -29,7 +30,7 @@ function saveOutfitFilters(updates: Partial<{ outfitFilterGender: string; outfit
   try {
     const current = loadSavedOutfitFilters() || {};
     sessionStorage.setItem(OUTFIT_FILTER_KEY, JSON.stringify({ ...current, ...updates }));
-  } catch { /* ignore */ }
+  } catch { }
 }
 
 interface OutfitWithMeta extends Outfit {
@@ -86,6 +87,8 @@ function SeasonIcon({ season, size = 10 }: { season: string; size?: number }) {
 
 export default function AdminOutfitLinker() {
   const [outfits, setOutfits] = useState<OutfitWithMeta[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showOutfitLinker, setShowOutfitLinker] = useState(false);
   const [showAutoGenerator, setShowAutoGenerator] = useState(false);
@@ -97,26 +100,45 @@ export default function AdminOutfitLinker() {
   const [outfitFilterVibe, setOutfitFilterVibeRaw] = useState(savedFilters?.outfitFilterVibe ?? '');
   const [outfitFilterSeason, setOutfitFilterSeasonRaw] = useState(savedFilters?.outfitFilterSeason ?? '');
 
-  const setOutfitFilterGender = (v: string) => { setOutfitFilterGenderRaw(v); saveOutfitFilters({ outfitFilterGender: v }); };
-  const setOutfitFilterBodyType = (v: string) => { setOutfitFilterBodyTypeRaw(v); saveOutfitFilters({ outfitFilterBodyType: v }); };
-  const setOutfitFilterVibe = (v: string) => { setOutfitFilterVibeRaw(v); saveOutfitFilters({ outfitFilterVibe: v }); };
-  const setOutfitFilterSeason = (v: string) => { setOutfitFilterSeasonRaw(v); saveOutfitFilters({ outfitFilterSeason: v }); };
+  const setOutfitFilterGender = (v: string) => { setOutfitFilterGenderRaw(v); saveOutfitFilters({ outfitFilterGender: v }); setCurrentPage(0); };
+  const setOutfitFilterBodyType = (v: string) => { setOutfitFilterBodyTypeRaw(v); saveOutfitFilters({ outfitFilterBodyType: v }); setCurrentPage(0); };
+  const setOutfitFilterVibe = (v: string) => { setOutfitFilterVibeRaw(v); saveOutfitFilters({ outfitFilterVibe: v }); setCurrentPage(0); };
+  const setOutfitFilterSeason = (v: string) => { setOutfitFilterSeasonRaw(v); saveOutfitFilters({ outfitFilterSeason: v }); setCurrentPage(0); };
 
   const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    loadOutfits();
-  }, []);
-
-  const loadOutfits = async () => {
+  const loadOutfits = useCallback(async (page: number) => {
     setLoading(true);
     try {
-      const [outfitsResult, itemsResult] = await Promise.all([
-        supabase.from('outfits').select('*').order('created_at', { ascending: false }),
-        supabase.from('outfit_items').select('outfit_id, product:products(warmth, category)'),
-      ]);
+      let query = supabase
+        .from('outfits')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
 
+      if (outfitFilterGender) query = query.eq('gender', outfitFilterGender);
+      if (outfitFilterBodyType) query = query.eq('body_type', outfitFilterBodyType);
+      if (outfitFilterVibe) query = query.eq('vibe', outfitFilterVibe);
+
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const outfitsResult = await query;
       if (outfitsResult.error) throw outfitsResult.error;
+
+      setTotalCount(outfitsResult.count ?? 0);
+
+      const rawOutfits = outfitsResult.data || [];
+      if (rawOutfits.length === 0) {
+        setOutfits([]);
+        return;
+      }
+
+      const outfitIds = rawOutfits.map((o: any) => o.id);
+      const itemsResult = await supabase
+        .from('outfit_items')
+        .select('outfit_id, product:products(warmth, category)')
+        .in('outfit_id', outfitIds);
 
       const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
       const itemCountByOutfit: Record<string, number> = {};
@@ -133,8 +155,6 @@ export default function AdminOutfitLinker() {
         }
       }
 
-      const rawOutfits = outfitsResult.data || [];
-
       const vibeGroupOrder: Record<string, number> = {};
       const vibeCounters: Record<string, number> = {};
       for (const row of rawOutfits) {
@@ -144,11 +164,13 @@ export default function AdminOutfitLinker() {
         vibeGroupOrder[row.id] = ((vibeCounters[key] - 1) % 3) + 1;
       }
 
-      const outfitsData: OutfitWithMeta[] = rawOutfits.map(row => {
+      const outfitsData: OutfitWithMeta[] = rawOutfits.map((row: any) => {
         const items = itemsByOutfit[row.id] || [];
         const avgWarmth = computeOutfitWarmth(items);
         const tempRange = avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined;
         const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
+
+        if (outfitFilterSeason && !autoSeasons.includes(outfitFilterSeason)) return null;
 
         return {
           id: row.id,
@@ -174,7 +196,7 @@ export default function AdminOutfitLinker() {
           look_number: vibeGroupOrder[row.id],
           item_count: itemCountByOutfit[row.id] || 0,
         };
-      });
+      }).filter(Boolean) as OutfitWithMeta[];
 
       setOutfits(outfitsData);
     } catch (error) {
@@ -182,7 +204,11 @@ export default function AdminOutfitLinker() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [outfitFilterGender, outfitFilterBodyType, outfitFilterVibe, outfitFilterSeason]);
+
+  useEffect(() => {
+    loadOutfits(currentPage);
+  }, [loadOutfits, currentPage]);
 
   const handleLinkOutfit = (outfit: Outfit) => {
     setSelectedOutfit(outfit);
@@ -195,7 +221,7 @@ export default function AdminOutfitLinker() {
   };
 
   const handleLinksUpdated = () => {
-    loadOutfits();
+    loadOutfits(currentPage);
   };
 
   const handleDeleteOutfit = async (outfitId: string) => {
@@ -206,7 +232,7 @@ export default function AdminOutfitLinker() {
       await supabase.from('outfit_items').delete().eq('outfit_id', outfitId);
       const { error } = await supabase.from('outfits').delete().eq('id', outfitId);
       if (error) throw error;
-      await loadOutfits();
+      await loadOutfits(currentPage);
       alert('코디가 삭제되었습니다.');
     } catch (error) {
       console.error('Failed to delete outfit:', error);
@@ -226,10 +252,10 @@ export default function AdminOutfitLinker() {
   };
 
   const toggleSelectAllOutfits = () => {
-    if (selectedOutfitIds.size === filteredOutfits.length) {
+    if (selectedOutfitIds.size === outfits.length) {
       setSelectedOutfitIds(new Set());
     } else {
-      setSelectedOutfitIds(new Set(filteredOutfits.map(o => o.id)));
+      setSelectedOutfitIds(new Set(outfits.map(o => o.id)));
     }
   };
 
@@ -245,7 +271,7 @@ export default function AdminOutfitLinker() {
       const { error } = await supabase.from('outfits').delete().in('id', ids);
       if (error) throw error;
       setSelectedOutfitIds(new Set());
-      await loadOutfits();
+      await loadOutfits(currentPage);
       alert(`${count}개 코디가 삭제되었습니다.`);
     } catch (error) {
       console.error('Bulk delete failed:', error);
@@ -255,16 +281,7 @@ export default function AdminOutfitLinker() {
     }
   };
 
-  const filteredOutfits = outfits.filter(outfit => {
-    if (outfitFilterGender && outfit.gender !== outfitFilterGender) return false;
-    if (outfitFilterBodyType && outfit.body_type !== outfitFilterBodyType) return false;
-    if (outfitFilterVibe && outfit.vibe !== outfitFilterVibe) return false;
-    if (outfitFilterSeason) {
-      const autoSeasons = outfit.auto_seasons || [];
-      if (!autoSeasons.includes(outfitFilterSeason)) return false;
-    }
-    return true;
-  });
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   if (loading) {
     return (
@@ -348,7 +365,7 @@ export default function AdminOutfitLinker() {
           <div className="mb-4 flex items-start justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">
-                코디 목록 ({filteredOutfits.length}개 / 전체 {outfits.length}개)
+                코디 목록 ({outfits.length}개 / 전체 {totalCount}개)
               </h2>
               <p className="text-sm text-gray-600">코디를 선택하여 제품을 연결하세요</p>
             </div>
@@ -361,18 +378,18 @@ export default function AdminOutfitLinker() {
             </button>
           </div>
 
-          {filteredOutfits.length > 0 && (
+          {outfits.length > 0 && (
             <div className="mb-4 flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
               <button
                 onClick={toggleSelectAllOutfits}
                 className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
               >
-                {selectedOutfitIds.size === filteredOutfits.length && filteredOutfits.length > 0 ? (
+                {selectedOutfitIds.size === outfits.length && outfits.length > 0 ? (
                   <CheckSquare size={18} className="text-blue-600" />
                 ) : (
                   <Square size={18} />
                 )}
-                {selectedOutfitIds.size === filteredOutfits.length && filteredOutfits.length > 0
+                {selectedOutfitIds.size === outfits.length && outfits.length > 0
                   ? '전체 해제'
                   : '전체 선택'}
               </button>
@@ -399,120 +416,144 @@ export default function AdminOutfitLinker() {
             </div>
           )}
 
-          {filteredOutfits.length === 0 ? (
+          {outfits.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              {outfits.length === 0 ? '등록된 코디가 없습니다' : '검색 결과가 없습니다'}
+              {totalCount === 0 ? '등록된 코디가 없습니다' : '검색 결과가 없습니다'}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-              {filteredOutfits.map((outfit) => (
-                <div
-                  key={outfit.id}
-                  className={`group relative bg-white rounded-lg overflow-hidden transition-all duration-200 border-2 ${
-                    selectedOutfitIds.has(outfit.id)
-                      ? 'border-blue-500 ring-2 ring-blue-200'
-                      : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
-                  }`}
-                >
-                  <div className="relative aspect-square bg-gray-100">
-                    {outfit.image_url_flatlay ? (
-                      <img
-                        src={outfit.image_url_flatlay}
-                        alt={`${outfit.gender} - ${outfit.vibe}`}
-                        className="absolute inset-0 w-full h-full object-contain p-1"
-                        onError={(e) => {
-                          e.currentTarget.src = 'https://via.placeholder.com/300x300?text=No+Image';
-                        }}
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-gray-400 text-xs">이미지 없음</span>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => toggleOutfitSelection(outfit.id)}
-                      className="absolute top-1.5 left-1.5 z-10"
-                    >
-                      {selectedOutfitIds.has(outfit.id) ? (
-                        <CheckSquare size={20} className="text-blue-600 drop-shadow-md" />
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                {outfits.map((outfit) => (
+                  <div
+                    key={outfit.id}
+                    className={`group relative bg-white rounded-lg overflow-hidden transition-all duration-200 border-2 ${
+                      selectedOutfitIds.has(outfit.id)
+                        ? 'border-blue-500 ring-2 ring-blue-200'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
+                    }`}
+                  >
+                    <div className="relative aspect-square bg-gray-100">
+                      {outfit.image_url_flatlay ? (
+                        <img
+                          src={outfit.image_url_flatlay}
+                          alt={`${outfit.gender} - ${outfit.vibe}`}
+                          className="absolute inset-0 w-full h-full object-contain p-1"
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://via.placeholder.com/300x300?text=No+Image';
+                          }}
+                        />
                       ) : (
-                        <Square size={20} className="text-white/80 drop-shadow-md group-hover:text-white" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-gray-400 text-xs">이미지 없음</span>
+                        </div>
                       )}
-                    </button>
 
-                    {outfit.look_number && (
-                      <div className="absolute top-1.5 right-1.5 z-10 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                        Look {outfit.look_number}
-                      </div>
-                    )}
+                      <button
+                        onClick={() => toggleOutfitSelection(outfit.id)}
+                        className="absolute top-1.5 left-1.5 z-10"
+                      >
+                        {selectedOutfitIds.has(outfit.id) ? (
+                          <CheckSquare size={20} className="text-blue-600 drop-shadow-md" />
+                        ) : (
+                          <Square size={20} className="text-white/80 drop-shadow-md group-hover:text-white" />
+                        )}
+                      </button>
 
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleLinkOutfit(outfit)}
-                          className="p-2 bg-white rounded-full text-blue-700 hover:bg-blue-50 transition-colors shadow-sm"
-                          title="제품 연결"
-                        >
-                          <Link2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteOutfit(outfit.id)}
-                          className="p-2 bg-white rounded-full text-red-700 hover:bg-red-50 transition-colors shadow-sm"
-                          title="삭제"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                      {outfit.look_number && (
+                        <div className="absolute top-1.5 right-1.5 z-10 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                          Look {outfit.look_number}
+                        </div>
+                      )}
 
-                  <div className="px-2 pt-1.5 pb-2 space-y-1.5">
-                    <p className="text-[11px] text-gray-700 font-medium leading-tight truncate">
-                      {outfit.gender} · {outfit.body_type} · {outfit.vibe}
-                    </p>
-
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-gray-400">
-                        {outfit.item_count ?? 0}개 · {outfit.status || '-'}
-                      </span>
-                    </div>
-
-                    {outfit.avg_warmth !== undefined && (
-                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium w-fit ${getWarmthColor(outfit.avg_warmth)}`}>
-                        <Thermometer size={9} />
-                        <span>보온 {outfit.avg_warmth.toFixed(1)} · {getWarmthLabel(outfit.avg_warmth)}</span>
-                      </div>
-                    )}
-
-                    {outfit.temp_range_f && (
-                      <div className="flex items-center gap-1 text-[9px] text-gray-500">
-                        <span className="font-medium text-gray-600">{outfit.temp_range_f.min}–{outfit.temp_range_f.max}°F</span>
-                        <span className="text-gray-300">|</span>
-                        <div className="flex items-center gap-0.5">
-                          {(outfit.auto_seasons || []).map(s => (
-                            <span key={s} className="flex items-center gap-0.5">
-                              <SeasonIcon season={s} size={9} />
-                              <span>{SEASON_LABELS[s]}</span>
-                            </span>
-                          ))}
-                          {(outfit.auto_seasons || []).length === 0 && (
-                            <span className="text-gray-400">-</span>
-                          )}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleLinkOutfit(outfit)}
+                            className="p-2 bg-white rounded-full text-blue-700 hover:bg-blue-50 transition-colors shadow-sm"
+                            title="제품 연결"
+                          >
+                            <Link2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOutfit(outfit.id)}
+                            className="p-2 bg-white rounded-full text-red-700 hover:bg-red-50 transition-colors shadow-sm"
+                            title="삭제"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
-                    )}
+                    </div>
 
-                    {outfit.avg_warmth === undefined && (
-                      <div className="flex items-center gap-1 text-[9px] text-gray-400 italic">
-                        <Thermometer size={9} />
-                        <span>제품 연결 후 계산</span>
+                    <div className="px-2 pt-1.5 pb-2 space-y-1.5">
+                      <p className="text-[11px] text-gray-700 font-medium leading-tight truncate">
+                        {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+                      </p>
+
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-gray-400">
+                          {outfit.item_count ?? 0}개 · {outfit.status || '-'}
+                        </span>
                       </div>
-                    )}
+
+                      {outfit.avg_warmth !== undefined && (
+                        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium w-fit ${getWarmthColor(outfit.avg_warmth)}`}>
+                          <Thermometer size={9} />
+                          <span>보온 {outfit.avg_warmth.toFixed(1)} · {getWarmthLabel(outfit.avg_warmth)}</span>
+                        </div>
+                      )}
+
+                      {outfit.temp_range_f && (
+                        <div className="flex items-center gap-1 text-[9px] text-gray-500">
+                          <span className="font-medium text-gray-600">{outfit.temp_range_f.min}–{outfit.temp_range_f.max}°F</span>
+                          <span className="text-gray-300">|</span>
+                          <div className="flex items-center gap-0.5">
+                            {(outfit.auto_seasons || []).map(s => (
+                              <span key={s} className="flex items-center gap-0.5">
+                                <SeasonIcon season={s} size={9} />
+                                <span>{SEASON_LABELS[s]}</span>
+                              </span>
+                            ))}
+                            {(outfit.auto_seasons || []).length === 0 && (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {outfit.avg_warmth === undefined && (
+                        <div className="flex items-center gap-1 text-[9px] text-gray-400 italic">
+                          <Thermometer size={9} />
+                          <span>제품 연결 후 계산</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                    disabled={currentPage === 0}
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    {currentPage + 1} / {totalPages} 페이지
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={currentPage >= totalPages - 1}
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -529,12 +570,11 @@ export default function AdminOutfitLinker() {
         <AutoOutfitGenerator
           onClose={() => setShowAutoGenerator(false)}
           onGenerated={() => {
-            loadOutfits();
+            loadOutfits(currentPage);
             setShowAutoGenerator(false);
           }}
         />
       )}
-
     </div>
   );
 }

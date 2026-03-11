@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { outfitWarmthToTempRange } from '../utils/weather';
-import { X, Save, ArrowLeft, Package, Thermometer, Snowflake, Sun, Leaf, Wind } from 'lucide-react';
+import { X, Save, ArrowLeft, Package, Thermometer, Snowflake, Sun, Leaf, Wind, ChevronLeft, ChevronRight } from 'lucide-react';
 import { scoreProductForVibe, COLOR_TIER_LABELS, type VibeCompatScore } from '../utils/vibeCompatibility';
+
+const PAGE_SIZE = 30;
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -66,6 +68,8 @@ interface OutfitWithMeta extends Outfit {
 
 export default function AdminPins() {
   const [outfits, setOutfits] = useState<OutfitWithMeta[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageType>('flatlay');
   const [pins, setPins] = useState<ImagePin[]>([]);
@@ -77,29 +81,57 @@ export default function AdminPins() {
   const imageRef = useRef<HTMLDivElement>(null);
   const PINS_FILTER_KEY = 'admin_pins_filters';
   const savedPinsFilters = (() => { try { const v = sessionStorage.getItem(PINS_FILTER_KEY); return v ? JSON.parse(v) : null; } catch { return null; } })();
-  const [filterGender, setFilterGender] = useState<string>(savedPinsFilters?.filterGender ?? '');
-  const [filterBodyType, setFilterBodyType] = useState<string>(savedPinsFilters?.filterBodyType ?? '');
-  const [filterVibe, setFilterVibe] = useState<string>(savedPinsFilters?.filterVibe ?? '');
-  const [filterSeason, setFilterSeason] = useState<string>(savedPinsFilters?.filterSeason ?? '');
+  const [filterGender, setFilterGenderRaw] = useState<string>(savedPinsFilters?.filterGender ?? '');
+  const [filterBodyType, setFilterBodyTypeRaw] = useState<string>(savedPinsFilters?.filterBodyType ?? '');
+  const [filterVibe, setFilterVibeRaw] = useState<string>(savedPinsFilters?.filterVibe ?? '');
+  const [filterSeason, setFilterSeasonRaw] = useState<string>(savedPinsFilters?.filterSeason ?? '');
   const [tpo, setTpo] = useState<string>('');
+
+  const setFilterGender = (v: string) => { setFilterGenderRaw(v); setCurrentPage(0); };
+  const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); setCurrentPage(0); };
+  const setFilterVibe = (v: string) => { setFilterVibeRaw(v); setCurrentPage(0); };
+  const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); setCurrentPage(0); };
 
   useEffect(() => {
     sessionStorage.setItem(PINS_FILTER_KEY, JSON.stringify({ filterGender, filterBodyType, filterVibe, filterSeason }));
   }, [filterGender, filterBodyType, filterVibe, filterSeason]);
 
   useEffect(() => {
-    loadOutfits();
     loadProducts();
   }, []);
 
-  const loadOutfits = async () => {
+  const loadOutfits = useCallback(async (page: number) => {
+    setLoading(true);
     try {
-      const [outfitsResult, itemsResult] = await Promise.all([
-        supabase.from('outfits').select('*').order('created_at', { ascending: false }),
-        supabase.from('outfit_items').select('outfit_id, product:products(warmth, category)'),
-      ]);
+      let query = supabase
+        .from('outfits')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
 
+      if (filterGender) query = query.eq('gender', filterGender);
+      if (filterBodyType) query = query.eq('body_type', filterBodyType);
+      if (filterVibe) query = query.eq('vibe', filterVibe);
+
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const outfitsResult = await query;
       if (outfitsResult.error) throw outfitsResult.error;
+
+      setTotalCount(outfitsResult.count ?? 0);
+
+      const rawOutfits = outfitsResult.data || [];
+      if (rawOutfits.length === 0) {
+        setOutfits([]);
+        return;
+      }
+
+      const outfitIds = rawOutfits.map((o: any) => o.id);
+      const itemsResult = await supabase
+        .from('outfit_items')
+        .select('outfit_id, product:products(warmth, category)')
+        .in('outfit_id', outfitIds);
 
       const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
       if (itemsResult.data) {
@@ -113,9 +145,13 @@ export default function AdminPins() {
         }
       }
 
-      const outfitsData: OutfitWithMeta[] = (outfitsResult.data || []).map(row => {
+      const outfitsData: OutfitWithMeta[] = rawOutfits.map((row: any) => {
         const items = itemsByOutfit[row.id] || [];
         const avgWarmth = computeOutfitWarmth(items);
+        const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
+
+        if (filterSeason && !autoSeasons.includes(filterSeason)) return null;
+
         return {
           id: row.id,
           gender: row.gender,
@@ -136,9 +172,9 @@ export default function AdminPins() {
           items: [],
           avg_warmth: avgWarmth,
           temp_range_f: avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined,
-          auto_seasons: avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [],
+          auto_seasons: autoSeasons,
         };
-      });
+      }).filter(Boolean) as OutfitWithMeta[];
 
       setOutfits(outfitsData);
     } catch (error) {
@@ -146,7 +182,11 @@ export default function AdminPins() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterGender, filterBodyType, filterVibe, filterSeason]);
+
+  useEffect(() => {
+    loadOutfits(currentPage);
+  }, [loadOutfits, currentPage]);
 
   const loadProducts = async () => {
     try {
@@ -330,16 +370,7 @@ export default function AdminPins() {
     setPins(newPins);
   };
 
-  const filteredOutfits = outfits.filter(outfit => {
-    if (filterGender && outfit.gender !== filterGender) return false;
-    if (filterBodyType && outfit.body_type !== filterBodyType) return false;
-    if (filterVibe && outfit.vibe !== filterVibe) return false;
-    if (filterSeason) {
-      const autoSeasons = outfit.auto_seasons || [];
-      if (!autoSeasons.includes(filterSeason)) return false;
-    }
-    return true;
-  });
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   if (loading) {
     return (
@@ -362,7 +393,7 @@ export default function AdminPins() {
             <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-gray-600 font-semibold">
-                  총 {filteredOutfits.length}개의 코디 (전체: {outfits.length}개)
+                  총 {totalCount}개의 코디 (현재 {outfits.length}개)
                 </p>
               </div>
 
@@ -434,18 +465,19 @@ export default function AdminPins() {
                 </div>
               </div>
             </div>
-            {filteredOutfits.length === 0 ? (
+            {outfits.length === 0 ? (
               <div className="bg-white rounded-lg shadow-sm p-12 text-center">
                 <p className="text-gray-500 mb-4">
-                  {outfits.length === 0 ? '등록된 코디가 없습니다' : '검색 결과가 없습니다'}
+                  {totalCount === 0 ? '등록된 코디가 없습니다' : '검색 결과가 없습니다'}
                 </p>
                 <p className="text-sm text-gray-400">
-                  {outfits.length === 0 ? '데이터베이스에 코디를 추가해주세요' : '필터 조건을 변경해보세요'}
+                  {totalCount === 0 ? '데이터베이스에 코디를 추가해주세요' : '필터 조건을 변경해보세요'}
                 </p>
               </div>
             ) : (
+              <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-                {filteredOutfits.map((outfit) => (
+                {outfits.map((outfit) => (
                   <div
                     key={outfit.id}
                     className="group relative bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all duration-200"
@@ -516,6 +548,28 @@ export default function AdminPins() {
                   </div>
                 ))}
               </div>
+              {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                    disabled={currentPage === 0}
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    {currentPage + 1} / {totalPages} 페이지
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={currentPage >= totalPages - 1}
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+              </>
             )}
           </>
         ) : (
