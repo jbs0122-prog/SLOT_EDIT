@@ -403,9 +403,10 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const loadData = async () => {
     setLoading(true);
     try {
+      const PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,created_at,updated_at';
       const [productsResult, itemsResult] = await Promise.all([
-        supabase.from('products').select('*').eq('gender', outfit.gender).order('created_at', { ascending: false }),
-        supabase.from('outfit_items').select(`*, product:products(*)`).eq('outfit_id', outfit.id)
+        supabase.from('products').select(PRODUCT_COLS).eq('gender', outfit.gender).order('created_at', { ascending: false }),
+        supabase.from('outfit_items').select(`*, product:products(${PRODUCT_COLS})`).eq('outfit_id', outfit.id)
       ]);
       if (productsResult.error) throw productsResult.error;
       if (itemsResult.error) throw itemsResult.error;
