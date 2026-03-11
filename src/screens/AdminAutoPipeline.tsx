@@ -3,9 +3,10 @@ import {
   Zap, Play, CheckCircle2, XCircle, Loader2,
   ChevronDown, ChevronRight, Package, ShoppingBag, Shirt,
   Sparkles, Clock, RefreshCw, ExternalLink, Check, X,
-  BarChart3, ThumbsUp, ThumbsDown,
+  BarChart3, ThumbsUp, ThumbsDown, Server, Monitor,
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import MCPPipelineMode from './MCPPipelineMode';
 
 type Gender = 'MALE' | 'FEMALE' | 'UNISEX';
 type BodyType = 'slim' | 'regular' | 'plus-size';
@@ -307,6 +308,7 @@ function saveSession(session: PipelineSession) {
 export default function AdminAutoPipeline() {
   const session = loadSession();
 
+  const [mcpMode, setMcpMode] = useState(false);
   const [gender, setGender] = useState<Gender>(session.gender ?? 'FEMALE');
   const [bodyType, setBodyType] = useState<BodyType>(session.bodyType ?? 'regular');
   const [vibe, setVibe] = useState<Vibe>(session.vibe ?? 'ELEVATED_COOL');
@@ -785,14 +787,36 @@ export default function AdminAutoPipeline() {
       <div className="max-w-5xl mx-auto px-6 py-10">
 
         <div className="mb-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center">
-              <Zap className="w-5 h-5 text-white" />
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center">
+                <Zap className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Auto Pipeline</h1>
+              <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-500/30">BETA</span>
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Auto Pipeline</h1>
-            <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-500/30">BETA</span>
+            <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1">
+              <button
+                onClick={() => setMcpMode(false)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${!mcpMode ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                Classic
+              </button>
+              <button
+                onClick={() => setMcpMode(true)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${mcpMode ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+              >
+                <Server className="w-3.5 h-3.5" />
+                MCP
+              </button>
+            </div>
           </div>
-          <p className="text-zinc-400 text-sm ml-12">Look A/B/C 격리 조합 | Vibe Score + Color Palette 필터 | Season Slot 규칙 | Warmth Budget</p>
+          <p className="text-zinc-400 text-sm ml-12">
+            {mcpMode
+              ? 'Server-side pipeline | Learning feedback loop | Template insights | Zero browser dependency'
+              : 'Look A/B/C 격리 조합 | Vibe Score + Color Palette 필터 | Season Slot 규칙 | Warmth Budget'}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -891,15 +915,27 @@ export default function AdminAutoPipeline() {
               </div>
             </div>
 
-            <button onClick={running ? handleAbort : handleRun} disabled={aborting} className={`w-full py-4 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2.5 ${aborting ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' : running ? 'bg-red-600/90 text-white hover:bg-red-500 active:scale-[0.98]' : 'bg-white text-black hover:bg-zinc-100 active:scale-[0.98] shadow-lg shadow-white/5'}`}>
-              {aborting ? <><Loader2 className="w-4 h-4 animate-spin" />Stopping...</> : running ? <><X className="w-4 h-4" />Abort Pipeline</> : <><Play className="w-4 h-4" fill="currentColor" />Run Auto Pipeline</>}
-            </button>
+            {!mcpMode && (
+              <button onClick={running ? handleAbort : handleRun} disabled={aborting} className={`w-full py-4 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2.5 ${aborting ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' : running ? 'bg-red-600/90 text-white hover:bg-red-500 active:scale-[0.98]' : 'bg-white text-black hover:bg-zinc-100 active:scale-[0.98] shadow-lg shadow-white/5'}`}>
+                {aborting ? <><Loader2 className="w-4 h-4 animate-spin" />Stopping...</> : running ? <><X className="w-4 h-4" />Abort Pipeline</> : <><Play className="w-4 h-4" fill="currentColor" />Run Auto Pipeline</>}
+              </button>
+            )}
           </div>
 
           {/* RIGHT: Progress & Results */}
           <div className="lg:col-span-3 space-y-4">
 
-            {(running || result || events.length > 0) && (
+            {mcpMode && (
+              <MCPPipelineMode
+                gender={gender}
+                bodyType={bodyType}
+                vibe={vibe}
+                season={season}
+                productsPerSlot={productsPerSlot}
+              />
+            )}
+
+            {!mcpMode && (running || result || events.length > 0) && (
               <div className="bg-white/5 rounded-2xl p-5 border border-white/8">
                 <div className="flex items-center gap-2 mb-5">
                   {running ? <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
@@ -926,7 +962,7 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {hasCandidates && (
+            {!mcpMode && hasCandidates && (
               <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
                 <div className="px-5 py-4 border-b border-white/8 flex items-center justify-between">
                   <div>
@@ -965,7 +1001,7 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {savedCount > 0 && !hasCandidates && (
+            {!mcpMode && savedCount > 0 && !hasCandidates && (
               <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
@@ -992,7 +1028,7 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {(error || (result && !result.success)) && (
+            {!mcpMode && (error || (result && !result.success)) && (
               <div className="bg-red-500/10 border border-red-500/25 rounded-2xl p-5">
                 <div className="flex items-start gap-3">
                   <XCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
@@ -1004,7 +1040,7 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {!running && events.length === 0 && !result && !error && (
+            {!mcpMode && !running && events.length === 0 && !result && !error && (
               <div className="bg-white/3 border border-white/6 rounded-2xl p-10 flex flex-col items-center justify-center text-center gap-3">
                 <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-1">
                   <Zap className="w-7 h-7 text-zinc-500" />
@@ -1014,7 +1050,7 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {allEvents.length > 0 && (
+            {!mcpMode && allEvents.length > 0 && (
               <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
                 <button onClick={() => setShowAllLogs(v => !v)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-all">
                   <span className="text-xs font-semibold text-zinc-300 flex items-center gap-2">
@@ -1054,7 +1090,7 @@ export default function AdminAutoPipeline() {
               </div>
             )}
 
-            {history.length > 0 && (
+            {!mcpMode && history.length > 0 && (
               <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
                 <div className="px-5 py-4 border-b border-white/8">
                   <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Recent Runs</span>

@@ -206,6 +206,43 @@ Deno.serve(async (req: Request) => {
         );
     }
 
+    // Fetch learning context: top items + acceptance rate from feedback tables
+    const vibeKey = (context.vibe || "").toLowerCase().replace(/\s+/g, "_");
+    let learningContext = "";
+    try {
+      const [topItemsRes, acceptanceRes] = await Promise.all([
+        supabase.from("vibe_item_expansions")
+          .select("slot, item_name, score, success_count")
+          .eq("vibe", vibeKey)
+          .gte("score", 0.6)
+          .order("score", { ascending: false })
+          .limit(15),
+        supabase.from("pipeline_feedback")
+          .select("action, rule_scores, ai_score")
+          .eq("vibe", vibeKey)
+          .order("created_at", { ascending: false })
+          .limit(30),
+      ]);
+      const topItems = topItemsRes.data || [];
+      const feedback = acceptanceRes.data || [];
+      const accepted = feedback.filter((f: any) => f.action === "accepted").length;
+      const rate = feedback.length > 0 ? Math.round((accepted / feedback.length) * 100) : null;
+
+      if (topItems.length > 0 || rate !== null) {
+        const bySlot: Record<string, string[]> = {};
+        for (const item of topItems) {
+          if (!bySlot[item.slot]) bySlot[item.slot] = [];
+          bySlot[item.slot].push(`${item.item_name}(${Math.round(item.score * 100)}%)`);
+        }
+        const slotLines = Object.entries(bySlot).map(([s, items]) => `  ${s}: ${items.join(", ")}`).join("\n");
+        learningContext = `\nLEARNING INSIGHTS FROM PAST ACCEPTED OUTFITS (${vibeKey}):
+${rate !== null ? `- Historical acceptance rate: ${rate}% (${accepted}/${feedback.length} outfits)` : ""}
+- Top-performing items by slot:\n${slotLines}
+PREFER outfits containing these proven items. PENALIZE combinations not seen in accepted outfits.
+`;
+      }
+    } catch { /* silent — learning context is optional */ }
+
     // #10: Build VibeDNA rules section for the prompt
     const vibeDNASection = buildVibeDNASection(context.vibe);
 
@@ -230,7 +267,7 @@ CONTEXT:
 ${vibeDNASection}
 CURRENT TREND CONTEXT:
 ${trendContext}
-
+${learningContext}
 CANDIDATE OUTFITS:
 ${candidateSummaries.join("\n\n")}
 
