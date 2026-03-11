@@ -5,7 +5,7 @@ import { outfitWarmthToTempRange } from '../utils/weather';
 import { X, Save, ArrowLeft, Package, Thermometer, Snowflake, Sun, Leaf, Wind, Loader2 } from 'lucide-react';
 import { scoreProductForVibe, COLOR_TIER_LABELS, type VibeCompatScore } from '../utils/vibeCompatibility';
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 15;
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',

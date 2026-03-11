@@ -13,7 +13,7 @@ const SEASON_LABELS: Record<string, string> = {
   winter: '겨울',
 };
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 15;
 
 const OUTFIT_FILTER_KEY = 'admin_outfit_filters';
 
