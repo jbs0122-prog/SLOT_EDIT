@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { outfitWarmthToTempRange } from '../utils/weather';
-import { X, Save, ArrowLeft, Package, Thermometer, Snowflake, Sun, Leaf, Wind, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Save, ArrowLeft, Package, Thermometer, Snowflake, Sun, Leaf, Wind, Loader2 } from 'lucide-react';
 import { scoreProductForVibe, COLOR_TIER_LABELS, type VibeCompatScore } from '../utils/vibeCompatibility';
 
 const PAGE_SIZE = 30;
@@ -69,16 +69,19 @@ interface OutfitWithMeta extends Outfit {
 export default function AdminPins() {
   const [outfits, setOutfits] = useState<OutfitWithMeta[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageType>('flatlay');
   const [pins, setPins] = useState<ImagePin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [showProductsPanel, setShowProductsPanel] = useState(false);
   const imageRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const filterVersionRef = useRef(0);
   const PINS_FILTER_KEY = 'admin_pins_filters';
   const savedPinsFilters = (() => { try { const v = sessionStorage.getItem(PINS_FILTER_KEY); return v ? JSON.parse(v) : null; } catch { return null; } })();
   const [filterGender, setFilterGenderRaw] = useState<string>(savedPinsFilters?.filterGender ?? '');
@@ -87,10 +90,13 @@ export default function AdminPins() {
   const [filterSeason, setFilterSeasonRaw] = useState<string>(savedPinsFilters?.filterSeason ?? '');
   const [tpo, setTpo] = useState<string>('');
 
-  const setFilterGender = (v: string) => { setFilterGenderRaw(v); setCurrentPage(0); };
-  const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); setCurrentPage(0); };
-  const setFilterVibe = (v: string) => { setFilterVibeRaw(v); setCurrentPage(0); };
-  const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); setCurrentPage(0); };
+  const setFilterGender = (v: string) => { setFilterGenderRaw(v); };
+  const setFilterBodyType = (v: string) => { setFilterBodyTypeRaw(v); };
+  const setFilterVibe = (v: string) => { setFilterVibeRaw(v); };
+  const setFilterSeason = (v: string) => { setFilterSeasonRaw(v); };
+
+  const filtersRef = useRef({ filterGender, filterBodyType, filterVibe, filterSeason });
+  filtersRef.current = { filterGender, filterBodyType, filterVibe, filterSeason };
 
   useEffect(() => {
     sessionStorage.setItem(PINS_FILTER_KEY, JSON.stringify({ filterGender, filterBodyType, filterVibe, filterSeason }));
@@ -100,93 +106,135 @@ export default function AdminPins() {
     loadProducts();
   }, []);
 
-  const loadOutfits = useCallback(async (page: number) => {
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('outfits')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false });
+  const fetchPage = useCallback(async (from: number, to: number) => {
+    const { filterGender: fg, filterBodyType: fbt, filterVibe: fv, filterSeason: fs } = filtersRef.current;
+    let query = supabase
+      .from('outfits')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
 
-      if (filterGender) query = query.eq('gender', filterGender);
-      if (filterBodyType) query = query.eq('body_type', filterBodyType);
-      if (filterVibe) query = query.eq('vibe', filterVibe);
+    if (fg) query = query.eq('gender', fg);
+    if (fbt) query = query.eq('body_type', fbt);
+    if (fv) query = query.eq('vibe', fv);
+    query = query.range(from, to);
 
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      query = query.range(from, to);
+    const outfitsResult = await query;
+    if (outfitsResult.error) throw outfitsResult.error;
 
-      const outfitsResult = await query;
-      if (outfitsResult.error) throw outfitsResult.error;
+    const rawOutfits = outfitsResult.data || [];
+    const count = outfitsResult.count ?? 0;
 
-      setTotalCount(outfitsResult.count ?? 0);
+    if (rawOutfits.length === 0) return { data: [] as OutfitWithMeta[], count };
 
-      const rawOutfits = outfitsResult.data || [];
-      if (rawOutfits.length === 0) {
-        setOutfits([]);
-        return;
-      }
+    const outfitIds = rawOutfits.map((o: any) => o.id);
+    const itemsResult = await supabase
+      .from('outfit_items')
+      .select('outfit_id, product:products(warmth, category)')
+      .in('outfit_id', outfitIds);
 
-      const outfitIds = rawOutfits.map((o: any) => o.id);
-      const itemsResult = await supabase
-        .from('outfit_items')
-        .select('outfit_id, product:products(warmth, category)')
-        .in('outfit_id', outfitIds);
-
-      const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
-      if (itemsResult.data) {
-        for (const item of itemsResult.data) {
-          const oid = item.outfit_id;
-          if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
-          const p = item.product as { warmth?: number; category?: string } | null;
-          if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
-            itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
-          }
+    const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
+    if (itemsResult.data) {
+      for (const item of itemsResult.data) {
+        const oid = item.outfit_id;
+        if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
+        const p = item.product as { warmth?: number; category?: string } | null;
+        if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
+          itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
         }
       }
+    }
 
-      const outfitsData: OutfitWithMeta[] = rawOutfits.map((row: any) => {
-        const items = itemsByOutfit[row.id] || [];
-        const avgWarmth = computeOutfitWarmth(items);
-        const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
+    const mapped = rawOutfits.map((row: any) => {
+      const items = itemsByOutfit[row.id] || [];
+      const avgWarmth = computeOutfitWarmth(items);
+      const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
 
-        if (filterSeason && !autoSeasons.includes(filterSeason)) return null;
+      if (fs && !autoSeasons.includes(fs)) return null;
 
-        return {
-          id: row.id,
-          gender: row.gender,
-          body_type: row.body_type,
-          vibe: row.vibe,
-          season: row.season || [],
-          image_url_flatlay: row.image_url_flatlay || '',
-          image_url_flatlay_clean: row.image_url_flatlay_clean || '',
-          image_url_on_model: row.image_url_on_model || '',
-          insight_text: row['AI insight'] || '',
-          flatlay_pins: row.flatlay_pins || [],
-          on_model_pins: row.on_model_pins || [],
-          tpo: row.tpo || '',
-          status: row.status || '',
-          prompt_flatlay: row.prompt_flatlay || '',
-          created_at: row.created_at || '',
-          updated_at: row.updated_at || '',
-          items: [],
-          avg_warmth: avgWarmth,
-          temp_range_f: avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined,
-          auto_seasons: autoSeasons,
-        };
-      }).filter(Boolean) as OutfitWithMeta[];
+      return {
+        id: row.id,
+        gender: row.gender,
+        body_type: row.body_type,
+        vibe: row.vibe,
+        season: row.season || [],
+        image_url_flatlay: row.image_url_flatlay || '',
+        image_url_flatlay_clean: row.image_url_flatlay_clean || '',
+        image_url_on_model: row.image_url_on_model || '',
+        insight_text: row['AI insight'] || '',
+        flatlay_pins: row.flatlay_pins || [],
+        on_model_pins: row.on_model_pins || [],
+        tpo: row.tpo || '',
+        status: row.status || '',
+        prompt_flatlay: row.prompt_flatlay || '',
+        created_at: row.created_at || '',
+        updated_at: row.updated_at || '',
+        items: [],
+        avg_warmth: avgWarmth,
+        temp_range_f: avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined,
+        auto_seasons: autoSeasons,
+      };
+    }).filter(Boolean) as OutfitWithMeta[];
 
-      setOutfits(outfitsData);
+    return { data: mapped, count };
+  }, []);
+
+  const loadInitial = useCallback(async () => {
+    const version = ++filterVersionRef.current;
+    setInitialLoading(true);
+    setOutfits([]);
+    setHasMore(false);
+    try {
+      const { data, count } = await fetchPage(0, PAGE_SIZE - 1);
+      if (version !== filterVersionRef.current) return;
+      setOutfits(data);
+      setTotalCount(count);
+      setHasMore(data.length >= PAGE_SIZE);
     } catch (error) {
+      if (version !== filterVersionRef.current) return;
       console.error('Failed to load outfits:', error);
     } finally {
-      setLoading(false);
+      if (version === filterVersionRef.current) setInitialLoading(false);
     }
-  }, [filterGender, filterBodyType, filterVibe, filterSeason]);
+  }, [fetchPage, filterGender, filterBodyType, filterVibe, filterSeason]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    const version = filterVersionRef.current;
+    setLoadingMore(true);
+    try {
+      const from = outfits.length;
+      const to = from + PAGE_SIZE - 1;
+      const { data, count } = await fetchPage(from, to);
+      if (version !== filterVersionRef.current) return;
+      setOutfits(prev => [...prev, ...data]);
+      setTotalCount(count);
+      setHasMore(data.length >= PAGE_SIZE);
+    } catch (error) {
+      if (version !== filterVersionRef.current) return;
+      console.error('Failed to load more outfits:', error);
+    } finally {
+      if (version === filterVersionRef.current) setLoadingMore(false);
+    }
+  }, [fetchPage, loadingMore, hasMore, outfits.length]);
 
   useEffect(() => {
-    loadOutfits(currentPage);
-  }, [loadOutfits, currentPage]);
+    loadInitial();
+  }, [loadInitial]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !initialLoading && !loadingMore && hasMore) {
+          loadMore();
+        }
+      },
+      { rootMargin: '400px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, initialLoading, loadingMore, hasMore]);
 
   const loadProducts = async () => {
     try {
@@ -370,9 +418,7 @@ export default function AdminPins() {
     setPins(newPins);
   };
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">로딩 중...</div>
@@ -393,7 +439,10 @@ export default function AdminPins() {
             <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-gray-600 font-semibold">
-                  총 {totalCount}개의 코디 (현재 {outfits.length}개)
+                  총 {totalCount}개의 코디
+                  {outfits.length > 0 && outfits.length < totalCount && (
+                    <span className="text-sm font-normal text-gray-400 ml-1">({outfits.length}개 로드됨)</span>
+                  )}
                 </p>
               </div>
 
@@ -548,25 +597,19 @@ export default function AdminPins() {
                   </div>
                 ))}
               </div>
-              {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                    disabled={currentPage === 0}
-                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="text-sm text-gray-600">
-                    {currentPage + 1} / {totalPages} 페이지
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+
+              <div ref={sentinelRef} className="h-1" />
+
+              {loadingMore && (
+                <div className="flex items-center justify-center py-6 gap-2">
+                  <Loader2 size={18} className="animate-spin text-blue-500" />
+                  <span className="text-sm text-gray-500">더 불러오는 중...</span>
+                </div>
+              )}
+
+              {!hasMore && outfits.length > 0 && outfits.length >= PAGE_SIZE && (
+                <div className="text-center py-4 text-sm text-gray-400">
+                  모든 코디를 불러왔습니다
                 </div>
               )}
               </>

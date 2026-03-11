@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Outfit } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
 import { outfitWarmthToTempRange } from '../utils/weather';
-import { Sparkles, Trash2, CheckSquare, Square, XSquare, Link2, Thermometer, Snowflake, Sun, Leaf, Wind, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Sparkles, Trash2, CheckSquare, Square, XSquare, Link2, Thermometer, Snowflake, Sun, Leaf, Wind, Loader2 } from 'lucide-react';
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -85,14 +85,98 @@ function SeasonIcon({ season, size = 10 }: { season: string; size?: number }) {
   return <Wind size={size} className="text-green-500" />;
 }
 
+async function fetchOutfitPage(
+  from: number,
+  to: number,
+  filters: { gender: string; bodyType: string; vibe: string; season: string }
+): Promise<{ data: OutfitWithMeta[]; count: number }> {
+  let query = supabase
+    .from('outfits')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false });
+
+  if (filters.gender) query = query.eq('gender', filters.gender);
+  if (filters.bodyType) query = query.eq('body_type', filters.bodyType);
+  if (filters.vibe) query = query.eq('vibe', filters.vibe);
+
+  query = query.range(from, to);
+
+  const outfitsResult = await query;
+  if (outfitsResult.error) throw outfitsResult.error;
+
+  const rawOutfits = outfitsResult.data || [];
+  const totalCount = outfitsResult.count ?? 0;
+
+  if (rawOutfits.length === 0) return { data: [], count: totalCount };
+
+  const outfitIds = rawOutfits.map((o: any) => o.id);
+  const itemsResult = await supabase
+    .from('outfit_items')
+    .select('outfit_id, product:products(warmth, category)')
+    .in('outfit_id', outfitIds);
+
+  const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
+  const itemCountByOutfit: Record<string, number> = {};
+  if (itemsResult.data) {
+    for (const item of itemsResult.data) {
+      const oid = item.outfit_id;
+      if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
+      if (!itemCountByOutfit[oid]) itemCountByOutfit[oid] = 0;
+      itemCountByOutfit[oid]++;
+      const p = item.product as { warmth?: number; category?: string } | null;
+      if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
+        itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
+      }
+    }
+  }
+
+  const mapped: OutfitWithMeta[] = rawOutfits.map((row: any) => {
+    const items = itemsByOutfit[row.id] || [];
+    const avgWarmth = computeOutfitWarmth(items);
+    const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
+
+    if (filters.season && !autoSeasons.includes(filters.season)) return null;
+
+    return {
+      id: row.id,
+      gender: row.gender,
+      body_type: row.body_type,
+      vibe: row.vibe,
+      season: row.season || [],
+      image_url_flatlay: row.image_url_flatlay || '',
+      image_url_flatlay_clean: row.image_url_flatlay_clean || '',
+      image_url_on_model: row.image_url_on_model || '',
+      insight_text: row['AI insight'] || '',
+      flatlay_pins: row.flatlay_pins || [],
+      on_model_pins: row.on_model_pins || [],
+      tpo: row.tpo || '',
+      status: row.status || '',
+      prompt_flatlay: row.prompt_flatlay || '',
+      created_at: row.created_at || '',
+      updated_at: row.updated_at || '',
+      items: [],
+      avg_warmth: avgWarmth,
+      temp_range_f: avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined,
+      auto_seasons: autoSeasons,
+      item_count: itemCountByOutfit[row.id] || 0,
+    };
+  }).filter(Boolean) as OutfitWithMeta[];
+
+  return { data: mapped, count: totalCount };
+}
+
 export default function AdminOutfitLinker() {
   const [outfits, setOutfits] = useState<OutfitWithMeta[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [showOutfitLinker, setShowOutfitLinker] = useState(false);
   const [showAutoGenerator, setShowAutoGenerator] = useState(false);
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
+  const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const filterVersionRef = useRef(0);
 
   const savedFilters = loadSavedOutfitFilters();
   const [outfitFilterGender, setOutfitFilterGenderRaw] = useState(savedFilters?.outfitFilterGender ?? '');
@@ -100,115 +184,79 @@ export default function AdminOutfitLinker() {
   const [outfitFilterVibe, setOutfitFilterVibeRaw] = useState(savedFilters?.outfitFilterVibe ?? '');
   const [outfitFilterSeason, setOutfitFilterSeasonRaw] = useState(savedFilters?.outfitFilterSeason ?? '');
 
-  const setOutfitFilterGender = (v: string) => { setOutfitFilterGenderRaw(v); saveOutfitFilters({ outfitFilterGender: v }); setCurrentPage(0); };
-  const setOutfitFilterBodyType = (v: string) => { setOutfitFilterBodyTypeRaw(v); saveOutfitFilters({ outfitFilterBodyType: v }); setCurrentPage(0); };
-  const setOutfitFilterVibe = (v: string) => { setOutfitFilterVibeRaw(v); saveOutfitFilters({ outfitFilterVibe: v }); setCurrentPage(0); };
-  const setOutfitFilterSeason = (v: string) => { setOutfitFilterSeasonRaw(v); saveOutfitFilters({ outfitFilterSeason: v }); setCurrentPage(0); };
+  const currentFilters = {
+    gender: outfitFilterGender,
+    bodyType: outfitFilterBodyType,
+    vibe: outfitFilterVibe,
+    season: outfitFilterSeason,
+  };
+  const filtersRef = useRef(currentFilters);
+  filtersRef.current = currentFilters;
 
-  const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
+  const setOutfitFilterGender = (v: string) => { setOutfitFilterGenderRaw(v); saveOutfitFilters({ outfitFilterGender: v }); };
+  const setOutfitFilterBodyType = (v: string) => { setOutfitFilterBodyTypeRaw(v); saveOutfitFilters({ outfitFilterBodyType: v }); };
+  const setOutfitFilterVibe = (v: string) => { setOutfitFilterVibeRaw(v); saveOutfitFilters({ outfitFilterVibe: v }); };
+  const setOutfitFilterSeason = (v: string) => { setOutfitFilterSeasonRaw(v); saveOutfitFilters({ outfitFilterSeason: v }); };
 
-  const loadOutfits = useCallback(async (page: number) => {
-    setLoading(true);
+  const loadInitial = useCallback(async () => {
+    const version = ++filterVersionRef.current;
+    setInitialLoading(true);
+    setOutfits([]);
+    setHasMore(false);
     try {
-      let query = supabase
-        .from('outfits')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false });
-
-      if (outfitFilterGender) query = query.eq('gender', outfitFilterGender);
-      if (outfitFilterBodyType) query = query.eq('body_type', outfitFilterBodyType);
-      if (outfitFilterVibe) query = query.eq('vibe', outfitFilterVibe);
-
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      query = query.range(from, to);
-
-      const outfitsResult = await query;
-      if (outfitsResult.error) throw outfitsResult.error;
-
-      setTotalCount(outfitsResult.count ?? 0);
-
-      const rawOutfits = outfitsResult.data || [];
-      if (rawOutfits.length === 0) {
-        setOutfits([]);
-        return;
-      }
-
-      const outfitIds = rawOutfits.map((o: any) => o.id);
-      const itemsResult = await supabase
-        .from('outfit_items')
-        .select('outfit_id, product:products(warmth, category)')
-        .in('outfit_id', outfitIds);
-
-      const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
-      const itemCountByOutfit: Record<string, number> = {};
-      if (itemsResult.data) {
-        for (const item of itemsResult.data) {
-          const oid = item.outfit_id;
-          if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
-          if (!itemCountByOutfit[oid]) itemCountByOutfit[oid] = 0;
-          itemCountByOutfit[oid]++;
-          const p = item.product as { warmth?: number; category?: string } | null;
-          if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
-            itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
-          }
-        }
-      }
-
-      const vibeGroupOrder: Record<string, number> = {};
-      const vibeCounters: Record<string, number> = {};
-      for (const row of rawOutfits) {
-        const key = `${row.vibe}__${row.gender}__${row.body_type}`;
-        if (vibeCounters[key] === undefined) vibeCounters[key] = 0;
-        vibeCounters[key]++;
-        vibeGroupOrder[row.id] = ((vibeCounters[key] - 1) % 3) + 1;
-      }
-
-      const outfitsData: OutfitWithMeta[] = rawOutfits.map((row: any) => {
-        const items = itemsByOutfit[row.id] || [];
-        const avgWarmth = computeOutfitWarmth(items);
-        const tempRange = avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined;
-        const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
-
-        if (outfitFilterSeason && !autoSeasons.includes(outfitFilterSeason)) return null;
-
-        return {
-          id: row.id,
-          gender: row.gender,
-          body_type: row.body_type,
-          vibe: row.vibe,
-          season: row.season || [],
-          image_url_flatlay: row.image_url_flatlay || '',
-          image_url_flatlay_clean: row.image_url_flatlay_clean || '',
-          image_url_on_model: row.image_url_on_model || '',
-          insight_text: row['AI insight'] || '',
-          flatlay_pins: row.flatlay_pins || [],
-          on_model_pins: row.on_model_pins || [],
-          tpo: row.tpo || '',
-          status: row.status || '',
-          prompt_flatlay: row.prompt_flatlay || '',
-          created_at: row.created_at || '',
-          updated_at: row.updated_at || '',
-          items: [],
-          avg_warmth: avgWarmth,
-          temp_range_f: tempRange,
-          auto_seasons: autoSeasons,
-          look_number: vibeGroupOrder[row.id],
-          item_count: itemCountByOutfit[row.id] || 0,
-        };
-      }).filter(Boolean) as OutfitWithMeta[];
-
-      setOutfits(outfitsData);
+      const { data, count } = await fetchOutfitPage(0, PAGE_SIZE - 1, filtersRef.current);
+      if (version !== filterVersionRef.current) return;
+      setOutfits(data);
+      setTotalCount(count);
+      setHasMore(data.length >= PAGE_SIZE);
     } catch (error) {
+      if (version !== filterVersionRef.current) return;
       console.error('Failed to load outfits:', error);
     } finally {
-      setLoading(false);
+      if (version === filterVersionRef.current) setInitialLoading(false);
     }
   }, [outfitFilterGender, outfitFilterBodyType, outfitFilterVibe, outfitFilterSeason]);
 
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    const version = filterVersionRef.current;
+    setLoadingMore(true);
+    try {
+      const from = outfits.length;
+      const to = from + PAGE_SIZE - 1;
+      const { data, count } = await fetchOutfitPage(from, to, filtersRef.current);
+      if (version !== filterVersionRef.current) return;
+      setOutfits(prev => [...prev, ...data]);
+      setTotalCount(count);
+      setHasMore(data.length >= PAGE_SIZE);
+    } catch (error) {
+      if (version !== filterVersionRef.current) return;
+      console.error('Failed to load more outfits:', error);
+    } finally {
+      if (version === filterVersionRef.current) setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, outfits.length]);
+
   useEffect(() => {
-    loadOutfits(currentPage);
-  }, [loadOutfits, currentPage]);
+    loadInitial();
+  }, [loadInitial]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !initialLoading && !loadingMore && hasMore) {
+          loadMore();
+        }
+      },
+      { rootMargin: '400px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, initialLoading, loadingMore, hasMore]);
+
+  const reloadCurrent = () => loadInitial();
 
   const handleLinkOutfit = (outfit: Outfit) => {
     setSelectedOutfit(outfit);
@@ -221,24 +269,21 @@ export default function AdminOutfitLinker() {
   };
 
   const handleLinksUpdated = () => {
-    loadOutfits(currentPage);
+    loadInitial();
   };
 
   const handleDeleteOutfit = async (outfitId: string) => {
     if (!confirm('이 코디를 삭제하시겠습니까? 연결된 제품 정보도 함께 삭제됩니다.')) return;
-
-    setLoading(true);
     try {
       await supabase.from('outfit_items').delete().eq('outfit_id', outfitId);
       const { error } = await supabase.from('outfits').delete().eq('id', outfitId);
       if (error) throw error;
-      await loadOutfits(currentPage);
+      setOutfits(prev => prev.filter(o => o.id !== outfitId));
+      setTotalCount(prev => prev - 1);
       alert('코디가 삭제되었습니다.');
     } catch (error) {
       console.error('Failed to delete outfit:', error);
       alert('코디 삭제 실패: ' + (error as Error).message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -263,27 +308,22 @@ export default function AdminOutfitLinker() {
     const count = selectedOutfitIds.size;
     if (count === 0) return;
     if (!confirm(`선택한 ${count}개의 코디를 삭제하시겠습니까? 연결된 제품 정보도 함께 삭제됩니다.`)) return;
-
-    setLoading(true);
     try {
       const ids = Array.from(selectedOutfitIds);
       await supabase.from('outfit_items').delete().in('outfit_id', ids);
       const { error } = await supabase.from('outfits').delete().in('id', ids);
       if (error) throw error;
       setSelectedOutfitIds(new Set());
-      await loadOutfits(currentPage);
+      setOutfits(prev => prev.filter(o => !ids.includes(o.id)));
+      setTotalCount(prev => prev - count);
       alert(`${count}개 코디가 삭제되었습니다.`);
     } catch (error) {
       console.error('Bulk delete failed:', error);
       alert('삭제 실패: ' + (error as Error).message);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">로딩 중...</div>
@@ -365,7 +405,12 @@ export default function AdminOutfitLinker() {
           <div className="mb-4 flex items-start justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">
-                코디 목록 ({outfits.length}개 / 전체 {totalCount}개)
+                코디 목록
+                {outfits.length > 0 && (
+                  <span className="text-sm font-normal text-gray-500 ml-2">
+                    {outfits.length} / {totalCount}개 로드됨
+                  </span>
+                )}
               </h2>
               <p className="text-sm text-gray-600">코디를 선택하여 제품을 연결하세요</p>
             </div>
@@ -459,12 +504,6 @@ export default function AdminOutfitLinker() {
                         )}
                       </button>
 
-                      {outfit.look_number && (
-                        <div className="absolute top-1.5 right-1.5 z-10 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                          Look {outfit.look_number}
-                        </div>
-                      )}
-
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
                         <div className="flex items-center gap-1.5">
                           <button
@@ -532,25 +571,18 @@ export default function AdminOutfitLinker() {
                 ))}
               </div>
 
-              {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                    disabled={currentPage === 0}
-                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="text-sm text-gray-600">
-                    {currentPage + 1} / {totalPages} 페이지
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+              <div ref={sentinelRef} className="h-1" />
+
+              {loadingMore && (
+                <div className="flex items-center justify-center py-6 gap-2">
+                  <Loader2 size={18} className="animate-spin text-blue-500" />
+                  <span className="text-sm text-gray-500">더 불러오는 중...</span>
+                </div>
+              )}
+
+              {!hasMore && outfits.length > 0 && outfits.length >= PAGE_SIZE && (
+                <div className="text-center py-4 text-sm text-gray-400">
+                  모든 코디를 불러왔습니다
                 </div>
               )}
             </>
@@ -570,7 +602,7 @@ export default function AdminOutfitLinker() {
         <AutoOutfitGenerator
           onClose={() => setShowAutoGenerator(false)}
           onGenerated={() => {
-            loadOutfits(currentPage);
+            reloadCurrent();
             setShowAutoGenerator(false);
           }}
         />
