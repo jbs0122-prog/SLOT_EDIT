@@ -232,13 +232,20 @@ Deno.serve(async (req: Request) => {
         const bySlot: Record<string, string[]> = {};
         for (const item of topItems) {
           if (!bySlot[item.slot]) bySlot[item.slot] = [];
-          bySlot[item.slot].push(`${item.item_name}(${Math.round(item.score * 100)}%)`);
+          // Cap to top 3 items per slot to limit token usage
+          if (bySlot[item.slot].length < 3) {
+            bySlot[item.slot].push(`${item.item_name}(${Math.round(item.score * 100)}%)`);
+          }
         }
-        const slotLines = Object.entries(bySlot).map(([s, items]) => `  ${s}: ${items.join(", ")}`).join("\n");
-        learningContext = `\nLEARNING INSIGHTS FROM PAST ACCEPTED OUTFITS (${vibeKey}):
-${rate !== null ? `- Historical acceptance rate: ${rate}% (${accepted}/${feedback.length} outfits)` : ""}
-- Top-performing items by slot:\n${slotLines}
-PREFER outfits containing these proven items. PENALIZE combinations not seen in accepted outfits.
+        const slotLines = Object.entries(bySlot)
+          .slice(0, 6)
+          .map(([s, items]) => `  ${s}: ${items.join(", ")}`)
+          .join("\n");
+        const rateNote = rate !== null ? `- Acceptance rate: ${rate}% (${accepted}/${feedback.length})` : "";
+        learningContext = `\nLEARNING INSIGHTS (${vibeKey}):
+${rateNote}
+- Top items by slot:\n${slotLines}
+PREFER proven items above. PENALIZE untested combinations.
 `;
       }
     } catch { /* silent — learning context is optional */ }

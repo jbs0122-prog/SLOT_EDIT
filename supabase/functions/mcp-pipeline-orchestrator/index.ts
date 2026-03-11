@@ -38,6 +38,45 @@ async function callFunction(fnName: string, body: unknown, authHeader: string): 
   return r.json();
 }
 
+async function loadKeywordScores(db: ReturnType<typeof adminClient>, vibeKey: string, seasonLabel: string): Promise<Map<string, number>> {
+  const scoreMap = new Map<string, number>();
+  try {
+    const { data } = await db.from("keyword_performance")
+      .select("keyword, score")
+      .eq("vibe", vibeKey)
+      .eq("season", seasonLabel)
+      .gte("score", 0)
+      .order("score", { ascending: false })
+      .limit(200);
+    if (data) {
+      for (const row of data) {
+        if (row.keyword && typeof row.score === "number") {
+          scoreMap.set(row.keyword, row.score);
+        }
+      }
+    }
+  } catch { /* silent — scores are optional */ }
+  return scoreMap;
+}
+
+function sortKeywordsByLearning(keywords: string[], scoreMap: Map<string, number>): string[] {
+  if (scoreMap.size === 0) return keywords;
+  return [...keywords].sort((a, b) => {
+    const sa = scoreMap.get(a) ?? 0.5;
+    const sb = scoreMap.get(b) ?? 0.5;
+    return sb - sa;
+  });
+}
+
+function isValidSearchResult(item: any): boolean {
+  return (
+    item &&
+    typeof item.asin === "string" && item.asin.length >= 8 &&
+    typeof item.image === "string" && item.image.startsWith("http") &&
+    (item.price === null || typeof item.price === "number")
+  );
+}
+
 async function runPipeline(batchId: string, config: {
   gender: string; bodyType: string; vibe: string; season: string; productsPerSlot: number;
 }, authHeader: string) {
@@ -48,6 +87,9 @@ async function runPipeline(batchId: string, config: {
     await updateRun(batchId, { status: "running", phase: "keywords" });
     await log(batchId, "system", "start", `MCP Pipeline started — ${vibe} / ${season} / ${gender}`);
 
+    const vibeKey = vibe.toLowerCase().replace(/\s+/g, "_");
+    const seasonLabel = season.toLowerCase();
+
     // ── STEP 1: Keywords (reads keyword_performance for top performers) ──────
     await log(batchId, "keywords", "start", "Generating keywords via rule engine + learning data...");
     const kwData = await callFunction("auto-generate-keywords", { gender, body_type: bodyType, vibe, season }, authHeader);
@@ -55,7 +97,19 @@ async function runPipeline(batchId: string, config: {
     const lookNames: Record<string, string> = kwData.lookNames || {};
     const lookKeys = Object.keys(byLook);
     const totalKw = Object.values(kwData.categories || {}).reduce((a: number, b: unknown) => a + (b as string[]).length, 0);
-    await log(batchId, "keywords", "success", `${totalKw} keywords across ${lookKeys.length} looks: ${lookKeys.map(k => lookNames[k] || k).join(", ")}`);
+
+    // Load keyword_performance scores to re-sort search order
+    const kwScores = await loadKeywordScores(db, vibeKey, seasonLabel);
+    const learnedCount = kwScores.size;
+    await log(batchId, "keywords", "success", `${totalKw} keywords across ${lookKeys.length} looks (${learnedCount} learned scores loaded)`);
+
+    // Apply learning scores: re-sort keywords per slot per look
+    for (const lookKey of lookKeys) {
+      for (const slot of Object.keys(byLook[lookKey] || {})) {
+        byLook[lookKey][slot] = sortKeywordsByLearning(byLook[lookKey][slot], kwScores);
+      }
+    }
+
     await updateRun(batchId, { phase: "search", phase_data: { byLook, lookNames, lookKeys } });
 
     // ── STEP 2: Fetch existing ASINs for dedup ───────────────────────────────
@@ -97,11 +151,14 @@ async function runPipeline(batchId: string, config: {
           } else {
             try {
               const d = await callFunction("auto-amazon-search", { query: kw, page: 1 }, authHeader);
-              results = d.results || [];
+              const raw = d.results || [];
+              results = (raw as any[]).filter(isValidSearchResult);
               globalSearchCache.set(kw, results);
-              await log(batchId, "search", "progress", `[${lookKey}/${slot}] "${kw}" → ${d.total_filtered ?? 0}/${d.total_raw ?? 0} passed`);
-            } catch {
+              const invalid = raw.length - results.length;
+              await log(batchId, "search", "progress", `[${lookKey}/${slot}] "${kw}" → ${results.length} valid${invalid > 0 ? `, ${invalid} filtered` : ""} (${d.total_filtered ?? 0}/${d.total_raw ?? 0})`);
+            } catch (e) {
               results = [];
+              await log(batchId, "search", "progress", `[${lookKey}/${slot}] "${kw}" failed: ${(e as Error).message.slice(0, 80)}`);
             }
           }
           for (const item of results as any[]) {
@@ -118,7 +175,7 @@ async function runPipeline(batchId: string, config: {
           try {
             const d = await callFunction("auto-amazon-search", { query: allKws[0], page: 1, filter: { minRating: 3.5 } }, authHeader);
             for (const item of (d.results || []) as any[]) {
-              if (item.asin && !lookSeenAsins.has(item.asin) && candidates.length < slotLimit) {
+              if (isValidSearchResult(item) && !lookSeenAsins.has(item.asin) && candidates.length < slotLimit) {
                 lookSeenAsins.add(item.asin);
                 candidates.push(item);
               }
@@ -384,43 +441,40 @@ Deno.serve(async (req: Request) => {
             ai_score: c.matchScore || 0,
           });
 
-          // Update vibe_item_expansions for each item
+          // Update vibe_item_expansions via atomic RPC (no race conditions)
           const vibeKey = (fbVibe || "").toLowerCase().replace(/\s+/g, "_");
           for (const item of (c.items || []) as any[]) {
             if (!item.slot || !item.name) continue;
             const itemName = (item.sub_category || item.name || "").toLowerCase().slice(0, 80);
             const lookKey = c.lookKey || "A";
 
-            await db.from("vibe_item_expansions").upsert({
-              vibe: vibeKey, look: lookKey, slot: item.slot, item_name: itemName, source: "feedback",
-              success_count: accepted ? 1 : 0,
-              fail_count: accepted ? 0 : 1,
-              score: accepted ? 1.0 : 0.0,
-            }, {
-              onConflict: "vibe,look,slot,item_name",
-              ignoreDuplicates: false,
-            }).then(async () => {
-              if (accepted) {
-                await db.rpc("increment_vibe_expansion_success", { p_vibe: vibeKey, p_look: lookKey, p_slot: item.slot, p_item: itemName }).catch(() => {});
-              } else {
-                await db.rpc("increment_vibe_expansion_fail", { p_vibe: vibeKey, p_look: lookKey, p_slot: item.slot, p_item: itemName }).catch(() => {});
-              }
-            });
+            if (accepted) {
+              await db.rpc("increment_vibe_expansion_success", { p_vibe: vibeKey, p_look: lookKey, p_slot: item.slot, p_item: itemName }).catch(() => {});
+            } else {
+              await db.rpc("increment_vibe_expansion_fail", { p_vibe: vibeKey, p_look: lookKey, p_slot: item.slot, p_item: itemName }).catch(() => {});
+            }
           }
 
-          // Update keyword_performance
+          // Update keyword_performance via atomic RPC (no race conditions)
           const lookKws: any[] = byLook[c.lookKey || "A"] ? Object.entries(byLook[c.lookKey]).flatMap(([slot, kws]) =>
             (kws as string[]).map(kw => ({ slot, kw }))
           ) : [];
 
           for (const { slot, kw } of lookKws) {
-            await db.from("keyword_performance").upsert({
-              keyword: kw, vibe: (fbVibe || "").toLowerCase().replace(/\s+/g, "_"),
-              slot, season: fbSeason || "",
-              accepted_count: accepted ? 1 : 0,
-              total_count: 1,
-              score: accepted ? 1.0 : 0.0,
-            }, { onConflict: "keyword,vibe,slot", ignoreDuplicates: false }).catch(() => {});
+            if (accepted) {
+              await db.rpc("increment_keyword_accepted", {
+                p_keyword: kw,
+                p_vibe: (fbVibe || "").toLowerCase().replace(/\s+/g, "_"),
+                p_slot: slot,
+                p_season: fbSeason || "",
+              }).catch(() => {});
+            }
+            await db.rpc("increment_keyword_total", {
+              p_keyword: kw,
+              p_vibe: (fbVibe || "").toLowerCase().replace(/\s+/g, "_"),
+              p_slot: slot,
+              p_season: fbSeason || "",
+            }).catch(() => {});
           }
         }
 

@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -141,6 +142,46 @@ async function fetchImageAsBase64(
   } catch {
     return null;
   }
+}
+
+async function loadKeywordScoresForSmartSearch(
+  vibe: string,
+  season: string
+): Promise<Map<string, number>> {
+  const scoreMap = new Map<string, number>();
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+    const vibeKey = vibe.toLowerCase().replace(/\s+/g, "_");
+    const seasonLabel = (season || "").toLowerCase();
+    const { data } = await supabase
+      .from("keyword_performance")
+      .select("keyword, score")
+      .eq("vibe", vibeKey)
+      .eq("season", seasonLabel)
+      .gte("score", 0)
+      .order("score", { ascending: false })
+      .limit(200);
+    if (data) {
+      for (const row of data) {
+        if (row.keyword && typeof row.score === "number") {
+          scoreMap.set(row.keyword, row.score);
+        }
+      }
+    }
+  } catch { /* silent */ }
+  return scoreMap;
+}
+
+function sortKeywordsByScore(keywords: string[], scoreMap: Map<string, number>): string[] {
+  if (scoreMap.size === 0) return keywords;
+  return [...keywords].sort((a, b) => {
+    const sa = scoreMap.get(a) ?? 0.5;
+    const sb = scoreMap.get(b) ?? 0.5;
+    return sb - sa;
+  });
 }
 
 async function analyzeImageWithGemini(
@@ -555,6 +596,15 @@ Deno.serve(async (req: Request) => {
         categories.forEach((c) => {
           if (!detectedZones.includes(c.zone)) detectedZones.push(c.zone);
         });
+      }
+
+      // Load keyword_performance scores and re-sort keywords by learned score
+      const kwScores = await loadKeywordScoresForSmartSearch(vibe || "", season || "");
+      if (kwScores.size > 0) {
+        log.push(`학습 데이터 로드: ${kwScores.size}개 키워드 점수 적용`);
+        for (const cat of categories) {
+          cat.keywords = sortKeywordsByScore(cat.keywords, kwScores);
+        }
       }
 
       // Step 3: 브랜드 우선 검색 → 일반 키워드 검색 (카테고리별)
