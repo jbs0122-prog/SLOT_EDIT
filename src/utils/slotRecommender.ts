@@ -2,7 +2,7 @@ import { Product, OutfitItem } from '../data/outfits';
 import { VIBE_ITEM_DATABASE, VibeKey, SlotCategory } from '../data/vibeItemDatabase';
 import { getVibeDNA, getLookDNA } from '../data/vibeItems/vibeDna';
 import { LookKey } from '../data/vibeItems/types';
-import { scoreProductForVibe, type VibeCompatScore } from './vibeCompatibility';
+import { scoreProductForVibe, type VibeCompatScore, type VibeScoreContext } from './vibeCompatibility';
 import { resolveColorFamily, getColorHarmonyScore, getColorDNA, type ColorDNA } from './matching/colorDna';
 import { getVibeItemAffinity } from './matching/vibeAffinity';
 import { inferMaterialGroup, getMaterialCompatScore, MATERIAL_GROUPS } from './matching/itemDna';
@@ -144,7 +144,17 @@ function buildReasons(
 
   if (vibeScore.materialScore >= 85) reasons.push('소재 적합');
 
-  if (seasonMatch >= 1) reasons.push('시즌 적합');
+  if (vibeScore.seasonScore !== undefined) {
+    if (vibeScore.seasonScore >= 90) reasons.push('시즌 적합');
+    else if (vibeScore.seasonScore < 30) reasons.push('시즌 부적합');
+  } else if (seasonMatch >= 1) {
+    reasons.push('시즌 적합');
+  }
+
+  if (vibeScore.warmthScore !== undefined) {
+    if (vibeScore.warmthScore >= 85) reasons.push('보온도 최적');
+    else if (vibeScore.warmthScore < 30) reasons.push('보온도 부적합');
+  }
 
   return reasons;
 }
@@ -187,19 +197,24 @@ export function getSlotRecommendations(
     return true;
   });
 
+  const slotVibeCtx: VibeScoreContext = {
+    season: outfitSeason,
+    slotType,
+  };
+
   const scored: RegisteredRecommendation[] = candidates.map(product => {
-    const vibeScore = scoreProductForVibe(product, outfitVibe);
+    const vibeScore = scoreProductForVibe(product, outfitVibe, slotVibeCtx);
     const colorHarmonyAvg = computeColorHarmonyWithExisting(product, existingColorFamilies);
     const seasonMatch = computeSeasonMatch(product, outfitSeason);
     const bodyTypeMatch = computeBodyTypeMatch(product, outfitBodyType);
     const vibeItemAffinity = getVibeItemAffinity(product, outfitVibe);
 
     const score = Math.round(
-      vibeScore.total * 0.35 +
+      vibeScore.total * 0.40 +
       colorHarmonyAvg * 0.30 +
-      seasonMatch * 20 +
       bodyTypeMatch * 10 +
-      vibeItemAffinity * 5
+      vibeItemAffinity * 5 +
+      (vibeScore.seasonScore !== undefined ? 0 : seasonMatch * 15)
     );
 
     const reasons = buildReasons(vibeScore, colorHarmonyAvg, seasonMatch, vibeItemAffinity);
