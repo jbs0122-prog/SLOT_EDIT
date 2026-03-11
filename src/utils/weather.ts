@@ -129,6 +129,18 @@ export function getTargetWarmth(tempF: number): number {
   return 1.6;
 }
 
+export function outfitWarmthToTempRange(warmth: number): { min: number; max: number } {
+  if (warmth >= 3.8) return { min: 0, max: 39 };
+  if (warmth >= 3.0) return { min: 40, max: 54 };
+  if (warmth >= 2.2) return { min: 55, max: 74 };
+  return { min: 75, max: 100 };
+}
+
+export function outfitWarmthMatchesTempF(outfitWarmth: number, tempF: number): boolean {
+  const range = outfitWarmthToTempRange(outfitWarmth);
+  return tempF >= range.min && tempF <= range.max;
+}
+
 export function getWeatherEmoji(condition: WeatherCondition): string {
   switch (condition) {
     case 'Sunny': return '☀️';

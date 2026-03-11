@@ -25,7 +25,7 @@ import DMCAPolicy from './screens/DMCAPolicy';
 import Accessibility from './screens/Accessibility';
 import { Outfit } from './data/outfits';
 import { fetchOutfits, fetchOutfitById } from './utils/outfitService';
-import { WeatherData, getSeasonsFromTemperature, getTargetWarmth } from './utils/weather';
+import { WeatherData, getSeasonsFromTemperature, getTargetWarmth, outfitWarmthMatchesTempF } from './utils/weather';
 
 type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-outfit-linker' | 'admin-users' | 'admin-amazon' | 'admin-smart' | 'admin-auto-pipeline' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
 
@@ -320,8 +320,7 @@ function App() {
 
       const outfitWarmth = computeOutfitWarmthScore(outfit);
       if (outfitWarmth !== undefined) {
-        const diff = Math.abs(outfitWarmth - targetWarmth);
-        if (diff > 2.0) return false;
+        if (!outfitWarmthMatchesTempF(outfitWarmth, weather.temperature)) return false;
       }
 
       return true;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
+import { outfitWarmthToTempRange } from '../utils/weather';
 import { X, Save, ArrowLeft, Package, Thermometer, Snowflake, Sun, Leaf, Wind } from 'lucide-react';
 import { scoreProductForVibe, COLOR_TIER_LABELS, type VibeCompatScore } from '../utils/vibeCompatibility';
 
@@ -23,12 +24,7 @@ function computeOutfitWarmth(items: { category: string; warmth: number }[]): num
   return weight > 0 ? sum / weight : undefined;
 }
 
-function warmthToTempRangeF(warmth: number): { min: number; max: number } {
-  if (warmth >= 3.8) return { min: 0, max: 39 };
-  if (warmth >= 3.0) return { min: 40, max: 54 };
-  if (warmth >= 2.2) return { min: 55, max: 74 };
-  return { min: 75, max: 100 };
-}
+const warmthToTempRangeF = outfitWarmthToTempRange;
 
 function warmthToSeasons(warmth: number): string[] {
   if (warmth >= 3.8) return ['winter'];

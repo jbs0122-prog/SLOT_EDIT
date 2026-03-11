@@ -3,6 +3,7 @@ import { Outfit } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
+import { outfitWarmthToTempRange } from '../utils/weather';
 import { Sparkles, Trash2, CheckSquare, Square, XSquare, Link2, Thermometer, Snowflake, Sun, Leaf, Wind } from 'lucide-react';
 
 const SEASON_LABELS: Record<string, string> = {
@@ -51,12 +52,7 @@ function computeOutfitWarmth(items: { category: string; warmth: number }[]): num
   return weight > 0 ? sum / weight : undefined;
 }
 
-function warmthToTempRangeF(warmth: number): { min: number; max: number } {
-  if (warmth >= 3.8) return { min: 0, max: 39 };
-  if (warmth >= 3.0) return { min: 40, max: 54 };
-  if (warmth >= 2.2) return { min: 55, max: 74 };
-  return { min: 75, max: 100 };
-}
+const warmthToTempRangeF = outfitWarmthToTempRange;
 
 function warmthToSeasons(warmth: number): string[] {
   if (warmth >= 3.8) return ['winter'];
