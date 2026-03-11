@@ -526,7 +526,24 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   const getSlotItem = (slotType: string): OutfitItem | undefined => linkedItems.find(item => item.slot_type === slotType);
 
-  const outfitSeason = outfit.season && outfit.season.length > 0 ? outfit.season[0] : undefined;
+  const outfitSeason = useMemo(() => {
+    if (outfit.season && outfit.season.length > 0) return outfit.season[0];
+    const warmths = linkedItems
+      .map(i => i.product?.warmth)
+      .filter((w): w is number => typeof w === 'number');
+    if (warmths.length > 0) {
+      const avg = warmths.reduce((a, b) => a + b, 0) / warmths.length;
+      if (avg <= 2.0) return 'summer';
+      if (avg <= 3.0) return 'spring';
+      if (avg <= 4.0) return 'fall';
+      return 'winter';
+    }
+    const month = new Date().getMonth() + 1;
+    if (month >= 3 && month <= 5) return 'spring';
+    if (month >= 6 && month <= 8) return 'summer';
+    if (month >= 9 && month <= 11) return 'fall';
+    return 'winter';
+  }, [outfit.season, linkedItems]);
 
   const vibeCtx = useMemo<VibeScoreContext>(() => ({
     season: outfitSeason,
@@ -581,7 +598,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       }
     }
     return map;
-  }, [availableProducts, linkedItems, outfit.vibe, outfit.gender, outfit.body_type, outfit.season]);
+  }, [availableProducts, linkedItems, outfit.vibe, outfit.gender, outfit.body_type, outfitSeason]);
 
   const [expandedRecSlots, setExpandedRecSlots] = useState<Set<string>>(
     new Set(['outer', 'top', 'bottom', 'shoes'])
