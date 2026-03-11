@@ -3,7 +3,7 @@ import { Outfit } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
-import { Sparkles, Trash2, CheckSquare, Square, XSquare, ChevronDown, Link2 } from 'lucide-react';
+import { Sparkles, Trash2, CheckSquare, Square, XSquare, ChevronDown, Link2, Thermometer, Snowflake, Sun, Leaf, Wind } from 'lucide-react';
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -32,8 +32,58 @@ function saveOutfitFilters(updates: Partial<{ outfitFilterGender: string; outfit
   } catch { /* ignore */ }
 }
 
+interface OutfitWithMeta extends Outfit {
+  avg_warmth?: number;
+  temp_range_f?: { min: number; max: number };
+  auto_seasons?: string[];
+  look_number?: number;
+  item_count?: number;
+}
+
+function warmthToTempRangeF(warmth: number): { min: number; max: number } {
+  if (warmth >= 9) return { min: 0, max: 32 };
+  if (warmth >= 7) return { min: 20, max: 45 };
+  if (warmth >= 5) return { min: 40, max: 60 };
+  if (warmth >= 3) return { min: 55, max: 75 };
+  return { min: 68, max: 95 };
+}
+
+function tempRangeToSeasons(min: number, max: number): string[] {
+  const seasons: string[] = [];
+  const midTemp = (min + max) / 2;
+  if (midTemp <= 35) seasons.push('winter');
+  else if (midTemp <= 50) { seasons.push('winter'); seasons.push('fall'); }
+  else if (midTemp <= 60) { seasons.push('fall'); seasons.push('spring'); }
+  else if (midTemp <= 72) { seasons.push('spring'); seasons.push('fall'); }
+  else seasons.push('summer');
+  return [...new Set(seasons)];
+}
+
+function getWarmthLabel(warmth: number): string {
+  if (warmth >= 8.5) return '매우 두꺼움';
+  if (warmth >= 6.5) return '두꺼움';
+  if (warmth >= 4.5) return '보통';
+  if (warmth >= 2.5) return '얇음';
+  return '매우 얇음';
+}
+
+function getWarmthColor(warmth: number): string {
+  if (warmth >= 8.5) return 'bg-blue-100 text-blue-700';
+  if (warmth >= 6.5) return 'bg-sky-100 text-sky-700';
+  if (warmth >= 4.5) return 'bg-amber-50 text-amber-600';
+  if (warmth >= 2.5) return 'bg-orange-100 text-orange-600';
+  return 'bg-red-100 text-red-600';
+}
+
+function SeasonIcon({ season, size = 10 }: { season: string; size?: number }) {
+  if (season === 'winter') return <Snowflake size={size} className="text-blue-500" />;
+  if (season === 'summer') return <Sun size={size} className="text-amber-500" />;
+  if (season === 'fall') return <Leaf size={size} className="text-orange-500" />;
+  return <Wind size={size} className="text-green-500" />;
+}
+
 export default function AdminOutfitLinker() {
-  const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [outfits, setOutfits] = useState<OutfitWithMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [showOutfitLinker, setShowOutfitLinker] = useState(false);
   const [showAutoGenerator, setShowAutoGenerator] = useState(false);
@@ -62,32 +112,72 @@ export default function AdminOutfitLinker() {
   const loadOutfits = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('outfits')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [outfitsResult, itemsResult] = await Promise.all([
+        supabase.from('outfits').select('*').order('created_at', { ascending: false }),
+        supabase.from('outfit_items').select('outfit_id, product:products(warmth)'),
+      ]);
 
-      if (error) throw error;
+      if (outfitsResult.error) throw outfitsResult.error;
 
-      const outfitsData: Outfit[] = data?.map(row => ({
-        id: row.id,
-        gender: row.gender,
-        body_type: row.body_type,
-        vibe: row.vibe,
-        season: row.season || [],
-        image_url_flatlay: row.image_url_flatlay || '',
-        image_url_flatlay_clean: row.image_url_flatlay_clean || '',
-        image_url_on_model: row.image_url_on_model || '',
-        insight_text: row['AI insight'] || '',
-        flatlay_pins: row.flatlay_pins || [],
-        on_model_pins: row.on_model_pins || [],
-        tpo: row.tpo || '',
-        status: row.status || '',
-        prompt_flatlay: row.prompt_flatlay || '',
-        created_at: row.created_at || '',
-        updated_at: row.updated_at || '',
-        items: [],
-      })) || [];
+      const warmthByOutfit: Record<string, number[]> = {};
+      const itemCountByOutfit: Record<string, number> = {};
+      if (itemsResult.data) {
+        for (const item of itemsResult.data) {
+          const oid = item.outfit_id;
+          if (!warmthByOutfit[oid]) warmthByOutfit[oid] = [];
+          if (!itemCountByOutfit[oid]) itemCountByOutfit[oid] = 0;
+          itemCountByOutfit[oid]++;
+          const p = item.product as { warmth?: number } | null;
+          if (p && typeof p.warmth === 'number') {
+            warmthByOutfit[oid].push(p.warmth);
+          }
+        }
+      }
+
+      const rawOutfits = outfitsResult.data || [];
+
+      const vibeGroupOrder: Record<string, number> = {};
+      const vibeCounters: Record<string, number> = {};
+      for (const row of rawOutfits) {
+        const key = `${row.vibe}__${row.gender}__${row.body_type}`;
+        if (vibeCounters[key] === undefined) vibeCounters[key] = 0;
+        vibeCounters[key]++;
+        vibeGroupOrder[row.id] = ((vibeCounters[key] - 1) % 3) + 1;
+      }
+
+      const outfitsData: OutfitWithMeta[] = rawOutfits.map(row => {
+        const warmths = warmthByOutfit[row.id] || [];
+        const avgWarmth = warmths.length > 0
+          ? warmths.reduce((a, b) => a + b, 0) / warmths.length
+          : undefined;
+        const tempRange = avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined;
+        const autoSeasons = tempRange ? tempRangeToSeasons(tempRange.min, tempRange.max) : [];
+
+        return {
+          id: row.id,
+          gender: row.gender,
+          body_type: row.body_type,
+          vibe: row.vibe,
+          season: row.season || [],
+          image_url_flatlay: row.image_url_flatlay || '',
+          image_url_flatlay_clean: row.image_url_flatlay_clean || '',
+          image_url_on_model: row.image_url_on_model || '',
+          insight_text: row['AI insight'] || '',
+          flatlay_pins: row.flatlay_pins || [],
+          on_model_pins: row.on_model_pins || [],
+          tpo: row.tpo || '',
+          status: row.status || '',
+          prompt_flatlay: row.prompt_flatlay || '',
+          created_at: row.created_at || '',
+          updated_at: row.updated_at || '',
+          items: [],
+          avg_warmth: avgWarmth,
+          temp_range_f: tempRange,
+          auto_seasons: autoSeasons,
+          look_number: vibeGroupOrder[row.id],
+          item_count: itemCountByOutfit[row.id] || 0,
+        };
+      });
 
       setOutfits(outfitsData);
     } catch (error) {
@@ -369,6 +459,12 @@ export default function AdminOutfitLinker() {
                       )}
                     </button>
 
+                    {outfit.look_number && (
+                      <div className="absolute top-1.5 right-1.5 z-10 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                        Look {outfit.look_number}
+                      </div>
+                    )}
+
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
                       <div className="flex items-center gap-1.5">
                         <button
@@ -389,13 +485,14 @@ export default function AdminOutfitLinker() {
                     </div>
                   </div>
 
-                  <div className="px-2 py-2">
+                  <div className="px-2 pt-1.5 pb-2 space-y-1.5">
                     <p className="text-[11px] text-gray-700 font-medium leading-tight truncate">
                       {outfit.gender} · {outfit.body_type} · {outfit.vibe}
                     </p>
-                    <div className="mt-1 flex items-center justify-between gap-1">
+
+                    <div className="flex items-center justify-between gap-1">
                       <span className="text-[10px] text-gray-400">
-                        {outfit.items?.length || 0}개 · {outfit.status || '-'}
+                        {outfit.item_count ?? 0}개 · {outfit.status || '-'}
                       </span>
                       <div className="relative">
                         <button
@@ -428,6 +525,38 @@ export default function AdminOutfitLinker() {
                         </button>
                       </div>
                     </div>
+
+                    {outfit.avg_warmth !== undefined && (
+                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium w-fit ${getWarmthColor(outfit.avg_warmth)}`}>
+                        <Thermometer size={9} />
+                        <span>보온 {outfit.avg_warmth.toFixed(1)} · {getWarmthLabel(outfit.avg_warmth)}</span>
+                      </div>
+                    )}
+
+                    {outfit.temp_range_f && (
+                      <div className="flex items-center gap-1 text-[9px] text-gray-500">
+                        <span className="font-medium text-gray-600">{outfit.temp_range_f.min}–{outfit.temp_range_f.max}°F</span>
+                        <span className="text-gray-300">|</span>
+                        <div className="flex items-center gap-0.5">
+                          {(outfit.auto_seasons || []).map(s => (
+                            <span key={s} className="flex items-center gap-0.5">
+                              <SeasonIcon season={s} size={9} />
+                              <span>{SEASON_LABELS[s]}</span>
+                            </span>
+                          ))}
+                          {(outfit.auto_seasons || []).length === 0 && (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {outfit.avg_warmth === undefined && (
+                      <div className="flex items-center gap-1 text-[9px] text-gray-400 italic">
+                        <Thermometer size={9} />
+                        <span>제품 연결 후 계산</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
