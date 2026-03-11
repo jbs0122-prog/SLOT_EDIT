@@ -40,17 +40,19 @@ export function computeWarmthFit(
   targetWarmth?: number,
   targetSeason?: string
 ): number {
-  const coreKeys = ['outer', 'mid', 'top', 'bottom', 'shoes'];
-  const coreItems = coreKeys.map(k => items[k]).filter(Boolean) as Product[];
+  const CLOTHING_KEYS = ['outer', 'mid', 'top', 'bottom'];
+  const SHOES_WEIGHT = 0.4;
+  let wSum = 0; let wTot = 0;
+  for (const [k, prod] of Object.entries(items)) {
+    if (!prod || typeof prod.warmth !== 'number') continue;
+    if (CLOTHING_KEYS.includes(k)) { wSum += prod.warmth; wTot += 1; }
+    else if (k === 'shoes') { wSum += prod.warmth * SHOES_WEIGHT; wTot += SHOES_WEIGHT; }
+  }
 
-  const warmths = coreItems
-    .map(i => i.warmth)
-    .filter((w): w is number => typeof w === 'number');
-
-  if (warmths.length < 2) return 50;
+  if (wTot < 1) return 50;
 
   let score = 100;
-  const avg = warmths.reduce((s, w) => s + w, 0) / warmths.length;
+  const avg = wSum / wTot;
 
   const effectiveTarget = targetWarmth ?? (targetSeason ? SEASON_WARMTH[targetSeason]?.ideal : undefined);
 
@@ -71,9 +73,14 @@ export function computeWarmthFit(
     }
   }
 
-  const range = Math.max(...warmths) - Math.min(...warmths);
-  if (range > 2) score -= 20;
-  else if (range <= 1) score += 10;
+  const clothingWarmths = (['outer', 'mid', 'top', 'bottom'] as const)
+    .map(k => items[k]?.warmth)
+    .filter((w): w is number => typeof w === 'number');
+  if (clothingWarmths.length >= 2) {
+    const range = Math.max(...clothingWarmths) - Math.min(...clothingWarmths);
+    if (range > 2) score -= 20;
+    else if (range <= 1) score += 10;
+  }
 
   return Math.max(0, Math.min(100, score));
 }

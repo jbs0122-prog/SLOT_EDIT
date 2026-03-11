@@ -123,10 +123,10 @@ export function getSeasonsFromTemperature(tempF: number): string[] {
 }
 
 export function getTargetWarmth(tempF: number): number {
-  if (tempF < 40) return 5;
-  if (tempF < 55) return 4;
-  if (tempF < 75) return 3;
-  return 1.5;
+  if (tempF < 40) return 4.2;
+  if (tempF < 55) return 3.4;
+  if (tempF < 75) return 2.6;
+  return 1.6;
 }
 
 export function getWeatherEmoji(condition: WeatherCondition): string {

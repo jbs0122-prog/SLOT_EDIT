@@ -39,33 +39,45 @@ interface OutfitWithMeta extends Outfit {
   item_count?: number;
 }
 
+function computeOutfitWarmth(items: { category: string; warmth: number }[]): number | undefined {
+  const CLOTHING = ['outer', 'mid', 'top', 'bottom'];
+  const SHOES_WEIGHT = 0.4;
+  let sum = 0;
+  let weight = 0;
+  for (const item of items) {
+    if (CLOTHING.includes(item.category)) { sum += item.warmth * 1.0; weight += 1.0; }
+    else if (item.category === 'shoes') { sum += item.warmth * SHOES_WEIGHT; weight += SHOES_WEIGHT; }
+  }
+  return weight > 0 ? sum / weight : undefined;
+}
+
 function warmthToTempRangeF(warmth: number): { min: number; max: number } {
-  if (warmth >= 4.5) return { min: 0, max: 39 };
-  if (warmth >= 3.5) return { min: 40, max: 54 };
-  if (warmth >= 2.5) return { min: 55, max: 74 };
+  if (warmth >= 3.8) return { min: 0, max: 39 };
+  if (warmth >= 3.0) return { min: 40, max: 54 };
+  if (warmth >= 2.2) return { min: 55, max: 74 };
   return { min: 75, max: 100 };
 }
 
 function warmthToSeasons(warmth: number): string[] {
-  if (warmth >= 4.5) return ['winter', 'fall'];
-  if (warmth >= 3.5) return ['fall', 'winter', 'spring'];
-  if (warmth >= 2.5) return ['spring', 'summer', 'fall'];
+  if (warmth >= 3.8) return ['winter', 'fall'];
+  if (warmth >= 3.0) return ['fall', 'winter', 'spring'];
+  if (warmth >= 2.2) return ['spring', 'summer', 'fall'];
   return ['summer', 'spring'];
 }
 
 function getWarmthLabel(warmth: number): string {
-  if (warmth >= 4.5) return '매우 두꺼움';
-  if (warmth >= 3.5) return '두꺼움';
-  if (warmth >= 2.5) return '보통';
-  if (warmth >= 1.8) return '얇음';
+  if (warmth >= 3.8) return '매우 두꺼움';
+  if (warmth >= 3.0) return '두꺼움';
+  if (warmth >= 2.2) return '보통';
+  if (warmth >= 1.6) return '얇음';
   return '매우 얇음';
 }
 
 function getWarmthColor(warmth: number): string {
-  if (warmth >= 4.5) return 'bg-blue-100 text-blue-700';
-  if (warmth >= 3.5) return 'bg-sky-100 text-sky-700';
-  if (warmth >= 2.5) return 'bg-amber-50 text-amber-600';
-  if (warmth >= 1.8) return 'bg-orange-100 text-orange-600';
+  if (warmth >= 3.8) return 'bg-blue-100 text-blue-700';
+  if (warmth >= 3.0) return 'bg-sky-100 text-sky-700';
+  if (warmth >= 2.2) return 'bg-amber-50 text-amber-600';
+  if (warmth >= 1.6) return 'bg-orange-100 text-orange-600';
   return 'bg-red-100 text-red-600';
 }
 
@@ -105,22 +117,22 @@ export default function AdminOutfitLinker() {
     try {
       const [outfitsResult, itemsResult] = await Promise.all([
         supabase.from('outfits').select('*').order('created_at', { ascending: false }),
-        supabase.from('outfit_items').select('outfit_id, product:products(warmth)'),
+        supabase.from('outfit_items').select('outfit_id, product:products(warmth, category)'),
       ]);
 
       if (outfitsResult.error) throw outfitsResult.error;
 
-      const warmthByOutfit: Record<string, number[]> = {};
+      const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
       const itemCountByOutfit: Record<string, number> = {};
       if (itemsResult.data) {
         for (const item of itemsResult.data) {
           const oid = item.outfit_id;
-          if (!warmthByOutfit[oid]) warmthByOutfit[oid] = [];
+          if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
           if (!itemCountByOutfit[oid]) itemCountByOutfit[oid] = 0;
           itemCountByOutfit[oid]++;
-          const p = item.product as { warmth?: number } | null;
-          if (p && typeof p.warmth === 'number') {
-            warmthByOutfit[oid].push(p.warmth);
+          const p = item.product as { warmth?: number; category?: string } | null;
+          if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
+            itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
           }
         }
       }
@@ -137,10 +149,8 @@ export default function AdminOutfitLinker() {
       }
 
       const outfitsData: OutfitWithMeta[] = rawOutfits.map(row => {
-        const warmths = warmthByOutfit[row.id] || [];
-        const avgWarmth = warmths.length > 0
-          ? warmths.reduce((a, b) => a + b, 0) / warmths.length
-          : undefined;
+        const items = itemsByOutfit[row.id] || [];
+        const avgWarmth = computeOutfitWarmth(items);
         const tempRange = avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined;
         const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
 

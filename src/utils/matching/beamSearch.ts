@@ -347,9 +347,16 @@ export async function assembleOutfits(
             if (mid) items.mid = mid;
 
             const allItems = Object.values(items);
-            const warmths = allItems.map(i => i.warmth).filter((w): w is number => typeof w === 'number');
-            if (warmths.length > 0 && context.targetSeason) {
-              const avgWarmth = warmths.reduce((s, w) => s + w, 0) / warmths.length;
+            const CLOTHING_KEYS = ['outer', 'mid', 'top', 'bottom'];
+            const SHOES_W = 0.4;
+            let wSum = 0; let wTot = 0;
+            for (const [k, prod] of Object.entries(items)) {
+              if (typeof prod.warmth !== 'number') continue;
+              if (CLOTHING_KEYS.includes(k)) { wSum += prod.warmth; wTot += 1; }
+              else if (k === 'shoes') { wSum += prod.warmth * SHOES_W; wTot += SHOES_W; }
+            }
+            if (wTot > 0 && context.targetSeason) {
+              const avgWarmth = wSum / wTot;
               const bounds = SEASON_WARMTH[context.targetSeason];
               if (bounds && (avgWarmth < bounds.min - 0.8 || avgWarmth > bounds.max + 0.8)) continue;
             }
