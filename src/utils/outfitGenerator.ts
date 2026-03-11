@@ -548,19 +548,19 @@ async function refineWithAI(
       }),
     });
 
-    if (!response.ok) return ruleBased.slice(0, finalCount);
+    if (!response.ok) return deduplicateOutfits(ruleBased, finalCount);
 
     const data = await response.json();
 
     if (!data.success || !data.selected || data.fallback) {
-      return ruleBased.slice(0, finalCount);
+      return deduplicateOutfits(ruleBased, finalCount);
     }
 
     const selectedIndices: number[] = data.selected
       .map((s: { index: number }) => s.index)
       .filter((idx: number) => idx >= 0 && idx < ruleBased.length);
 
-    if (selectedIndices.length === 0) return ruleBased.slice(0, finalCount);
+    if (selectedIndices.length === 0) return deduplicateOutfits(ruleBased, finalCount);
 
     const dedupedResult = deduplicateOutfits(
       selectedIndices.map((idx: number) => ruleBased[idx]),
@@ -569,19 +569,19 @@ async function refineWithAI(
     );
 
     if (dedupedResult.length < finalCount) {
+      const usedInResult = new Set<string>(dedupedResult.flatMap(r => getOutfitProductIds(r.outfit)));
       const remaining = ruleBased.filter(item => !dedupedResult.includes(item));
-      const extra = deduplicateOutfits(
-        remaining.filter(item => canAddWithoutDuplicates(dedupedResult, item)),
-        finalCount - dedupedResult.length
+      const eligible = remaining.filter(item =>
+        !getOutfitProductIds(item.outfit).some(id => usedInResult.has(id))
       );
+      const extra = deduplicateOutfits(eligible, finalCount - dedupedResult.length);
       dedupedResult.push(...extra);
     }
 
     return dedupedResult.slice(0, finalCount);
   } catch (err) {
     console.error('AI refinement failed, falling back to rule-based:', err);
-    const fallback = deduplicateOutfits(ruleBased, finalCount);
-    return fallback;
+    return deduplicateOutfits(ruleBased, finalCount);
   }
 }
 
