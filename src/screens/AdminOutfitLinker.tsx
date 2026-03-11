@@ -90,9 +90,10 @@ async function fetchOutfitPage(
   to: number,
   filters: { gender: string; bodyType: string; vibe: string; season: string }
 ): Promise<{ data: OutfitWithMeta[]; count: number }> {
+  const OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,"AI insight",flatlay_pins,on_model_pins,tpo,status,prompt_flatlay,created_at,updated_at';
   let query = supabase
     .from('outfits')
-    .select('*', { count: 'exact' })
+    .select(OUTFIT_COLS, { count: 'estimated' })
     .order('created_at', { ascending: false });
 
   if (filters.gender) query = query.eq('gender', filters.gender);
@@ -110,13 +111,15 @@ async function fetchOutfitPage(
   if (rawOutfits.length === 0) return { data: [], count: totalCount };
 
   const outfitIds = rawOutfits.map((o: any) => o.id);
+
+  const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
+  const itemCountByOutfit: Record<string, number> = {};
+
   const itemsResult = await supabase
     .from('outfit_items')
     .select('outfit_id, product:products(warmth, category)')
     .in('outfit_id', outfitIds);
 
-  const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
-  const itemCountByOutfit: Record<string, number> = {};
   if (itemsResult.data) {
     for (const item of itemsResult.data) {
       const oid = item.outfit_id;
