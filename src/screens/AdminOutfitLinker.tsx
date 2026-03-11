@@ -41,37 +41,32 @@ interface OutfitWithMeta extends Outfit {
 }
 
 function warmthToTempRangeF(warmth: number): { min: number; max: number } {
-  if (warmth >= 9) return { min: 0, max: 32 };
-  if (warmth >= 7) return { min: 20, max: 45 };
-  if (warmth >= 5) return { min: 40, max: 60 };
-  if (warmth >= 3) return { min: 55, max: 75 };
-  return { min: 68, max: 95 };
+  if (warmth >= 4.5) return { min: 0, max: 39 };
+  if (warmth >= 3.5) return { min: 40, max: 54 };
+  if (warmth >= 2.5) return { min: 55, max: 74 };
+  return { min: 75, max: 100 };
 }
 
-function tempRangeToSeasons(min: number, max: number): string[] {
-  const seasons: string[] = [];
-  const midTemp = (min + max) / 2;
-  if (midTemp <= 35) seasons.push('winter');
-  else if (midTemp <= 50) { seasons.push('winter'); seasons.push('fall'); }
-  else if (midTemp <= 60) { seasons.push('fall'); seasons.push('spring'); }
-  else if (midTemp <= 72) { seasons.push('spring'); seasons.push('fall'); }
-  else seasons.push('summer');
-  return [...new Set(seasons)];
+function warmthToSeasons(warmth: number): string[] {
+  if (warmth >= 4.5) return ['winter', 'fall'];
+  if (warmth >= 3.5) return ['fall', 'winter', 'spring'];
+  if (warmth >= 2.5) return ['spring', 'summer', 'fall'];
+  return ['summer', 'spring'];
 }
 
 function getWarmthLabel(warmth: number): string {
-  if (warmth >= 8.5) return '매우 두꺼움';
-  if (warmth >= 6.5) return '두꺼움';
-  if (warmth >= 4.5) return '보통';
-  if (warmth >= 2.5) return '얇음';
+  if (warmth >= 4.5) return '매우 두꺼움';
+  if (warmth >= 3.5) return '두꺼움';
+  if (warmth >= 2.5) return '보통';
+  if (warmth >= 1.8) return '얇음';
   return '매우 얇음';
 }
 
 function getWarmthColor(warmth: number): string {
-  if (warmth >= 8.5) return 'bg-blue-100 text-blue-700';
-  if (warmth >= 6.5) return 'bg-sky-100 text-sky-700';
-  if (warmth >= 4.5) return 'bg-amber-50 text-amber-600';
-  if (warmth >= 2.5) return 'bg-orange-100 text-orange-600';
+  if (warmth >= 4.5) return 'bg-blue-100 text-blue-700';
+  if (warmth >= 3.5) return 'bg-sky-100 text-sky-700';
+  if (warmth >= 2.5) return 'bg-amber-50 text-amber-600';
+  if (warmth >= 1.8) return 'bg-orange-100 text-orange-600';
   return 'bg-red-100 text-red-600';
 }
 
@@ -151,7 +146,7 @@ export default function AdminOutfitLinker() {
           ? warmths.reduce((a, b) => a + b, 0) / warmths.length
           : undefined;
         const tempRange = avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined;
-        const autoSeasons = tempRange ? tempRangeToSeasons(tempRange.min, tempRange.max) : [];
+        const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
 
         return {
           id: row.id,
