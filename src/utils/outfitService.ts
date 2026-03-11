@@ -113,6 +113,54 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   return Promise.race([promise, timeout]);
 };
 
+const mapOutfitRow = (row: any, itemsMap?: Map<string, OutfitItem[]>): Outfit => ({
+  id: row.id,
+  gender: row.gender,
+  body_type: row.body_type,
+  vibe: row.vibe,
+  image_url_flatlay: row.image_url_flatlay || '',
+  image_url_on_model: row.image_url_on_model || '',
+  insight_text: row['AI insight'] || '',
+  flatlay_pins: row.flatlay_pins || [],
+  on_model_pins: row.on_model_pins || [],
+  tpo: row.tpo || '',
+  status: row.status || '',
+  prompt_flatlay: row.prompt_flatlay || '',
+  created_at: row.created_at || '',
+  updated_at: row.updated_at || '',
+  items: itemsMap ? (itemsMap.get(row.id) || []) : [],
+});
+
+export const fetchOutfitsMetaOnly = async (): Promise<Outfit[]> => {
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('outfits')
+        .select('id, gender, body_type, vibe, image_url_flatlay, image_url_on_model, "AI insight", flatlay_pins, on_model_pins, tpo, status, prompt_flatlay, created_at, updated_at')
+        .in('status', ['DONE_FLAT', 'completed'])
+        .not('image_url_flatlay', 'is', null)
+        .neq('image_url_flatlay', ''),
+      10000
+    );
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      console.log(`Loaded ${data.length} outfit metas from Supabase`);
+      return data.map((row: any) => mapOutfitRow(row));
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error fetching outfit metas:', error);
+    return [];
+  }
+};
+
+export const fetchOutfitItemsForIds = async (outfitIds: string[]): Promise<Map<string, OutfitItem[]>> => {
+  return withTimeout(fetchOutfitItems(outfitIds), 20000);
+};
+
 export const fetchOutfits = async (): Promise<Outfit[]> => {
   try {
     const { data, error } = await withTimeout(
@@ -133,23 +181,7 @@ export const fetchOutfits = async (): Promise<Outfit[]> => {
       const outfitIds = data.map((o: any) => o.id);
       const itemsMap = await withTimeout(fetchOutfitItems(outfitIds), 20000);
 
-      return data.map(row => ({
-        id: row.id,
-        gender: row.gender,
-        body_type: row.body_type,
-        vibe: row.vibe,
-        image_url_flatlay: row.image_url_flatlay || '',
-        image_url_on_model: row.image_url_on_model || '',
-        insight_text: row['AI insight'] || '',
-        flatlay_pins: row.flatlay_pins || [],
-        on_model_pins: row.on_model_pins || [],
-        tpo: row.tpo || '',
-        status: row.status || '',
-        prompt_flatlay: row.prompt_flatlay || '',
-        created_at: row.created_at || '',
-        updated_at: row.updated_at || '',
-        items: itemsMap.get(row.id) || [],
-      }));
+      return data.map((row: any) => mapOutfitRow(row, itemsMap));
     }
 
     return [];

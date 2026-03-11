@@ -24,7 +24,7 @@ import AffiliateDisclosure from './screens/AffiliateDisclosure';
 import DMCAPolicy from './screens/DMCAPolicy';
 import Accessibility from './screens/Accessibility';
 import { Outfit } from './data/outfits';
-import { fetchOutfits, fetchOutfitById } from './utils/outfitService';
+import { fetchOutfitsMetaOnly, fetchOutfitItemsForIds, fetchOutfitById } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature, getTargetWarmth, outfitWarmthMatchesTempF } from './utils/weather';
 
 type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-outfit-linker' | 'admin-users' | 'admin-amazon' | 'admin-smart' | 'admin-auto-pipeline' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
@@ -181,7 +181,7 @@ function App() {
 
     const load = async () => {
       try {
-        const data = await fetchOutfits();
+        const data = await fetchOutfitsMetaOnly();
         setOutfits(data);
 
         const h = getHash();
@@ -302,19 +302,35 @@ function App() {
     let outfitPool = outfits;
     if (outfitPool.length === 0) {
       try {
-        const { fetchOutfits: load } = await import('./utils/outfitService');
-        outfitPool = await load();
+        outfitPool = await fetchOutfitsMetaOnly();
         setOutfits(outfitPool);
       } catch { /* use empty */ }
     }
 
-    const matches = outfitPool.filter(outfit => {
-      const matchesGender = normalizeString(outfit.gender) === normalizedGender;
-      const matchesBodyType = normalizeString(outfit.body_type) === normalizedBodyType;
-      const matchesVibe = normalizeString(outfit.vibe) === normalizedVibe;
+    const candidatesByProfile = outfitPool.filter(outfit =>
+      normalizeString(outfit.gender) === normalizedGender &&
+      normalizeString(outfit.body_type) === normalizedBodyType &&
+      normalizeString(outfit.vibe) === normalizedVibe
+    );
 
-      if (!matchesGender || !matchesBodyType || !matchesVibe) return false;
+    let candidatesWithItems = candidatesByProfile;
+    const needItems = candidatesByProfile.some(o => !o.items || o.items.length === 0);
+    if (needItems) {
+      try {
+        const ids = candidatesByProfile.map(o => o.id);
+        const itemsMap = await fetchOutfitItemsForIds(ids);
+        candidatesWithItems = candidatesByProfile.map(o => ({
+          ...o,
+          items: itemsMap.get(o.id) || o.items || [],
+        }));
+        setOutfits(prev => prev.map(o => {
+          const updated = candidatesWithItems.find(c => c.id === o.id);
+          return updated || o;
+        }));
+      } catch { /* proceed without items */ }
+    }
 
+    const matches = candidatesWithItems.filter(outfit => {
       const hasOuter = outfit.items?.some(item => item.slot_type === 'outer');
       if (isCold && !hasOuter) return false;
 
