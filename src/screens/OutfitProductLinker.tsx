@@ -12,6 +12,7 @@ import {
   COLOR_TIER_STYLES,
   COLOR_TIER_LABELS,
   type VibeCompatScore,
+  type VibeScoreContext,
 } from '../utils/vibeCompatibility';
 import {
   getSlotRecommendations,
@@ -524,6 +525,13 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   const getSlotItem = (slotType: string): OutfitItem | undefined => linkedItems.find(item => item.slot_type === slotType);
 
+  const outfitSeason = outfit.season && outfit.season.length > 0 ? outfit.season[0] : undefined;
+
+  const vibeCtx = useMemo<VibeScoreContext>(() => ({
+    season: outfitSeason,
+    slotType: selectedCategory !== 'all' ? selectedCategory : undefined,
+  }), [outfitSeason, selectedCategory]);
+
   // #12: Vibe-aware product sorting
   const filteredProducts = useMemo(() => {
     let products = availableProducts.filter(product => {
@@ -533,16 +541,16 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       return matchesSearch && matchesCategory;
     });
     if (vibeSort && outfit.vibe) {
-      return sortProductsByVibeCompat(products, outfit.vibe);
+      return sortProductsByVibeCompat(products, outfit.vibe, vibeCtx);
     }
-    return products.map(p => ({ ...p, _vibeScore: scoreProductForVibe(p, outfit.vibe || '') }));
-  }, [availableProducts, searchTerm, selectedCategory, vibeSort, outfit.vibe]);
+    return products.map(p => ({ ...p, _vibeScore: scoreProductForVibe(p, outfit.vibe || '', vibeCtx) }));
+  }, [availableProducts, searchTerm, selectedCategory, vibeSort, outfit.vibe, vibeCtx]);
 
   // #13: Drag compatibility preview score
   const dragPreviewScore = useMemo<VibeCompatScore | null>(() => {
     if (!draggedProduct || !outfit.vibe) return null;
-    return scoreProductForVibe(draggedProduct, outfit.vibe);
-  }, [draggedProduct, outfit.vibe]);
+    return scoreProductForVibe(draggedProduct, outfit.vibe, vibeCtx);
+  }, [draggedProduct, outfit.vibe, vibeCtx]);
 
   // #14: Outfit completeness analysis
   const completeness = useMemo(() => {
@@ -556,7 +564,6 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const slotRecommendationsMap = useMemo(() => {
     const map = new Map<string, SlotRecommendations>();
     const filledSlots = new Set(linkedItems.map(item => item.slot_type));
-    const outfitSeason = outfit.season && outfit.season.length > 0 ? outfit.season[0] : undefined;
 
     for (const slot of SLOT_TYPES) {
       if (!filledSlots.has(slot.value)) {
@@ -738,7 +745,8 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
               <div className="space-y-3">
                 {SLOT_TYPES.map(slot => {
                   const item = getSlotItem(slot.value);
-                  const itemScore = item?.product ? scoreProductForVibe(item.product, outfit.vibe || '') : null;
+                  const slotCtx: VibeScoreContext = { season: outfitSeason, slotType: slot.value };
+                  const itemScore = item?.product ? scoreProductForVibe(item.product, outfit.vibe || '', slotCtx) : null;
                   return (
                     <div
                       key={slot.value}
