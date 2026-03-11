@@ -111,17 +111,32 @@ function computeSeasonFit(outfit: Outfit, weatherSeasons: string[]): number {
   return (matchingCount / productsWithSeasons.length) * 10;
 }
 
+function computeOutfitWarmthScore(outfit: Outfit): number | undefined {
+  if (!outfit.items || outfit.items.length === 0) return undefined;
+  const CLOTHING = ['outer', 'mid', 'top', 'bottom'];
+  const SHOES_WEIGHT = 0.4;
+  let sum = 0; let weight = 0;
+  for (const item of outfit.items) {
+    const w = item.product?.warmth;
+    if (typeof w !== 'number') continue;
+    if (CLOTHING.includes(item.slot_type)) { sum += w; weight += 1; }
+    else if (item.slot_type === 'shoes') { sum += w * SHOES_WEIGHT; weight += SHOES_WEIGHT; }
+  }
+  return weight > 0 ? sum / weight : undefined;
+}
+
 function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: boolean, weatherSeasons: string[]): number {
   let score = 0;
   if (!outfit.items || outfit.items.length === 0) return 0;
 
-  const warmths = outfit.items
-    .map(item => item.product?.warmth)
-    .filter((w): w is number => typeof w === 'number');
-
-  if (warmths.length > 0) {
-    const avgWarmth = warmths.reduce((s, w) => s + w, 0) / warmths.length;
-    score += Math.max(0, 10 - Math.abs(avgWarmth - targetWarmth) * 3);
+  const avgWarmth = computeOutfitWarmthScore(outfit);
+  if (avgWarmth !== undefined) {
+    const diff = Math.abs(avgWarmth - targetWarmth);
+    if (diff <= 0.3) score += 10;
+    else if (diff <= 0.6) score += 8;
+    else if (diff <= 1.0) score += 5;
+    else if (diff <= 1.5) score += 2;
+    else score -= Math.min(8, (diff - 1.5) * 4);
   }
 
   score += computeSeasonFit(outfit, weatherSeasons);
@@ -284,7 +299,16 @@ function App() {
     const isWetWeather = weather.condition === 'Rainy' || weather.condition === 'Snow';
     const targetWarmth = getTargetWarmth(weather.temperature);
 
-    const matches = outfits.filter(outfit => {
+    let outfitPool = outfits;
+    if (outfitPool.length === 0) {
+      try {
+        const { fetchOutfits: load } = await import('./utils/outfitService');
+        outfitPool = await load();
+        setOutfits(outfitPool);
+      } catch { /* use empty */ }
+    }
+
+    const matches = outfitPool.filter(outfit => {
       const matchesGender = normalizeString(outfit.gender) === normalizedGender;
       const matchesBodyType = normalizeString(outfit.body_type) === normalizedBodyType;
       const matchesVibe = normalizeString(outfit.vibe) === normalizedVibe;
@@ -293,6 +317,12 @@ function App() {
 
       const hasOuter = outfit.items?.some(item => item.slot_type === 'outer');
       if (isCold && !hasOuter) return false;
+
+      const outfitWarmth = computeOutfitWarmthScore(outfit);
+      if (outfitWarmth !== undefined) {
+        const diff = Math.abs(outfitWarmth - targetWarmth);
+        if (diff > 2.0) return false;
+      }
 
       return true;
     });

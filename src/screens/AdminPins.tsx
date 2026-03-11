@@ -31,9 +31,9 @@ function warmthToTempRangeF(warmth: number): { min: number; max: number } {
 }
 
 function warmthToSeasons(warmth: number): string[] {
-  if (warmth >= 3.8) return ['winter', 'fall'];
-  if (warmth >= 3.0) return ['fall', 'winter', 'spring'];
-  if (warmth >= 2.2) return ['spring', 'summer', 'fall'];
+  if (warmth >= 3.8) return ['winter'];
+  if (warmth >= 3.0) return ['winter', 'fall'];
+  if (warmth >= 2.2) return ['fall', 'spring'];
   return ['summer', 'spring'];
 }
 
