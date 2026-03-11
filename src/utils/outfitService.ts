@@ -5,7 +5,44 @@ interface RankingOutfit extends Outfit {
   likeCount: number;
 }
 
-const fetchOutfitItems = async (outfitIds: string[]): Promise<Map<string, OutfitItem[]>> => {
+const CHUNK_SIZE = 50;
+
+const buildOutfitItem = (item: any): OutfitItem => ({
+  id: item.id,
+  outfit_id: item.outfit_id,
+  product_id: item.product_id,
+  slot_type: item.slot_type,
+  created_at: item.created_at,
+  product: item.products ? {
+    id: item.products.id,
+    brand: item.products.brand || '',
+    name: item.products.name,
+    category: item.products.category,
+    gender: item.products.gender,
+    body_type: item.products.body_type || [],
+    vibe: item.products.vibe || [],
+    color: item.products.color || '',
+    season: item.products.season || [],
+    silhouette: item.products.silhouette || '',
+    image_url: item.products.image_url,
+    product_link: item.products.product_link || '',
+    affiliate_link: item.products.affiliate_link || '',
+    price: item.products.price,
+    stock_status: item.products.stock_status || 'in_stock',
+    material: item.products.material || '',
+    color_family: item.products.color_family || '',
+    color_tone: item.products.color_tone || '',
+    sub_category: item.products.sub_category || '',
+    pattern: item.products.pattern || '',
+    formality: typeof item.products.formality === 'number' ? item.products.formality : undefined,
+    warmth: typeof item.products.warmth === 'number' ? item.products.warmth : undefined,
+    nobg_image_url: item.products.nobg_image_url || '',
+    created_at: item.products.created_at,
+    updated_at: item.products.updated_at,
+  } : undefined,
+});
+
+const fetchOutfitItemsChunk = async (chunkIds: string[]): Promise<any[]> => {
   const { data, error } = await supabase
     .from('outfit_items')
     .select(`
@@ -42,48 +79,24 @@ const fetchOutfitItems = async (outfitIds: string[]): Promise<Map<string, Outfit
         updated_at
       )
     `)
-    .in('outfit_id', outfitIds);
+    .in('outfit_id', chunkIds);
 
   if (error) throw error;
+  return data || [];
+};
+
+const fetchOutfitItems = async (outfitIds: string[]): Promise<Map<string, OutfitItem[]>> => {
+  const chunks: string[][] = [];
+  for (let i = 0; i < outfitIds.length; i += CHUNK_SIZE) {
+    chunks.push(outfitIds.slice(i, i + CHUNK_SIZE));
+  }
+
+  const results = await Promise.all(chunks.map(fetchOutfitItemsChunk));
+  const allItems = results.flat();
 
   const itemsMap = new Map<string, OutfitItem[]>();
-
-  data?.forEach((item: any) => {
-    const outfitItem: OutfitItem = {
-      id: item.id,
-      outfit_id: item.outfit_id,
-      product_id: item.product_id,
-      slot_type: item.slot_type,
-      created_at: item.created_at,
-      product: item.products ? {
-        id: item.products.id,
-        brand: item.products.brand || '',
-        name: item.products.name,
-        category: item.products.category,
-        gender: item.products.gender,
-        body_type: item.products.body_type || [],
-        vibe: item.products.vibe || [],
-        color: item.products.color || '',
-        season: item.products.season || [],
-        silhouette: item.products.silhouette || '',
-        image_url: item.products.image_url,
-        product_link: item.products.product_link || '',
-        affiliate_link: item.products.affiliate_link || '',
-        price: item.products.price,
-        stock_status: item.products.stock_status || 'in_stock',
-        material: item.products.material || '',
-        color_family: item.products.color_family || '',
-        color_tone: item.products.color_tone || '',
-        sub_category: item.products.sub_category || '',
-        pattern: item.products.pattern || '',
-        formality: typeof item.products.formality === 'number' ? item.products.formality : undefined,
-        warmth: typeof item.products.warmth === 'number' ? item.products.warmth : undefined,
-        nobg_image_url: item.products.nobg_image_url || '',
-        created_at: item.products.created_at,
-        updated_at: item.products.updated_at,
-      } : undefined,
-    };
-
+  allItems.forEach((item: any) => {
+    const outfitItem = buildOutfitItem(item);
     if (!itemsMap.has(item.outfit_id)) {
       itemsMap.set(item.outfit_id, []);
     }
@@ -93,22 +106,32 @@ const fetchOutfitItems = async (outfitIds: string[]): Promise<Map<string, Outfit
   return itemsMap;
 };
 
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Query timed out after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timeout]);
+};
+
 export const fetchOutfits = async (): Promise<Outfit[]> => {
   try {
-    const { data, error } = await supabase
-      .from('outfits')
-      .select('*')
-      .in('status', ['DONE_FLAT', 'completed'])
-      .not('image_url_flatlay', 'is', null)
-      .neq('image_url_flatlay', '');
+    const { data, error } = await withTimeout(
+      supabase
+        .from('outfits')
+        .select('*')
+        .in('status', ['DONE_FLAT', 'completed'])
+        .not('image_url_flatlay', 'is', null)
+        .neq('image_url_flatlay', ''),
+      15000
+    );
 
     if (error) throw error;
 
     if (data && data.length > 0) {
       console.log(`Loaded ${data.length} outfits from Supabase`);
 
-      const outfitIds = data.map(o => o.id);
-      const itemsMap = await fetchOutfitItems(outfitIds);
+      const outfitIds = data.map((o: any) => o.id);
+      const itemsMap = await withTimeout(fetchOutfitItems(outfitIds), 20000);
 
       return data.map(row => ({
         id: row.id,
