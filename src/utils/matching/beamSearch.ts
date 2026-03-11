@@ -158,6 +158,7 @@ function getMidTier(season?: string, warmth?: number): MidTier {
   if (warmth !== undefined && warmth <= 3) return 'none';
   if (season === 'spring') return 'light-only';
   if (season === 'fall') return 'light-or-medium';
+  if (season === 'winter') return 'any';
   return 'any';
 }
 
@@ -170,19 +171,58 @@ function midPassesTierFilter(product: Product, tier: MidTier): boolean {
   return true;
 }
 
-const OUTER_MID_WARMTH_BUDGET: Record<string, { max: number }> = {
+const OUTER_MID_WARMTH_BUDGET: Record<string, { min?: number; max: number }> = {
   spring: { max: 6.0 },
   fall:   { max: 7.5 },
-  winter: { max: 9.5 },
+  winter: { min: 6.0, max: 9.5 },
 };
 
 function outerMidBudgetOk(outer: Product | undefined, mid: Product | undefined, season?: string): boolean {
-  if (!outer || !mid || !season) return true;
+  if (!season) return true;
   const budget = OUTER_MID_WARMTH_BUDGET[season];
   if (!budget) return true;
-  const outerW = typeof outer.warmth === 'number' ? outer.warmth : 3;
-  const midW = typeof mid.warmth === 'number' ? mid.warmth : 2.5;
-  return (outerW + midW) <= budget.max;
+
+  const outerW = outer && typeof outer.warmth === 'number' ? outer.warmth : undefined;
+  const midW = mid && typeof mid.warmth === 'number' ? mid.warmth : undefined;
+
+  if (!outer && !mid) return true;
+
+  if (season === 'spring') {
+    if (outer && mid) {
+      const oW = outerW ?? 3;
+      const mW = midW ?? 2.5;
+      if (mW > 2.5) return false;
+      return (oW + mW) <= budget.max;
+    }
+    return true;
+  }
+
+  if (season === 'fall') {
+    if (outer && mid) {
+      const oW = outerW ?? 3;
+      const mW = midW ?? 2.5;
+      if (mW > 2.5 && oW >= 3) return false;
+      return (oW + mW) <= budget.max;
+    }
+    return true;
+  }
+
+  if (season === 'winter') {
+    if (outer && mid) {
+      const oW = outerW ?? 3;
+      const mW = midW ?? 2.5;
+      const total = oW + mW;
+      return total >= (budget.min ?? 0) && total <= budget.max;
+    }
+    return true;
+  }
+
+  if (outer && mid) {
+    const oW = outerW ?? 3;
+    const mW = midW ?? 2.5;
+    return (oW + mW) <= budget.max;
+  }
+  return true;
 }
 
 function quickColorCheck(product: Product, existingFamilies: string[]): boolean {
@@ -233,7 +273,7 @@ function buildSlotPools(
   const needsMid = midTier !== 'none';
 
   const MAX_CORE = 10;
-  const MAX_OPT = 6;
+  const MAX_OPT = 12;
 
   const pools: SlotPool[] = [];
 
@@ -340,6 +380,7 @@ export async function assembleOutfits(
           const midCandidates: (Product | undefined)[] = midPool ? [undefined, ...midPool.products] : [undefined];
 
           for (const mid of midCandidates) {
+            if (context.targetSeason === 'spring' && outer && mid) continue;
             if (!outerMidBudgetOk(outer, mid, context.targetSeason)) continue;
 
             const items: Record<string, Product> = { ...coreItems };

@@ -364,10 +364,14 @@ async function fillEmptySlots(
   const seasonExcluded = new Set(context.targetSeason ? (SEASON_EXCLUDED_SLOTS[context.targetSeason] || []) : []);
 
   const hasOuter = filledSlotTypes.has('outer');
+  const hasMid = filledSlotTypes.has('mid');
 
   const emptyOptionalSlots = OPTIONAL_SLOT_FILL_ORDER.filter(slot => {
     if (filledSlotTypes.has(slot) || seasonExcluded.has(slot)) return false;
-    if (slot === 'mid' && context.targetSeason === 'spring' && hasOuter) return false;
+    if (context.targetSeason === 'spring') {
+      if (slot === 'mid' && hasOuter) return false;
+      if (slot === 'outer' && hasMid) return false;
+    }
     return true;
   });
 
@@ -389,14 +393,26 @@ async function fillEmptySlots(
   const newItems: { outfit_id: string; product_id: string; slot_type: string }[] = [];
   const filledSlots: string[] = [];
 
+  const currentHasOuter = filledSlotTypes.has('outer');
+  const outerProduct = currentHasOuter
+    ? allProducts.find(p => p.id === existingItems.find(i => i.slot_type === 'outer')?.product_id)
+    : undefined;
+
   for (const slot of emptyOptionalSlots) {
     const slotWarmthLimits = context.targetSeason
       ? ITEM_WARMTH_LIMITS[context.targetSeason]?.[slot]
       : undefined;
 
-    const midTierMaxWarmth = (slot === 'mid' && context.targetSeason)
+    let midTierMaxWarmth = (slot === 'mid' && context.targetSeason)
       ? MID_TIER_MAX_WARMTH[context.targetSeason]
       : undefined;
+
+    if (slot === 'mid' && context.targetSeason === 'fall' && outerProduct) {
+      const outerW = typeof outerProduct.warmth === 'number' ? outerProduct.warmth : 3;
+      if (outerW >= 3) {
+        midTierMaxWarmth = 2.5;
+      }
+    }
 
     const availableProducts = allProducts.filter(p => {
       if (usedProductIds.has(p.id)) return false;
