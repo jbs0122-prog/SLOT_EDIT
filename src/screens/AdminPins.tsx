@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Outfit, ImagePin, Product } from '../data/outfits';
 import { supabase } from '../utils/supabase';
-import { X, Save, ArrowLeft, Package, ChevronDown } from 'lucide-react';
+import { X, Save, ArrowLeft, Package, Thermometer, Snowflake, Sun, Leaf, Wind } from 'lucide-react';
 import { scoreProductForVibe, COLOR_TIER_LABELS, type VibeCompatScore } from '../utils/vibeCompatibility';
 
 const SEASON_LABELS: Record<string, string> = {
@@ -11,12 +11,53 @@ const SEASON_LABELS: Record<string, string> = {
   winter: '겨울',
 };
 
-const ALL_SEASONS = ['spring', 'summer', 'fall', 'winter'];
+function warmthToTempRangeF(warmth: number): { min: number; max: number } {
+  if (warmth >= 4.5) return { min: 0, max: 39 };
+  if (warmth >= 3.5) return { min: 40, max: 54 };
+  if (warmth >= 2.5) return { min: 55, max: 74 };
+  return { min: 75, max: 100 };
+}
+
+function warmthToSeasons(warmth: number): string[] {
+  if (warmth >= 4.5) return ['winter', 'fall'];
+  if (warmth >= 3.5) return ['fall', 'winter', 'spring'];
+  if (warmth >= 2.5) return ['spring', 'summer', 'fall'];
+  return ['summer', 'spring'];
+}
+
+function getWarmthLabel(warmth: number): string {
+  if (warmth >= 4.5) return '매우 두꺼움';
+  if (warmth >= 3.5) return '두꺼움';
+  if (warmth >= 2.5) return '보통';
+  if (warmth >= 1.8) return '얇음';
+  return '매우 얇음';
+}
+
+function getWarmthColor(warmth: number): string {
+  if (warmth >= 4.5) return 'bg-blue-100 text-blue-700';
+  if (warmth >= 3.5) return 'bg-sky-100 text-sky-700';
+  if (warmth >= 2.5) return 'bg-amber-50 text-amber-600';
+  if (warmth >= 1.8) return 'bg-orange-100 text-orange-600';
+  return 'bg-red-100 text-red-600';
+}
+
+function SeasonIcon({ season, size = 9 }: { season: string; size?: number }) {
+  if (season === 'winter') return <Snowflake size={size} className="text-blue-500" />;
+  if (season === 'summer') return <Sun size={size} className="text-amber-500" />;
+  if (season === 'fall') return <Leaf size={size} className="text-orange-500" />;
+  return <Wind size={size} className="text-green-500" />;
+}
 
 type ImageType = 'flatlay' | 'on_model';
 
+interface OutfitWithMeta extends Outfit {
+  avg_warmth?: number;
+  temp_range_f?: { min: number; max: number };
+  auto_seasons?: string[];
+}
+
 export default function AdminPins() {
-  const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [outfits, setOutfits] = useState<OutfitWithMeta[]>([]);
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageType>('flatlay');
   const [pins, setPins] = useState<ImagePin[]>([]);
@@ -32,9 +73,6 @@ export default function AdminPins() {
   const [filterBodyType, setFilterBodyType] = useState<string>(savedPinsFilters?.filterBodyType ?? '');
   const [filterVibe, setFilterVibe] = useState<string>(savedPinsFilters?.filterVibe ?? '');
   const [filterSeason, setFilterSeason] = useState<string>(savedPinsFilters?.filterSeason ?? '');
-  const [seasonDropdownOpen, setSeasonDropdownOpen] = useState<string | null>(null);
-  const [seasonDropdownPos, setSeasonDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const seasonBtnRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [tpo, setTpo] = useState<string>('');
 
   useEffect(() => {
@@ -48,52 +86,57 @@ export default function AdminPins() {
 
   const loadOutfits = async () => {
     try {
-      const { data, error } = await supabase
-        .from('outfits')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [outfitsResult, itemsResult] = await Promise.all([
+        supabase.from('outfits').select('*').order('created_at', { ascending: false }),
+        supabase.from('outfit_items').select('outfit_id, product:products(warmth)'),
+      ]);
 
-      if (error) throw error;
+      if (outfitsResult.error) throw outfitsResult.error;
 
-      const outfitsData: Outfit[] = data?.map(row => ({
-        id: row.id,
-        gender: row.gender,
-        body_type: row.body_type,
-        vibe: row.vibe,
-        season: row.season || [],
-        image_url_flatlay: row.image_url_flatlay || '',
-        image_url_on_model: row.image_url_on_model || '',
-        insight_text: row['AI insight'] || '',
-        flatlay_pins: row.flatlay_pins || [],
-        on_model_pins: row.on_model_pins || [],
-        tpo: row.tpo || '',
-        status: row.status || '',
-        prompt_flatlay: row.prompt_flatlay || '',
-        created_at: row.created_at || '',
-        updated_at: row.updated_at || '',
-        items: [],
-      })) || [];
+      const warmthByOutfit: Record<string, number[]> = {};
+      if (itemsResult.data) {
+        for (const item of itemsResult.data) {
+          const oid = item.outfit_id;
+          if (!warmthByOutfit[oid]) warmthByOutfit[oid] = [];
+          const p = item.product as { warmth?: number } | null;
+          if (p && typeof p.warmth === 'number') warmthByOutfit[oid].push(p.warmth);
+        }
+      }
+
+      const outfitsData: OutfitWithMeta[] = (outfitsResult.data || []).map(row => {
+        const warmths = warmthByOutfit[row.id] || [];
+        const avgWarmth = warmths.length > 0
+          ? warmths.reduce((a, b) => a + b, 0) / warmths.length
+          : undefined;
+        return {
+          id: row.id,
+          gender: row.gender,
+          body_type: row.body_type,
+          vibe: row.vibe,
+          season: row.season || [],
+          image_url_flatlay: row.image_url_flatlay || '',
+          image_url_flatlay_clean: row.image_url_flatlay_clean || '',
+          image_url_on_model: row.image_url_on_model || '',
+          insight_text: row['AI insight'] || '',
+          flatlay_pins: row.flatlay_pins || [],
+          on_model_pins: row.on_model_pins || [],
+          tpo: row.tpo || '',
+          status: row.status || '',
+          prompt_flatlay: row.prompt_flatlay || '',
+          created_at: row.created_at || '',
+          updated_at: row.updated_at || '',
+          items: [],
+          avg_warmth: avgWarmth,
+          temp_range_f: avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined,
+          auto_seasons: avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [],
+        };
+      });
 
       setOutfits(outfitsData);
     } catch (error) {
       console.error('Failed to load outfits:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleOutfitSeasonToggle = async (outfitId: string, season: string, currentSeasons: string[]) => {
-    const newSeasons = currentSeasons.includes(season)
-      ? currentSeasons.filter(s => s !== season)
-      : [...currentSeasons, season];
-
-    const { error } = await supabase
-      .from('outfits')
-      .update({ season: newSeasons })
-      .eq('id', outfitId);
-
-    if (!error) {
-      setOutfits(prev => prev.map(o => o.id === outfitId ? { ...o, season: newSeasons } : o));
     }
   };
 
@@ -284,8 +327,8 @@ export default function AdminPins() {
     if (filterBodyType && outfit.body_type !== filterBodyType) return false;
     if (filterVibe && outfit.vibe !== filterVibe) return false;
     if (filterSeason) {
-      const seasons = outfit.season || [];
-      if (!seasons.includes(filterSeason)) return false;
+      const autoSeasons = outfit.auto_seasons || [];
+      if (!autoSeasons.includes(filterSeason)) return false;
     }
     return true;
   });
@@ -426,45 +469,41 @@ export default function AdminPins() {
                       </div>
                     </button>
 
-                    <div className="px-2 py-2">
+                    <div className="px-2 py-2 space-y-1">
                       <p className="text-[11px] text-gray-700 font-medium leading-tight truncate">
                         {outfit.gender} · {outfit.body_type} · {outfit.vibe}
                       </p>
-                      <div className="mt-1 flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1">
                         <span className="text-[10px] text-gray-400 truncate">
-                          {outfit.id.slice(0, 8)} · {outfit.status || '-'}
+                          {outfit.status || '-'}
                         </span>
-                        <div className="relative" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            ref={el => {
-                              if (el) seasonBtnRefs.current.set(outfit.id, el);
-                              else seasonBtnRefs.current.delete(outfit.id);
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (seasonDropdownOpen === outfit.id) {
-                                setSeasonDropdownOpen(null);
-                                setSeasonDropdownPos(null);
-                              } else {
-                                const btn = seasonBtnRefs.current.get(outfit.id);
-                                if (btn) {
-                                  const rect = btn.getBoundingClientRect();
-                                  setSeasonDropdownPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 100) });
-                                }
-                                setSeasonDropdownOpen(outfit.id);
-                              }
-                            }}
-                            className="flex items-center gap-0.5 px-1.5 py-0.5 border border-gray-200 rounded text-[10px] text-gray-500 hover:border-gray-300 bg-gray-50 hover:bg-white transition-colors"
-                          >
-                            <span className="truncate max-w-[60px]">
-                              {(outfit.season || []).length === 0
-                                ? '계절'
-                                : (outfit.season || []).map(s => SEASON_LABELS[s] || s).join('·')}
-                            </span>
-                            <ChevronDown size={10} />
-                          </button>
-                        </div>
                       </div>
+                      {outfit.avg_warmth !== undefined && (
+                        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium w-fit ${getWarmthColor(outfit.avg_warmth)}`}>
+                          <Thermometer size={9} />
+                          <span>보온 {outfit.avg_warmth.toFixed(1)} · {getWarmthLabel(outfit.avg_warmth)}</span>
+                        </div>
+                      )}
+                      {outfit.temp_range_f && (
+                        <div className="flex items-center gap-1 text-[9px] text-gray-500">
+                          <span className="font-medium text-gray-600">{outfit.temp_range_f.min}–{outfit.temp_range_f.max}°F</span>
+                          <span className="text-gray-300">|</span>
+                          <div className="flex items-center gap-0.5">
+                            {(outfit.auto_seasons || []).map(s => (
+                              <span key={s} className="flex items-center gap-0.5">
+                                <SeasonIcon season={s} />
+                                <span>{SEASON_LABELS[s]}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {outfit.avg_warmth === undefined && (
+                        <div className="flex items-center gap-1 text-[9px] text-gray-400 italic">
+                          <Thermometer size={9} />
+                          <span>제품 연결 후 계산</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -798,39 +837,6 @@ export default function AdminPins() {
         )}
       </div>
 
-      {seasonDropdownOpen && seasonDropdownPos && (() => {
-        const outfit = outfits.find(o => o.id === seasonDropdownOpen);
-        if (!outfit) return null;
-        return (
-          <>
-            <div
-              className="fixed inset-0 z-30"
-              onClick={() => { setSeasonDropdownOpen(null); setSeasonDropdownPos(null); }}
-            />
-            <div
-              className="fixed z-40 bg-white border border-gray-200 rounded-lg shadow-xl p-2"
-              style={{ top: seasonDropdownPos.top, left: seasonDropdownPos.left, width: seasonDropdownPos.width }}
-            >
-              {ALL_SEASONS.map(s => (
-                <button
-                  key={s}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleOutfitSeasonToggle(outfit.id, s, outfit.season || []);
-                  }}
-                  className={`w-full text-left px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    (outfit.season || []).includes(s)
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  {SEASON_LABELS[s]}
-                </button>
-              ))}
-            </div>
-          </>
-        );
-      })()}
     </div>
   );
 }
