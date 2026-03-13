@@ -120,7 +120,10 @@ export function scoreProductForVibe(product: Product, vibeKey: string, ctx?: Vib
   if (f < scaledMin) formalityScore = Math.max(0, 100 - (scaledMin - f) * 30);
   else if (f > scaledMax) formalityScore = Math.max(0, 100 - (f - scaledMax) * 30);
 
-  const vibeMatchScore = product.vibe?.includes(vibeKey) ? 100 : 30;
+  const precomputedVibeScore = product.vibe_scores?.[vibeKey];
+  const vibeMatchScore = precomputedVibeScore !== undefined
+    ? Math.round(precomputedVibeScore)
+    : product.vibe?.includes(vibeKey) ? 100 : 30;
 
   const MAT_KEYWORDS: Record<string, string[]> = {
     structured: ['wool', 'cotton', 'gabardine', 'poplin', 'neoprene', 'canvas'],

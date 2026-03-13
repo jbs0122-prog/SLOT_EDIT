@@ -471,9 +471,9 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const loadData = async () => {
     setLoading(true);
     try {
-      const PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,created_at,updated_at';
+      const PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,image_features,vibe_scores,created_at,updated_at';
       const [productsResult, itemsResult] = await Promise.all([
-        supabase.from('products').select(PRODUCT_COLS).eq('gender', outfit.gender).order('created_at', { ascending: false }),
+        supabase.from('products').select(PRODUCT_COLS).in('gender', [outfit.gender, 'UNISEX']).order('created_at', { ascending: false }),
         supabase.from('outfit_items').select(`*, product:products(${PRODUCT_COLS})`).eq('outfit_id', outfit.id)
       ]);
       if (productsResult.error) throw productsResult.error;
@@ -487,6 +487,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
         stock_status: p.stock_status || 'in_stock', material: p.material || '',
         color_family: p.color_family || '', color_tone: p.color_tone || '',
         sub_category: p.sub_category || '', pattern: p.pattern || '', formality: p.formality, warmth: p.warmth,
+        image_features: p.image_features || undefined, vibe_scores: p.vibe_scores || undefined,
         created_at: p.created_at, updated_at: p.updated_at,
       } as Product)) || []);
 
@@ -505,6 +506,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
           material: item.product.material || '', color_family: item.product.color_family || '',
           color_tone: item.product.color_tone || '', sub_category: item.product.sub_category || '',
           pattern: item.product.pattern || '', formality: item.product.formality, warmth: item.product.warmth,
+          image_features: item.product.image_features || undefined, vibe_scores: item.product.vibe_scores || undefined,
           created_at: item.product.created_at, updated_at: item.product.updated_at,
         } : undefined
       })) || []);
