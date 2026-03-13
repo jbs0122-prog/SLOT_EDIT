@@ -156,10 +156,10 @@ function computeSeasonMatch(product: Product, targetSeason?: string): number {
 }
 
 function computeBodyTypeMatch(product: Product, bodyType?: string): number {
-  if (!bodyType) return 1;
+  if (!bodyType) return 0;
   const types = product.body_type || [];
-  if (types.length === 0) return 0.7;
-  return types.includes(bodyType) ? 1 : 0.5;
+  if (types.length === 0) return 0;
+  return types.includes(bodyType) ? 1 : -0.5;
 }
 
 function buildReasons(
@@ -168,13 +168,18 @@ function buildReasons(
   seasonMatch: number,
   vibeItemAffinity: number,
   imageCoherenceScore?: number,
-  warmthDiff?: number
+  warmthDiff?: number,
+  bodyTypeMatch?: number
 ): string[] {
   const reasons: string[] = [];
 
-  if (vibeScore.vibeMatchScore >= 100) reasons.push('Vibe 일치');
+  if (vibeScore.vibeMatchScore >= 95) reasons.push('Vibe 일치');
+  else if (vibeScore.vibeMatchScore >= 70) reasons.push('Vibe 유사');
   if (vibeScore.colorTier === 'primary') reasons.push('팔레트 Primary');
   else if (vibeScore.colorTier === 'secondary') reasons.push('팔레트 Secondary');
+
+  if (bodyTypeMatch !== undefined && bodyTypeMatch > 0) reasons.push('체형 매칭');
+  else if (bodyTypeMatch !== undefined && bodyTypeMatch < 0) reasons.push('체형 미매칭');
 
   if (colorHarmonyAvg >= 85) reasons.push('컬러 조화 우수');
   else if (colorHarmonyAvg >= 75) reasons.push('컬러 조화 양호');
@@ -287,17 +292,20 @@ export function getSlotRecommendations(
       ? computeSeasonMatch(product, outfitSeason) * 12
       : 0;
 
+    const bodyTypeBonus = bodyTypeMatch * 8;
+    const vibeAffinityBonus = vibeItemAffinity >= 0.8 ? 12 : vibeItemAffinity >= 0.5 ? 7 : vibeItemAffinity >= 0.3 ? 2 : -3;
+
     const score = Math.round(
       vibeScore.total * 0.38 +
       colorHarmonyAvg * 0.27 +
-      bodyTypeMatch * 10 +
-      vibeItemAffinity * 5 +
+      bodyTypeBonus +
+      vibeAffinityBonus +
       seasonFallback +
       imageCoherenceBonus +
       warmthBonus
     );
 
-    const reasons = buildReasons(vibeScore, colorHarmonyAvg, vibeScore.seasonScore === undefined ? computeSeasonMatch(product, outfitSeason) : 1, vibeItemAffinity, imageCoherence, warmthDiff);
+    const reasons = buildReasons(vibeScore, colorHarmonyAvg, vibeScore.seasonScore === undefined ? computeSeasonMatch(product, outfitSeason) : 1, vibeItemAffinity, imageCoherence, warmthDiff, bodyTypeMatch);
 
     return { product, score, vibeScore, colorHarmonyAvg, reasons };
   });

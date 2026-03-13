@@ -5,6 +5,7 @@ import { RETRO_LUXE } from '../data/vibeItems/retroLuxe';
 import { SPORT_MODERN } from '../data/vibeItems/sportModern';
 import { CREATIVE_LAYERED } from '../data/vibeItems/creativeLayered';
 import type { VibeDefinition, VibeKey } from '../data/vibeItems/types';
+import { getVibeCompatScore } from '../data/vibeItems/vibeDna';
 import type { Product } from '../data/outfits';
 
 const VIBE_MAP: Record<string, VibeDefinition> = {
@@ -113,17 +114,23 @@ export function scoreProductForVibe(product: Product, vibeKey: string, ctx?: Vib
   const colorScore = colorTier === 'primary' ? 100 : colorTier === 'secondary' ? 75 : colorTier === 'accent' ? 50 : 20;
 
   const [fMin, fMax] = def.dna.formality_range;
-  const scaledMin = Math.ceil(fMin / 2);
-  const scaledMax = Math.ceil(fMax / 2);
-  const f = product.formality ?? 3;
+  const f = product.formality ?? 5;
   let formalityScore = 100;
-  if (f < scaledMin) formalityScore = Math.max(0, 100 - (scaledMin - f) * 30);
-  else if (f > scaledMax) formalityScore = Math.max(0, 100 - (f - scaledMax) * 30);
+  if (f < fMin) formalityScore = Math.max(0, 100 - (fMin - f) * 20);
+  else if (f > fMax) formalityScore = Math.max(0, 100 - (f - fMax) * 20);
 
   const precomputedVibeScore = product.vibe_scores?.[vibeKey];
-  const vibeMatchScore = precomputedVibeScore !== undefined
-    ? Math.round(precomputedVibeScore)
-    : product.vibe?.includes(vibeKey) ? 100 : 30;
+  let vibeMatchScore: number;
+  if (precomputedVibeScore !== undefined) {
+    vibeMatchScore = Math.round(precomputedVibeScore);
+  } else if (product.vibe?.includes(vibeKey)) {
+    vibeMatchScore = 100;
+  } else if (product.vibe && product.vibe.length > 0) {
+    const bestAdjacent = Math.max(...product.vibe.map(v => getVibeCompatScore(v, vibeKey)));
+    vibeMatchScore = Math.round(bestAdjacent * 0.7);
+  } else {
+    vibeMatchScore = 40;
+  }
 
   const MAT_KEYWORDS: Record<string, string[]> = {
     structured: ['wool', 'cotton', 'gabardine', 'poplin', 'neoprene', 'canvas'],
