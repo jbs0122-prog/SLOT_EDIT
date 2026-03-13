@@ -230,7 +230,7 @@ export default function AdminPins() {
           loadMore();
         }
       },
-      { rootMargin: '400px' }
+      { rootMargin: '100px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
