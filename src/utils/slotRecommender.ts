@@ -94,6 +94,17 @@ function getFilledColors(linkedItems: OutfitItem[]): ColorDNA[] {
     .filter(dna => dna.family);
 }
 
+const SLOT_COLOR_WEIGHT: Record<string, number> = {
+  outer: 1.5,
+  top: 1.5,
+  bottom: 1.5,
+  mid: 1.2,
+  shoes: 0.8,
+  bag: 0.6,
+  accessory: 0.4,
+  accessory_2: 0.4,
+};
+
 function getFilledColorFamilies(linkedItems: OutfitItem[]): string[] {
   return linkedItems
     .filter(item => item.product)
@@ -101,11 +112,37 @@ function getFilledColorFamilies(linkedItems: OutfitItem[]): string[] {
     .filter(Boolean);
 }
 
-function computeColorHarmonyWithExisting(product: Product, existingColorFamilies: string[]): number {
+interface WeightedColorFamily {
+  family: string;
+  weight: number;
+}
+
+function getWeightedColorFamilies(linkedItems: OutfitItem[]): WeightedColorFamily[] {
+  return linkedItems
+    .filter(item => item.product)
+    .map(item => ({
+      family: resolveColorFamily(item.product!.color || '', item.product!.color_family),
+      weight: SLOT_COLOR_WEIGHT[item.slot_type] ?? 1.0,
+    }))
+    .filter(wc => Boolean(wc.family));
+}
+
+function computeColorHarmonyWithExisting(product: Product, existingColorFamilies: string[], weightedColors?: WeightedColorFamily[]): number {
   if (existingColorFamilies.length === 0) return 75;
 
   const productFamily = resolveColorFamily(product.color || '', product.color_family);
   if (!productFamily) return 50;
+
+  if (weightedColors && weightedColors.length > 0) {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    for (const wc of weightedColors) {
+      const s = getColorHarmonyScore(productFamily, wc.family);
+      weightedSum += s * wc.weight;
+      totalWeight += wc.weight;
+    }
+    return totalWeight > 0 ? weightedSum / totalWeight : 75;
+  }
 
   const scores = existingColorFamilies.map(cf => getColorHarmonyScore(productFamily, cf));
   return scores.reduce((sum, s) => sum + s, 0) / scores.length;
@@ -187,6 +224,7 @@ export function getSlotRecommendations(
 ): SlotRecommendations {
   const category = SLOT_TO_CATEGORY[slotType] || slotType;
   const existingColorFamilies = getFilledColorFamilies(linkedItems);
+  const weightedColorFamilies = getWeightedColorFamilies(linkedItems);
   const linkedProductIds = new Set(linkedItems.map(item => item.product_id));
 
   const adjacentSeasons: Record<string, string[]> = {
@@ -230,7 +268,7 @@ export function getSlotRecommendations(
 
   const scored: RegisteredRecommendation[] = candidates.map(product => {
     const vibeScore = scoreProductForVibe(product, outfitVibe, slotVibeCtx);
-    const colorHarmonyAvg = computeColorHarmonyWithExisting(product, existingColorFamilies);
+    const colorHarmonyAvg = computeColorHarmonyWithExisting(product, existingColorFamilies, weightedColorFamilies);
     const bodyTypeMatch = computeBodyTypeMatch(product, outfitBodyType);
     const vibeItemAffinity = getVibeItemAffinity(product, outfitVibe);
 
@@ -277,7 +315,8 @@ export function getSlotRecommendations(
     allProducts,
     linkedItems,
     existingColorFamilies,
-    maxUnregistered
+    maxUnregistered,
+    outfitGender
   );
 
   return {
@@ -412,7 +451,8 @@ function getUnregisteredRecommendations(
   allProducts: Product[],
   linkedItems: OutfitItem[],
   existingColorFamilies: string[],
-  maxCount: number
+  maxCount: number,
+  outfitGender?: string
 ): UnregisteredRecommendation[] {
   const vk = vibeKey as VibeKey;
   const vibeDef = VIBE_ITEM_DATABASE[vk];
@@ -444,8 +484,9 @@ function getUnregisteredRecommendations(
   }
 
   const registeredCategory = slotType === 'accessory_2' ? 'accessory' : slotType;
+  const genderFilter = outfitGender || linkedItems.find(i => i.product)?.product?.gender;
   const registeredProductTerms = allProducts
-    .filter(p => p.category === registeredCategory && p.gender === linkedItems[0]?.product?.gender)
+    .filter(p => p.category === registeredCategory && (!genderFilter || p.gender === genderFilter || p.gender === 'UNISEX'))
     .flatMap(p => {
       const terms: string[] = [];
       if (p.sub_category) terms.push(p.sub_category.toLowerCase());
