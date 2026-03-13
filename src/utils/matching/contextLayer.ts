@@ -130,8 +130,11 @@ export function computeImageFeatureScore(items: Record<string, Product>): number
   const weights = withFeatures.map(i => i.image_features!.visualWeight);
   const heavyCount = weights.filter(w => w === 'heavy').length;
   const lightCount = weights.filter(w => w === 'light').length;
+  const mediumCount = weights.filter(w => w === 'medium').length;
   if (heavyCount > 0 && lightCount > 0) score += 8;
-  if (heavyCount === weights.length || lightCount === weights.length) score -= 5;
+  else if ((heavyCount > 0 || lightCount > 0) && mediumCount > 0) score += 4;
+  if (heavyCount === weights.length && weights.length >= 3) score -= 8;
+  if (lightCount === weights.length && weights.length >= 3) score -= 5;
 
   const allStyles = withFeatures.flatMap(i => i.image_features!.styleAttributes);
   const styleCounts = new Map<string, number>();
