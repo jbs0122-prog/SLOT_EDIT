@@ -3,7 +3,7 @@ import { Product, OutfitItem } from '../data/outfits';
 import { findBestOutfits, OutfitCandidate, AnchorItem, MatchScore } from './matchingEngine';
 import { removeBackground } from './backgroundRemoval';
 import { getSlotRecommendations } from './slotRecommender';
-import { ITEM_WARMTH_LIMITS } from './matching/beamSearch';
+import { ITEM_WARMTH_LIMITS, shouldIncludeOuter, getMidTier } from './matching/beamSearch';
 
 export interface GenerateOutfitsParams {
   gender: string;
@@ -127,6 +127,7 @@ export async function generateOutfitsAutomatically(
   const bestOutfits = await refineWithAI(ruleBased, count, { gender, bodyType, vibe, targetSeason, targetWarmth }, unusedOnly);
 
   const generatedOutfits: GeneratedOutfit[] = [];
+  const globalUsedInFill = new Set<string>();
 
   for (const { outfit, matchScore } of bestOutfits) {
     const { data: newOutfit, error: outfitError } = await supabase
@@ -193,12 +194,16 @@ export async function generateOutfitsAutomatically(
       if (itemsError) throw itemsError;
     }
 
-    const autoFilledSlots = await fillEmptySlots(
+    const availableForFill = productList.filter(p => !globalUsedInFill.has(p.id));
+
+    const { slots: autoFilledSlots, productIds: filledProductIds } = await fillEmptySlots(
       newOutfit.id,
       items,
-      productList,
-      { gender, bodyType, vibe, targetSeason }
+      availableForFill,
+      { gender, bodyType, vibe, targetSeason, targetWarmth }
     );
+
+    filledProductIds.forEach(id => globalUsedInFill.add(id));
 
     generatedOutfits.push({
       outfitId: newOutfit.id,
@@ -358,16 +363,24 @@ async function fillEmptySlots(
   outfitId: string,
   existingItems: { slot_type: string; product_id: string }[],
   allProducts: Product[],
-  context: { gender: string; bodyType: string; vibe: string; targetSeason?: string }
-): Promise<string[]> {
+  context: { gender: string; bodyType: string; vibe: string; targetSeason?: string; targetWarmth?: number }
+): Promise<{ slots: string[]; productIds: string[] }> {
   const filledSlotTypes = new Set(existingItems.map(i => i.slot_type));
   const seasonExcluded = new Set(context.targetSeason ? (SEASON_EXCLUDED_SLOTS[context.targetSeason] || []) : []);
+
+  const warmthExcluded = new Set<string>();
+  if (!shouldIncludeOuter(context.targetSeason, context.targetWarmth)) {
+    warmthExcluded.add('outer');
+  }
+  if (getMidTier(context.targetSeason, context.targetWarmth) === 'none') {
+    warmthExcluded.add('mid');
+  }
 
   const hasOuter = filledSlotTypes.has('outer');
   const hasMid = filledSlotTypes.has('mid');
 
   const emptyOptionalSlots = OPTIONAL_SLOT_FILL_ORDER.filter(slot => {
-    if (filledSlotTypes.has(slot) || seasonExcluded.has(slot)) return false;
+    if (filledSlotTypes.has(slot) || seasonExcluded.has(slot) || warmthExcluded.has(slot)) return false;
     if (context.targetSeason === 'spring') {
       if (slot === 'mid' && hasOuter) return false;
       if (slot === 'outer' && hasMid) return false;
@@ -375,7 +388,7 @@ async function fillEmptySlots(
     return true;
   });
 
-  if (emptyOptionalSlots.length === 0) return [];
+  if (emptyOptionalSlots.length === 0) return { slots: [], productIds: [] };
 
   const usedProductIds = new Set(existingItems.map(i => i.product_id));
 
@@ -392,6 +405,7 @@ async function fillEmptySlots(
 
   const newItems: { outfit_id: string; product_id: string; slot_type: string }[] = [];
   const filledSlots: string[] = [];
+  const filledProductIds: string[] = [];
 
   const currentHasOuter = filledSlotTypes.has('outer');
   const outerProduct = currentHasOuter
@@ -450,17 +464,18 @@ async function fillEmptySlots(
       product: top.product,
     } as OutfitItem);
     filledSlots.push(slot);
+    filledProductIds.push(top.product.id);
   }
 
   if (newItems.length > 0) {
     const { error } = await supabase.from('outfit_items').insert(newItems);
     if (error) {
       console.error('Auto-fill slot insertion failed:', error);
-      return [];
+      return { slots: [], productIds: [] };
     }
   }
 
-  return filledSlots;
+  return { slots: filledSlots, productIds: filledProductIds };
 }
 
 function getOutfitProductIds(outfit: OutfitCandidate): string[] {

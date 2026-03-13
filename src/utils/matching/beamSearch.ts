@@ -145,15 +145,15 @@ function pickTopCandidates(
   return result.slice(0, maxCount);
 }
 
-function shouldIncludeOuter(season?: string, warmth?: number): boolean {
+export function shouldIncludeOuter(season?: string, warmth?: number): boolean {
   if (season === 'summer') return false;
   if (warmth !== undefined && warmth <= 2) return false;
   return true;
 }
 
-type MidTier = 'none' | 'light-only' | 'light-or-medium' | 'any';
+export type MidTier = 'none' | 'light-only' | 'light-or-medium' | 'any';
 
-function getMidTier(season?: string, warmth?: number): MidTier {
+export function getMidTier(season?: string, warmth?: number): MidTier {
   if (season === 'summer') return 'none';
   if (warmth !== undefined && warmth <= 3) return 'none';
   if (season === 'spring') return 'light-only';
