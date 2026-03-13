@@ -69,7 +69,6 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
 
   const SEASON_EXCLUDED_ANCHOR_SLOTS: Record<string, string[]> = {
     summer: ['outer', 'mid'],
-    spring: ['mid'],
   };
 
   const availableAnchorSlots = useMemo(() => {
@@ -113,6 +112,10 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
 
       if (season) {
         query = query.contains('season', [season]);
+      }
+
+      if (season === 'spring' && anchorSlot === 'mid') {
+        query = query.lte('warmth', 2.5);
       }
 
       const { data, error: err } = await query.order('created_at', { ascending: false });
@@ -415,9 +418,17 @@ export default function AutoOutfitGenerator({ onClose, onGenerated }: AutoOutfit
                             }`}
                           >
                             {slot.label}
+                            {season === 'spring' && slot.value === 'mid' && (
+                              <span className="ml-1 opacity-75">(light)</span>
+                            )}
                           </button>
                         ))}
                       </div>
+                      {season === 'spring' && anchorSlot === 'mid' && (
+                        <p className="mt-1.5 text-[11px] text-amber-600 flex items-center gap-1">
+                          <span>봄 시즌에서 미드레이어는 보온도 2.5 이하 (니트 베스트, 얇은 카디건)만 사용됩니다</span>
+                        </p>
+                      )}
                     </div>
 
                     {anchorSlot && (
