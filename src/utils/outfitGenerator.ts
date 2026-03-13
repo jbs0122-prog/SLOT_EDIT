@@ -559,6 +559,7 @@ async function refineWithAI(
             vibe: p.vibe || [],
             formality: p.formality,
             warmth: p.warmth,
+            image_features: p.image_features || undefined,
           };
         }),
     }));

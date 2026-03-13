@@ -126,6 +126,15 @@ USE THESE RULES to evaluate each outfit. Specifically:
 `;
 }
 
+interface ImageFeaturesSummary {
+  dominantColors: string[];
+  texture: string;
+  visualWeight: string;
+  styleAttributes: string[];
+  patternDetail: string;
+  brightnessLevel: string;
+}
+
 interface OutfitItemSummary {
   slot_type: string;
   name: string;
@@ -139,6 +148,7 @@ interface OutfitItemSummary {
   vibe: string[];
   formality?: number;
   warmth?: number;
+  image_features?: ImageFeaturesSummary;
 }
 
 interface CandidateOutfit {
@@ -254,13 +264,32 @@ PREFER proven items above. PENALIZE untested combinations.
     const vibeDNASection = buildVibeDNASection(context.vibe);
 
     const candidateSummaries = candidates.map((c) => {
+      const hasImageFeatures = c.items.some(i => i.image_features);
       const itemList = c.items
-        .map(
-          (item) =>
-            `  [${item.slot_type}] ${item.brand} ${item.name} (${item.color_family}, ${item.material}, ${item.sub_category}, sil:${item.silhouette}, formality:${item.formality ?? '?'}, warmth:${item.warmth ?? '?'})`
-        )
+        .map((item) => {
+          const base = `  [${item.slot_type}] ${item.brand} ${item.name} (${item.color_family}, ${item.material}, ${item.sub_category}, sil:${item.silhouette}, formality:${item.formality ?? '?'}, warmth:${item.warmth ?? '?'})`;
+          if (!item.image_features) return base;
+          const f = item.image_features;
+          const visual = ` | visual: colors=[${f.dominantColors.join(',')}] tex=${f.texture} weight=${f.visualWeight} style=[${f.styleAttributes.join(',')}] pattern=${f.patternDetail} brightness=${f.brightnessLevel}`;
+          return base + visual;
+        })
         .join("\n");
-      return `Outfit #${c.index} (rule score: ${c.ruleScore}):\n${itemList}`;
+
+      let visualSummary = '';
+      if (hasImageFeatures) {
+        const allColors = c.items.flatMap(i => i.image_features?.dominantColors ?? []);
+        const colorFreq: Record<string, number> = {};
+        for (const col of allColors) colorFreq[col] = (colorFreq[col] || 0) + 1;
+        const topColors = Object.entries(colorFreq).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([c]) => c);
+        const weights = c.items.map(i => i.image_features?.visualWeight).filter(Boolean);
+        const styles = c.items.flatMap(i => i.image_features?.styleAttributes ?? []);
+        const styleFreq: Record<string, number> = {};
+        for (const s of styles) styleFreq[s] = (styleFreq[s] || 0) + 1;
+        const dominantStyles = Object.entries(styleFreq).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([s]) => s);
+        visualSummary = `\n  [VISUAL SUMMARY] palette: ${topColors.join('+')} | weights: ${weights.join('+')} | shared style: ${dominantStyles.join(',')}`;
+      }
+
+      return `Outfit #${c.index} (rule score: ${c.ruleScore}):${visualSummary}\n${itemList}`;
     });
 
     const prompt = `You are a professional fashion stylist AI with deep knowledge of VibeDNA matching rules. Evaluate these outfit candidates and select the best ${topN} outfits.
@@ -279,19 +308,28 @@ CANDIDATE OUTFITS:
 ${candidateSummaries.join("\n\n")}
 
 EVALUATION CRITERIA (weighted by importance):
-1. [30%] COLOR HARMONY: Check against the VibeDNA color palette hierarchy.
+1. [25%] COLOR HARMONY: Check against the VibeDNA color palette hierarchy.
    - Outfits using primarily palette.primary colors score highest
    - Accent colors beyond max_accent_ratio should be penalized
    - Tonal strategy should match the vibe's preferred approach
-2. [25%] FORMALITY COHERENCE: All items should be within the vibe's formality range.
+   - When "visual: colors=[...]" is present, use ACTUAL dominant colors from the image (not just color_family metadata) for more accurate palette evaluation
+2. [20%] FORMALITY COHERENCE: All items should be within the vibe's formality range.
    - Wide spread between item formality values = penalty
    - Items outside the DNA's range = heavy penalty
 3. [20%] SILHOUETTE & PROPORTION: Top+bottom should create the target proportion style.
    - Check if silhouette combination matches the DNA's proportion_style
-4. [15%] TEXTURE & MATERIAL MIX: Verify texture variety meets minimum.
+4. [20%] VISUAL HARMONY (use image_features when available):
+   - "tex=" field: reward texture contrast (e.g. smooth+structured) per DNA rules; penalize all-same texture
+   - "weight=" field: reward heavy+light balance; penalize all-heavy or all-light combinations
+   - "style=[...]" field: reward outfits where 2+ items share a style attribute (e.g. all "minimal" or all "structured")
+   - "pattern=" field: penalize multiple bold_pattern or graphic items together
+   - "brightness=" field: reward dark+light contrast; penalize monotone-dark (3+ dark items)
+   - VISUAL SUMMARY line shows aggregated palette and shared styles — use this for quick harmony check
+   - Items WITHOUT image_features: evaluate based on material/color_family metadata only
+5. [15%] TEXTURE & MATERIAL MIX: Verify texture variety meets minimum.
    - Items should use DNA-preferred materials
    - Forbidden textures = penalty
-5. [10%] TREND & CREATIVITY: Season-appropriate, modern combinations.
+6. [0%] TREND & CREATIVITY: Season-appropriate, modern combinations.
    - Sub-category pairing logic (blazer+slacks, hoodie+sneaker)
    - Era/mood alignment with the vibe
 

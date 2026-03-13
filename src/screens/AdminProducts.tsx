@@ -5,7 +5,7 @@ import ProductForm from './ProductForm';
 import ProductList from './ProductList';
 import CSVUpload from './CSVUpload';
 import VibeQualityDashboard from './VibeQualityDashboard';
-import { Plus, Upload, Loader2 } from 'lucide-react';
+import { Plus, Upload, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 
 const PAGE_SIZE = 40;
 
@@ -74,6 +74,8 @@ export default function AdminProducts() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [enrichmentState, setEnrichmentState] = useState<'idle' | 'running' | 'done'>('idle');
+  const [enrichmentProgress, setEnrichmentProgress] = useState({ done: 0, total: 0, failed: 0 });
 
   const saved = loadSavedFilters();
   const [searchTerm, setSearchTermRaw] = useState(saved?.searchTerm ?? '');
@@ -301,6 +303,68 @@ export default function AdminProducts() {
     setShowCSVUpload(false);
   };
 
+  const handleEnrichImageFeatures = useCallback(async () => {
+    if (enrichmentState === 'running') return;
+    setEnrichmentState('running');
+    setEnrichmentProgress({ done: 0, total: 0, failed: 0 });
+
+    try {
+      const { data: allProducts, error } = await supabase
+        .from('products')
+        .select('id')
+        .filter('image_url', 'not.is', null)
+        .neq('image_url', '')
+        .is('image_features', null);
+
+      if (error) throw error;
+
+      const ids = (allProducts || []).map((p: { id: string }) => p.id);
+      if (ids.length === 0) {
+        setEnrichmentState('done');
+        setEnrichmentProgress({ done: 0, total: 0, failed: 0 });
+        return;
+      }
+
+      const BATCH = 10;
+      let done = 0;
+      let failed = 0;
+      setEnrichmentProgress({ done: 0, total: ids.length, failed: 0 });
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-product-image`;
+      const headers = {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      };
+
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const batch = ids.slice(i, i + BATCH);
+        try {
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ batchProductIds: batch }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const results: Array<{ id: string; success: boolean }> = data.results || [];
+            done += results.filter(r => r.success).length;
+            failed += results.filter(r => !r.success).length;
+          } else {
+            failed += batch.length;
+          }
+        } catch {
+          failed += batch.length;
+        }
+        setEnrichmentProgress({ done, total: ids.length, failed });
+      }
+
+      setEnrichmentState('done');
+    } catch (err) {
+      console.error('Enrichment failed:', err);
+      setEnrichmentState('idle');
+    }
+  }, [enrichmentState]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -309,7 +373,39 @@ export default function AdminProducts() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">제품 관리</h1>
             <p className="text-gray-600">제품을 추가하고 관리하세요</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
+            <button
+              onClick={enrichmentState === 'done' ? () => setEnrichmentState('idle') : handleEnrichImageFeatures}
+              disabled={enrichmentState === 'running'}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                enrichmentState === 'running'
+                  ? 'bg-amber-100 text-amber-700 cursor-not-allowed'
+                  : enrichmentState === 'done'
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-amber-500 text-white hover:bg-amber-600'
+              }`}
+              title="image_features가 없는 모든 제품을 AI로 이미지 분석하여 시각적 특성을 채웁니다"
+            >
+              {enrichmentState === 'running' ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  {enrichmentProgress.total > 0
+                    ? `분석 중 ${enrichmentProgress.done}/${enrichmentProgress.total}`
+                    : '분석 중...'}
+                </>
+              ) : enrichmentState === 'done' ? (
+                <>
+                  <CheckCircle2 size={16} />
+                  완료 {enrichmentProgress.done}개
+                  {enrichmentProgress.failed > 0 && ` (실패 ${enrichmentProgress.failed}개)`}
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  이미지 특성 분석
+                </>
+              )}
+            </button>
             <button
               onClick={() => setShowCSVUpload(true)}
               className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
