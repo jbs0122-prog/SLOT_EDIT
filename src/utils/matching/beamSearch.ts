@@ -8,6 +8,18 @@ import { VibeKey, LookKey, VibeDNA } from '../../data/vibeItems/types';
 
 const MAX_RESULTS = 5000;
 
+const BEAM_POOL_SIZE: Record<string, number> = {
+  top: 12,
+  bottom: 12,
+  shoes: 12,
+  outer: 10,
+  mid: 10,
+  bag: 10,
+  accessory: 10,
+};
+
+const RAW_POOL_MULTIPLIER = 4;
+
 const ITEM_WARMTH_LIMITS: Record<string, Record<string, { min: number; max: number }>> = {
   summer: {
     top:    { min: 1, max: 2.5 },
@@ -95,54 +107,99 @@ function scoreProductForSlot(
   return score;
 }
 
-function pickTopCandidates(
-  products: Product[],
-  maxCount: number,
-  context: AssemblyContext,
-  usageCounts: Record<string, number>
+function diversitySampleFromPool(
+  scored: Array<{ product: Product; score: number }>,
+  maxCount: number
 ): Product[] {
-  if (products.length <= maxCount) return products;
+  const colorBuckets = new Map<string, Array<{ product: Product; score: number }>>();
+  const patternBuckets = new Map<string, Array<{ product: Product; score: number }>>();
 
-  const scored = products.map(p => ({
-    product: p,
-    score: scoreProductForSlot(p, context, usageCounts),
-  }));
-  scored.sort((a, b) => b.score - a.score);
-
-  const colorBuckets = new Map<string, Product[]>();
-  for (const { product } of scored) {
-    const cf = resolveColorFamily(product.color || '', product.color_family) || 'unknown';
+  for (const entry of scored) {
+    const cf = resolveColorFamily(entry.product.color || '', entry.product.color_family) || 'unknown';
     if (!colorBuckets.has(cf)) colorBuckets.set(cf, []);
-    colorBuckets.get(cf)!.push(product);
+    colorBuckets.get(cf)!.push(entry);
+
+    const pat = entry.product.pattern || 'none';
+    if (!patternBuckets.has(pat)) patternBuckets.set(pat, []);
+    patternBuckets.get(pat)!.push(entry);
   }
 
   const result: Product[] = [];
-  const blackBucket = colorBuckets.get('black') || [];
-  const nonBlack = [...colorBuckets.entries()].filter(([k]) => k !== 'black' && k !== 'unknown');
+  const usedIds = new Set<string>();
 
   const maxBlack = Math.max(1, Math.floor(maxCount * 0.25));
-  result.push(...blackBucket.slice(0, maxBlack));
+  const blackEntries = colorBuckets.get('black') || [];
+  for (const entry of blackEntries.slice(0, maxBlack)) {
+    if (result.length >= maxCount) break;
+    result.push(entry.product);
+    usedIds.add(entry.product.id);
+  }
 
-  const remaining = maxCount - result.length;
+  const nonBlack = [...colorBuckets.entries()].filter(([k]) => k !== 'black' && k !== 'unknown');
   if (nonBlack.length > 0) {
+    const remaining = maxCount - result.length;
     const perBucket = Math.max(1, Math.ceil(remaining / nonBlack.length));
     for (const [, bucket] of nonBlack) {
-      for (const p of bucket.slice(0, perBucket)) {
-        if (result.length >= maxCount) break;
-        if (!result.find(r => r.id === p.id)) result.push(p);
+      let added = 0;
+      for (const entry of bucket) {
+        if (result.length >= maxCount || added >= perBucket) break;
+        if (!usedIds.has(entry.product.id)) {
+          result.push(entry.product);
+          usedIds.add(entry.product.id);
+          added++;
+        }
       }
       if (result.length >= maxCount) break;
     }
   }
 
   if (result.length < maxCount) {
+    const patKeys = [...patternBuckets.keys()].filter(k => k !== 'none');
+    for (const pat of patKeys) {
+      if (result.length >= maxCount) break;
+      const bucket = patternBuckets.get(pat)!;
+      for (const entry of bucket) {
+        if (result.length >= maxCount) break;
+        if (!usedIds.has(entry.product.id)) {
+          result.push(entry.product);
+          usedIds.add(entry.product.id);
+          break;
+        }
+      }
+    }
+  }
+
+  if (result.length < maxCount) {
     for (const { product } of scored) {
       if (result.length >= maxCount) break;
-      if (!result.find(r => r.id === product.id)) result.push(product);
+      if (!usedIds.has(product.id)) {
+        result.push(product);
+        usedIds.add(product.id);
+      }
     }
   }
 
   return result.slice(0, maxCount);
+}
+
+function pickTopCandidates(
+  products: Product[],
+  beamSize: number,
+  context: AssemblyContext,
+  usageCounts: Record<string, number>
+): Product[] {
+  if (products.length <= beamSize) return products;
+
+  const rawCap = beamSize * RAW_POOL_MULTIPLIER;
+  const scored = products.map(p => ({
+    product: p,
+    score: scoreProductForSlot(p, context, usageCounts),
+  }));
+  scored.sort((a, b) => b.score - a.score);
+
+  const phase1 = scored.slice(0, rawCap);
+
+  return diversitySampleFromPool(phase1, beamSize);
 }
 
 export function shouldIncludeOuter(season?: string, warmth?: number): boolean {
@@ -272,19 +329,16 @@ function buildSlotPools(
   const midTier = anchor?.slotType === 'mid' ? 'any' as MidTier : getMidTier(context.targetSeason, context.targetWarmth);
   const needsMid = midTier !== 'none';
 
-  const MAX_CORE = 10;
-  const MAX_OPT = 12;
-
   const pools: SlotPool[] = [];
 
-  const slotConfigs: Array<{ slot: SlotName; category: string; required: boolean; max: number }> = [
-    { slot: 'top', category: 'top', required: true, max: MAX_CORE },
-    { slot: 'bottom', category: 'bottom', required: true, max: MAX_CORE },
-    { slot: 'shoes', category: 'shoes', required: true, max: MAX_CORE },
-    { slot: 'outer', category: 'outer', required: false, max: MAX_OPT },
-    { slot: 'mid', category: 'mid', required: false, max: MAX_OPT },
-    { slot: 'bag', category: 'bag', required: false, max: MAX_OPT },
-    { slot: 'accessory', category: 'accessory', required: false, max: MAX_OPT },
+  const slotConfigs: Array<{ slot: SlotName; category: string; required: boolean }> = [
+    { slot: 'top', category: 'top', required: true },
+    { slot: 'bottom', category: 'bottom', required: true },
+    { slot: 'shoes', category: 'shoes', required: true },
+    { slot: 'outer', category: 'outer', required: false },
+    { slot: 'mid', category: 'mid', required: false },
+    { slot: 'bag', category: 'bag', required: false },
+    { slot: 'accessory', category: 'accessory', required: false },
   ];
 
   for (const cfg of slotConfigs) {
@@ -299,7 +353,8 @@ function buildSlotPools(
       if (cfg.slot === 'mid' && midTier !== 'any') {
         raw = raw.filter(p => midPassesTierFilter(p, midTier));
       }
-      pool = pickTopCandidates(raw, cfg.max, context, usageCounts);
+      const beamSize = BEAM_POOL_SIZE[cfg.slot] ?? 12;
+      pool = pickTopCandidates(raw, beamSize, context, usageCounts);
     }
 
     if (pool.length > 0 || cfg.required) {

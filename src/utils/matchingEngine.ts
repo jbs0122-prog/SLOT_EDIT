@@ -39,6 +39,60 @@ export interface AnchorItem {
   slotType: keyof OutfitCandidate;
 }
 
+const DEDUP_STRICT_SLOTS: Array<keyof OutfitCandidate> = ['outer', 'mid'];
+
+function greedySlotDedup(
+  primary: Array<{ outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }>,
+  topN: number,
+  fallback: Array<{ outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }>
+): Array<{ outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }> {
+  const result: Array<{ outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }> = [];
+  const usedSlotProducts = new Map<string, Set<string>>();
+
+  for (const slot of DEDUP_STRICT_SLOTS) {
+    usedSlotProducts.set(slot, new Set<string>());
+  }
+
+  const tryAdd = (candidate: { outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }): boolean => {
+    if (result.length >= topN) return false;
+
+    const conflicts: Array<{ slot: string; id: string }> = [];
+    for (const slot of DEDUP_STRICT_SLOTS) {
+      const product = candidate.outfit[slot] as Product | undefined;
+      if (product) {
+        const used = usedSlotProducts.get(slot)!;
+        if (used.has(product.id)) {
+          conflicts.push({ slot, id: product.id });
+        }
+      }
+    }
+
+    if (conflicts.length > 1) return false;
+
+    result.push(candidate);
+    for (const slot of DEDUP_STRICT_SLOTS) {
+      const product = candidate.outfit[slot] as Product | undefined;
+      if (product) usedSlotProducts.get(slot)!.add(product.id);
+    }
+    return true;
+  };
+
+  for (const candidate of primary) {
+    tryAdd(candidate);
+    if (result.length >= topN) break;
+  }
+
+  if (result.length < topN) {
+    for (const candidate of fallback) {
+      if (result.includes(candidate)) continue;
+      tryAdd(candidate);
+      if (result.length >= topN) break;
+    }
+  }
+
+  return result;
+}
+
 function resultToCandidate(result: OutfitResult): OutfitCandidate {
   const items = result.items;
   return {
@@ -148,14 +202,16 @@ export async function findBestOutfits(
   );
 
   const diverseMap = new Set(diverseScored.map(d => d.result));
-  const finalResults = scored.filter(s => diverseMap.has(s.result));
+  const diverseResults = scored.filter(s => diverseMap.has(s.result));
 
-  if (finalResults.length < topN) {
+  if (diverseResults.length < topN) {
     for (const s of scored) {
-      if (finalResults.length >= topN) break;
-      if (!finalResults.includes(s)) finalResults.push(s);
+      if (diverseResults.length >= topN) break;
+      if (!diverseResults.includes(s)) diverseResults.push(s);
     }
   }
+
+  const finalResults = greedySlotDedup(diverseResults, topN, scored);
 
   return finalResults.slice(0, topN).map(({ outfit, matchScore }) => ({ outfit, matchScore }));
 }
