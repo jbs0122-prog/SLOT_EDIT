@@ -156,10 +156,12 @@ function buildReasons(
 
   if (vibeScore.warmthScore !== undefined) {
     if (vibeScore.warmthScore >= 85) reasons.push('보온도 최적');
+    else if (vibeScore.warmthScore >= 55) reasons.push('보온도 보통');
     else if (vibeScore.warmthScore < 30) reasons.push('보온도 부적합');
   } else if (warmthDiff !== undefined) {
     if (warmthDiff <= 0.5) reasons.push('보온도 최적');
-    else if (warmthDiff > 1.5) reasons.push('보온도 부적합');
+    else if (warmthDiff <= 1.5) reasons.push('보온도 보통');
+    else reasons.push('보온도 부적합');
   }
 
   if (imageCoherenceScore !== undefined) {
@@ -229,7 +231,6 @@ export function getSlotRecommendations(
   const scored: RegisteredRecommendation[] = candidates.map(product => {
     const vibeScore = scoreProductForVibe(product, outfitVibe, slotVibeCtx);
     const colorHarmonyAvg = computeColorHarmonyWithExisting(product, existingColorFamilies);
-    const seasonMatch = computeSeasonMatch(product, outfitSeason);
     const bodyTypeMatch = computeBodyTypeMatch(product, outfitBodyType);
     const vibeItemAffinity = getVibeItemAffinity(product, outfitVibe);
 
@@ -244,22 +245,30 @@ export function getSlotRecommendations(
       ? warmthDiff <= 0.5 ? 8 : warmthDiff <= 1.0 ? 4 : warmthDiff <= 1.5 ? 0 : -8
       : 0;
 
+    const seasonFallback = vibeScore.seasonScore === undefined
+      ? computeSeasonMatch(product, outfitSeason) * 12
+      : 0;
+
     const score = Math.round(
       vibeScore.total * 0.38 +
       colorHarmonyAvg * 0.27 +
       bodyTypeMatch * 10 +
       vibeItemAffinity * 5 +
-      (vibeScore.seasonScore !== undefined ? 0 : seasonMatch * 12) +
+      seasonFallback +
       imageCoherenceBonus +
       warmthBonus
     );
 
-    const reasons = buildReasons(vibeScore, colorHarmonyAvg, seasonMatch, vibeItemAffinity, imageCoherence, warmthDiff);
+    const reasons = buildReasons(vibeScore, colorHarmonyAvg, vibeScore.seasonScore === undefined ? computeSeasonMatch(product, outfitSeason) : 1, vibeItemAffinity, imageCoherence, warmthDiff);
 
     return { product, score, vibeScore, colorHarmonyAvg, reasons };
   });
 
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.vibeScore.total !== a.vibeScore.total) return b.vibeScore.total - a.vibeScore.total;
+    return b.colorHarmonyAvg - a.colorHarmonyAvg;
+  });
   const registered = scored.slice(0, maxRegistered);
 
   const unregistered = getUnregisteredRecommendations(

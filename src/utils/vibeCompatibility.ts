@@ -58,14 +58,14 @@ const ITEM_WARMTH_LIMITS_LOCAL: Record<string, Record<string, { min: number; max
     bottom: { min: 1, max: 3.5 },
     shoes:  { min: 1, max: 4.0 },
     outer:  { min: 2, max: 4.0 },
-    mid:    { min: 1.5, max: 2.5 },
+    mid:    { min: 1.5, max: 3.5 },
   },
   fall: {
     top:    { min: 2, max: 4.5 },
     bottom: { min: 1.5, max: 4.5 },
     shoes:  { min: 1.5, max: 5.0 },
     outer:  { min: 2.5, max: 5.0 },
-    mid:    { min: 2, max: 3.5 },
+    mid:    { min: 2, max: 4.5 },
   },
   winter: {
     top:    { min: 2.5, max: 5.0 },
@@ -122,26 +122,35 @@ export function scoreProductForVibe(product: Product, vibeKey: string, ctx?: Vib
 
   const vibeMatchScore = product.vibe?.includes(vibeKey) ? 100 : 30;
 
+  const MAT_KEYWORDS: Record<string, string[]> = {
+    structured: ['wool', 'cotton', 'gabardine', 'poplin', 'neoprene', 'canvas'],
+    luxe: ['silk', 'cashmere', 'leather', 'velvet', 'satin'],
+    classic: ['cotton', 'wool', 'linen', 'denim'],
+    eco: ['linen', 'hemp', 'organic', 'bamboo'],
+    knit: ['knit', 'cashmere', 'merino', 'mohair', 'wool'],
+    technical: ['nylon', 'polyester', 'gore-tex', 'fleece', 'mesh', 'spandex'],
+    casual: ['cotton', 'jersey', 'fleece', 'denim'],
+    blend: ['blend', 'poly', 'mixed'],
+    sheer: ['mesh', 'chiffon', 'organza', 'lace', 'tulle'],
+  };
+  const IMAGE_TEXTURE_TO_MATERIAL: Record<string, string> = {
+    knit: 'knit', denim: 'denim', smooth: 'cotton', structured: 'structured',
+    sheer: 'mesh', leather: 'leather', lace: 'lace', velvet: 'velvet',
+    satin: 'satin', silk: 'silk', wool: 'wool', canvas: 'canvas',
+  };
+  const matSource = product.material
+    || (product.image_features?.texture ? IMAGE_TEXTURE_TO_MATERIAL[product.image_features.texture] : undefined);
+
   let materialScore = 50;
-  if (product.material) {
-    const matLower = product.material.toLowerCase();
+  if (matSource) {
+    const matLower = matSource.toLowerCase();
     const prefMats = def.dna.material_preferences;
-    const matKeywords: Record<string, string[]> = {
-      structured: ['wool', 'cotton', 'gabardine', 'poplin', 'neoprene', 'canvas'],
-      luxe: ['silk', 'cashmere', 'leather', 'velvet', 'satin'],
-      classic: ['cotton', 'wool', 'linen', 'denim'],
-      eco: ['linen', 'hemp', 'organic', 'bamboo'],
-      knit: ['knit', 'cashmere', 'merino', 'mohair', 'wool'],
-      technical: ['nylon', 'polyester', 'gore-tex', 'fleece', 'mesh', 'spandex'],
-      casual: ['cotton', 'jersey', 'fleece', 'denim'],
-      blend: ['blend', 'poly', 'mixed'],
-      sheer: ['mesh', 'chiffon', 'organza', 'lace', 'tulle'],
-    };
     const matches = prefMats.filter(pref => {
-      const kws = matKeywords[pref] || [];
+      const kws = MAT_KEYWORDS[pref] || [];
       return kws.some(kw => matLower.includes(kw));
     });
-    materialScore = matches.length > 0 ? 70 + Math.min(30, matches.length * 15) : 40;
+    const baseScore = product.material ? 70 : 60;
+    materialScore = matches.length > 0 ? baseScore + Math.min(30, matches.length * 15) : 40;
   }
 
   let seasonScore: number | undefined;

@@ -195,6 +195,7 @@ const REASON_STYLES: Record<string, string> = {
   '시즌 적합':        'bg-rose-50 text-rose-600',
   '시즌 부적합':      'bg-red-50 text-red-600',
   '보온도 최적':      'bg-orange-50 text-orange-700',
+  '보온도 보통':      'bg-yellow-50 text-yellow-700',
   '보온도 부적합':    'bg-red-50 text-red-500',
   '비주얼 코히런스 ★':'bg-indigo-50 text-indigo-700',
   '비주얼 조화 우수': 'bg-slate-50 text-slate-600',
@@ -205,8 +206,9 @@ const REASON_STYLES: Record<string, string> = {
 function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecommendation; onQuickLink: () => void; saving: boolean }) {
   const hasWarmth = rec.product.warmth !== undefined;
   const warmthBad = rec.reasons.includes('보온도 부적합');
+  const warmthOk = rec.reasons.includes('보온도 보통');
   const warmthGood = rec.reasons.includes('보온도 최적');
-  const displayReasons = rec.reasons.filter(r => r !== '보온도 최적' && r !== '보온도 부적합');
+  const displayReasons = rec.reasons.filter(r => r !== '보온도 최적' && r !== '보온도 보통' && r !== '보온도 부적합');
 
   return (
     <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-2 hover:border-blue-300 hover:shadow-sm transition-all group/card">
@@ -226,9 +228,11 @@ function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecomm
             </span>
           )}
           {hasWarmth && (
-            <span className={`inline-flex items-center gap-0.5 ${warmthBad ? 'opacity-40' : ''}`} title={`보온도 ${rec.product.warmth}`}>
+            <span className={`inline-flex items-center gap-0.5 ${warmthBad ? 'opacity-30' : ''}`} title={`보온도 ${rec.product.warmth}`}>
               <WarmthDots value={rec.product.warmth!} />
               {warmthGood && <span className="text-[8px] text-orange-500 font-semibold">✓</span>}
+              {warmthOk && <span className="text-[8px] text-yellow-500">~</span>}
+              {warmthBad && <span className="text-[8px] text-red-400">✗</span>}
             </span>
           )}
           {displayReasons.slice(0, 3).map((r, i) => (
