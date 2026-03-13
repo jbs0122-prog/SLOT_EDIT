@@ -521,37 +521,61 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const handleDragStart = (product: Product) => { setDraggedProduct(product); };
   const handleDragEnd = () => { setDraggedProduct(null); setDragOverSlot(null); stopAutoScroll(); };
 
+  const applyOptimisticLink = useCallback((slotType: string, product: Product) => {
+    setLinkedItems(prev => {
+      const filtered = prev.filter(item => item.slot_type !== slotType);
+      const optimistic: OutfitItem = {
+        id: `optimistic-${slotType}-${Date.now()}`,
+        outfit_id: outfit.id,
+        product_id: product.id,
+        slot_type: slotType,
+        created_at: new Date().toISOString(),
+        product,
+      };
+      return [...filtered, optimistic];
+    });
+  }, [outfit.id]);
+
+  const applyOptimisticRemove = useCallback((itemId: string) => {
+    setLinkedItems(prev => prev.filter(item => item.id !== itemId));
+  }, []);
+
   const handleDrop = async (slotType: string) => {
     if (!draggedProduct) return;
+    const product = draggedProduct;
+    applyOptimisticLink(slotType, product);
+    setDraggedProduct(null);
     setSaving(true);
     try {
       const existingItem = linkedItems.find(item => item.slot_type === slotType);
       if (existingItem) {
         await supabase.from('outfit_items').delete().eq('id', existingItem.id);
       }
-      const { error } = await supabase.from('outfit_items').insert([{ outfit_id: outfit.id, product_id: draggedProduct.id, slot_type: slotType }]);
+      const { error } = await supabase.from('outfit_items').insert([{ outfit_id: outfit.id, product_id: product.id, slot_type: slotType }]);
       if (error) throw error;
-      await loadData();
+      loadData();
       onLinksUpdated();
     } catch (error) {
       console.error('Link error:', error);
       alert('연결 실패: ' + (error as Error).message);
+      await loadData();
     } finally {
       setSaving(false);
-      setDraggedProduct(null);
     }
   };
 
   const handleRemoveLink = async (itemId: string) => {
+    applyOptimisticRemove(itemId);
     setSaving(true);
     try {
       const { error } = await supabase.from('outfit_items').delete().eq('id', itemId);
       if (error) throw error;
-      await loadData();
+      loadData();
       onLinksUpdated();
     } catch (error) {
       console.error('Remove error:', error);
       alert('제거 실패: ' + (error as Error).message);
+      await loadData();
     } finally {
       setSaving(false);
     }
@@ -704,6 +728,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   };
 
   const handleQuickLink = async (slotType: string, product: Product) => {
+    applyOptimisticLink(slotType, product);
     setSaving(true);
     try {
       const existingItem = linkedItems.find(item => item.slot_type === slotType);
@@ -712,11 +737,12 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       }
       const { error } = await supabase.from('outfit_items').insert([{ outfit_id: outfit.id, product_id: product.id, slot_type: slotType }]);
       if (error) throw error;
-      await loadData();
+      loadData();
       onLinksUpdated();
     } catch (error) {
       console.error('Quick link error:', error);
       alert('연결 실패: ' + (error as Error).message);
+      await loadData();
     } finally {
       setSaving(false);
     }
