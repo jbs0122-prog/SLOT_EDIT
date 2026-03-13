@@ -54,9 +54,10 @@ function greedySlotDedup(
     usedSlotProducts.set(slot, new Set<string>());
   }
 
+  const ALL_SLOTS: Array<keyof OutfitCandidate> = ['outer', 'mid', 'top', 'bottom', 'shoes'];
   const getResultKey = (candidate: { outfit: OutfitCandidate }): string =>
-    DEDUP_STRICT_SLOTS
-      .map(slot => (candidate.outfit[slot] as Product | undefined)?.id ?? '')
+    ALL_SLOTS
+      .map(slot => (candidate.outfit[slot] as Product | undefined)?.id ?? 'none')
       .join('|');
 
   const countConflicts = (candidate: { outfit: OutfitCandidate }): number => {

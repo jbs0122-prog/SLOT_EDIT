@@ -45,14 +45,14 @@ export function selectDiverseOutfits(
 ): ScoredOutfit[] {
   if (scored.length <= topN) return scored;
 
-  const pool = scored.slice(0, Math.min(scored.length, topN * 30));
+  const pool = scored.slice(0, Math.min(scored.length, topN * 60));
   const selected: ScoredOutfit[] = [];
   const outerCounts = new Map<string, number>();
   const paletteCounts = new Map<string, number>();
   const productCounts = new Map<string, number>();
-  const maxOuterRepeat = Math.max(2, Math.ceil(topN / 4));
-  const maxPaletteRepeat = Math.max(1, Math.ceil(topN / 4));
-  const maxProductRepeat = 1;
+  const maxOuterRepeat = Math.max(3, Math.ceil(topN / 3));
+  const maxPaletteRepeat = Math.max(2, Math.ceil(topN / 3));
+  const maxProductRepeat = 2;
 
   const trySelect = (
     enforceProductLimit: boolean,
