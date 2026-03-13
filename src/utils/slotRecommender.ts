@@ -7,6 +7,7 @@ import { resolveColorFamily, getColorHarmonyScore, getColorDNA, type ColorDNA } 
 import { getVibeItemAffinity } from './matching/vibeAffinity';
 import { inferMaterialGroup, getMaterialCompatScore, MATERIAL_GROUPS } from './matching/itemDna';
 import { ITEM_WARMTH_LIMITS } from './matching/beamSearch';
+import { computeImageFeatureScore } from './matching/contextLayer';
 
 export interface RegisteredRecommendation {
   product: Product;
@@ -128,7 +129,9 @@ function buildReasons(
   vibeScore: VibeCompatScore,
   colorHarmonyAvg: number,
   seasonMatch: number,
-  vibeItemAffinity: number
+  vibeItemAffinity: number,
+  imageCoherenceScore?: number,
+  warmthDiff?: number
 ): string[] {
   const reasons: string[] = [];
 
@@ -154,6 +157,15 @@ function buildReasons(
   if (vibeScore.warmthScore !== undefined) {
     if (vibeScore.warmthScore >= 85) reasons.push('보온도 최적');
     else if (vibeScore.warmthScore < 30) reasons.push('보온도 부적합');
+  } else if (warmthDiff !== undefined) {
+    if (warmthDiff <= 0.5) reasons.push('보온도 최적');
+    else if (warmthDiff > 1.5) reasons.push('보온도 부적합');
+  }
+
+  if (imageCoherenceScore !== undefined) {
+    if (imageCoherenceScore >= 90) reasons.push('비주얼 코히런스 ★');
+    else if (imageCoherenceScore >= 80) reasons.push('비주얼 조화 우수');
+    else if (imageCoherenceScore < 55) reasons.push('비주얼 이질감');
   }
 
   return reasons;
@@ -168,7 +180,8 @@ export function getSlotRecommendations(
   outfitBodyType?: string,
   outfitSeason?: string,
   maxRegistered: number = 5,
-  maxUnregistered: number = 3
+  maxUnregistered: number = 3,
+  targetWarmth?: number
 ): SlotRecommendations {
   const category = SLOT_TO_CATEGORY[slotType] || slotType;
   const existingColorFamilies = getFilledColorFamilies(linkedItems);
@@ -194,13 +207,24 @@ export function getSlotRecommendations(
       if (limits && (p.warmth < limits.min - 0.5 || p.warmth > limits.max + 0.5)) return false;
     }
 
+    if (targetWarmth !== undefined && typeof p.warmth === 'number') {
+      const diff = Math.abs(p.warmth - targetWarmth);
+      if (diff > 2.0) return false;
+    }
+
     return true;
   });
 
   const slotVibeCtx: VibeScoreContext = {
     season: outfitSeason,
     slotType,
+    targetWarmth,
   };
+
+  const existingItemsMap: Record<string, Product> = {};
+  linkedItems.forEach(li => {
+    if (li.product) existingItemsMap[li.slot_type] = li.product;
+  });
 
   const scored: RegisteredRecommendation[] = candidates.map(product => {
     const vibeScore = scoreProductForVibe(product, outfitVibe, slotVibeCtx);
@@ -209,15 +233,28 @@ export function getSlotRecommendations(
     const bodyTypeMatch = computeBodyTypeMatch(product, outfitBodyType);
     const vibeItemAffinity = getVibeItemAffinity(product, outfitVibe);
 
+    const hypotheticalItems = { ...existingItemsMap, [slotType]: product };
+    const imageCoherence = computeImageFeatureScore(hypotheticalItems);
+    const imageCoherenceBonus = (imageCoherence - 70) * 0.08;
+
+    const warmthDiff = targetWarmth !== undefined && typeof product.warmth === 'number'
+      ? Math.abs(product.warmth - targetWarmth)
+      : undefined;
+    const warmthBonus = warmthDiff !== undefined
+      ? warmthDiff <= 0.5 ? 8 : warmthDiff <= 1.0 ? 4 : warmthDiff <= 1.5 ? 0 : -8
+      : 0;
+
     const score = Math.round(
-      vibeScore.total * 0.40 +
-      colorHarmonyAvg * 0.30 +
+      vibeScore.total * 0.38 +
+      colorHarmonyAvg * 0.27 +
       bodyTypeMatch * 10 +
       vibeItemAffinity * 5 +
-      (vibeScore.seasonScore !== undefined ? 0 : seasonMatch * 15)
+      (vibeScore.seasonScore !== undefined ? 0 : seasonMatch * 12) +
+      imageCoherenceBonus +
+      warmthBonus
     );
 
-    const reasons = buildReasons(vibeScore, colorHarmonyAvg, seasonMatch, vibeItemAffinity);
+    const reasons = buildReasons(vibeScore, colorHarmonyAvg, seasonMatch, vibeItemAffinity, imageCoherence, warmthDiff);
 
     return { product, score, vibeScore, colorHarmonyAvg, reasons };
   });
@@ -938,7 +975,8 @@ export function getAllSlotRecommendations(
   outfitVibe: string,
   outfitGender: string,
   outfitBodyType?: string,
-  outfitSeason?: string
+  outfitSeason?: string,
+  targetWarmth?: number
 ): SlotRecommendations[] {
   const allSlots = ['outer', 'mid', 'top', 'bottom', 'shoes', 'bag', 'accessory', 'accessory_2'];
   const filledSlots = new Set(linkedItems.map(item => item.slot_type));
@@ -953,7 +991,10 @@ export function getAllSlotRecommendations(
         outfitVibe,
         outfitGender,
         outfitBodyType,
-        outfitSeason
+        outfitSeason,
+        5,
+        3,
+        targetWarmth
       )
     );
 }

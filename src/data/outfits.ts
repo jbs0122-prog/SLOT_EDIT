@@ -67,6 +67,8 @@ export interface Outfit {
   tpo?: string;
   status?: string;
   prompt_flatlay?: string;
+  target_warmth?: number;
+  target_season?: string;
   created_at?: string;
   updated_at?: string;
   items?: OutfitItem[];

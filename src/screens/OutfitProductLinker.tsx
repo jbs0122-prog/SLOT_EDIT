@@ -57,6 +57,27 @@ function ScoreBadge({ score }: { score: number }) {
   return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>{score}</span>;
 }
 
+const SEASON_BADGE: Record<string, { label: string; className: string }> = {
+  spring: { label: '봄', className: 'bg-rose-50 text-rose-600 border-rose-200' },
+  summer: { label: '여름', className: 'bg-sky-50 text-sky-600 border-sky-200' },
+  fall:   { label: '가을', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  winter: { label: '겨울', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+};
+
+function WarmthDots({ value }: { value: number }) {
+  const filled = Math.round(value);
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {[1,2,3,4,5].map(i => (
+        <span
+          key={i}
+          className={`w-1.5 h-1.5 rounded-full ${i <= filled ? 'bg-orange-400' : 'bg-gray-200'}`}
+        />
+      ))}
+    </span>
+  );
+}
+
 interface SlotRecommendationPanelProps {
   slotValue: string;
   recommendations?: SlotRecommendations;
@@ -64,9 +85,11 @@ interface SlotRecommendationPanelProps {
   onToggle: () => void;
   onQuickLink: (product: Product) => void;
   saving: boolean;
+  season?: string;
+  targetWarmth?: number;
 }
 
-function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggle, onQuickLink, saving }: SlotRecommendationPanelProps) {
+function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggle, onQuickLink, saving, season, targetWarmth }: SlotRecommendationPanelProps) {
   const hasRegistered = recommendations && recommendations.registered.length > 0;
   const hasUnregistered = recommendations && recommendations.unregistered.length > 0;
   const hasAny = hasRegistered || hasUnregistered;
@@ -80,6 +103,8 @@ function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggl
     );
   }
 
+  const seasonBadge = season ? SEASON_BADGE[season] : null;
+
   return (
     <div>
       <button
@@ -90,10 +115,10 @@ function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggl
             : 'bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-100 hover:border-blue-300'
         }`}
       >
-        <div className="flex items-center gap-2 text-blue-700">
-          <Sparkles size={13} className="text-blue-500" />
-          <span className="font-semibold text-xs">AI 추천 아이템</span>
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2 text-blue-700 min-w-0">
+          <Sparkles size={13} className="text-blue-500 shrink-0" />
+          <span className="font-semibold text-xs shrink-0">AI 추천 아이템</span>
+          <div className="flex items-center gap-1 flex-wrap">
             {hasRegistered && (
               <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
                 등록 {recommendations!.registered.length}
@@ -104,9 +129,19 @@ function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggl
                 미등록 {recommendations!.unregistered.length}
               </span>
             )}
+            {seasonBadge && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${seasonBadge.className}`}>
+                {seasonBadge.label}
+              </span>
+            )}
+            {targetWarmth !== undefined && (
+              <span className="inline-flex items-center gap-1 text-[9px] text-gray-500">
+                <WarmthDots value={targetWarmth} />
+              </span>
+            )}
           </div>
         </div>
-        {expanded ? <ChevronUp size={13} className="text-blue-400" /> : <ChevronDown size={13} className="text-blue-400" />}
+        {expanded ? <ChevronUp size={13} className="text-blue-400 shrink-0" /> : <ChevronDown size={13} className="text-blue-400 shrink-0" />}
       </button>
 
       {expanded && (
@@ -149,7 +184,30 @@ function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggl
   );
 }
 
+const REASON_STYLES: Record<string, string> = {
+  'Vibe 일치':        'bg-blue-50 text-blue-700',
+  '팔레트 Primary':   'bg-amber-50 text-amber-700',
+  '팔레트 Secondary': 'bg-sky-50 text-sky-700',
+  '컬러 조화 우수':   'bg-emerald-50 text-emerald-700',
+  '컬러 조화 양호':   'bg-teal-50 text-teal-700',
+  '스타일 정확 매칭': 'bg-violet-50 text-violet-700',
+  '스타일 유사':      'bg-purple-50 text-purple-600',
+  '시즌 적합':        'bg-rose-50 text-rose-600',
+  '시즌 부적합':      'bg-red-50 text-red-600',
+  '보온도 최적':      'bg-orange-50 text-orange-700',
+  '보온도 부적합':    'bg-red-50 text-red-500',
+  '비주얼 코히런스 ★':'bg-indigo-50 text-indigo-700',
+  '비주얼 조화 우수': 'bg-slate-50 text-slate-600',
+  '비주얼 이질감':    'bg-gray-100 text-gray-400',
+  '소재 적합':        'bg-lime-50 text-lime-700',
+};
+
 function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecommendation; onQuickLink: () => void; saving: boolean }) {
+  const hasWarmth = rec.product.warmth !== undefined;
+  const warmthBad = rec.reasons.includes('보온도 부적합');
+  const warmthGood = rec.reasons.includes('보온도 최적');
+  const displayReasons = rec.reasons.filter(r => r !== '보온도 최적' && r !== '보온도 부적합');
+
   return (
     <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-2 hover:border-blue-300 hover:shadow-sm transition-all group/card">
       <img
@@ -167,8 +225,14 @@ function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecomm
               {COLOR_TIER_LABELS[rec.vibeScore.colorTier]}
             </span>
           )}
-          {rec.reasons.slice(0, 2).map((r, i) => (
-            <span key={i} className="text-[8px] px-1 py-0.5 bg-gray-100 text-gray-500 rounded">{r}</span>
+          {hasWarmth && (
+            <span className={`inline-flex items-center gap-0.5 ${warmthBad ? 'opacity-40' : ''}`} title={`보온도 ${rec.product.warmth}`}>
+              <WarmthDots value={rec.product.warmth!} />
+              {warmthGood && <span className="text-[8px] text-orange-500 font-semibold">✓</span>}
+            </span>
+          )}
+          {displayReasons.slice(0, 3).map((r, i) => (
+            <span key={i} className={`text-[8px] px-1 py-0.5 rounded ${REASON_STYLES[r] ?? 'bg-gray-100 text-gray-500'}`}>{r}</span>
           ))}
         </div>
       </div>
@@ -527,6 +591,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const getSlotItem = (slotType: string): OutfitItem | undefined => linkedItems.find(item => item.slot_type === slotType);
 
   const outfitSeason = useMemo(() => {
+    if (outfit.target_season) return outfit.target_season;
     if (outfit.season && outfit.season.length > 0) return outfit.season[0];
     const warmths = linkedItems
       .map(i => i.product?.warmth)
@@ -543,12 +608,28 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     if (month >= 6 && month <= 8) return 'summer';
     if (month >= 9 && month <= 11) return 'fall';
     return 'winter';
-  }, [outfit.season, linkedItems]);
+  }, [outfit.target_season, outfit.season, linkedItems]);
+
+  const targetWarmth = useMemo<number | undefined>(() => {
+    if (outfit.target_warmth !== undefined && outfit.target_warmth !== null) {
+      return outfit.target_warmth;
+    }
+    const clothingSlots = ['outer', 'mid', 'top', 'bottom'];
+    const warmths = linkedItems
+      .filter(i => clothingSlots.includes(i.slot_type))
+      .map(i => i.product?.warmth)
+      .filter((w): w is number => typeof w === 'number');
+    if (warmths.length >= 2) {
+      return warmths.reduce((a, b) => a + b, 0) / warmths.length;
+    }
+    return undefined;
+  }, [outfit.target_warmth, linkedItems]);
 
   const vibeCtx = useMemo<VibeScoreContext>(() => ({
     season: outfitSeason,
     slotType: selectedCategory !== 'all' ? selectedCategory : undefined,
-  }), [outfitSeason, selectedCategory]);
+    targetWarmth,
+  }), [outfitSeason, selectedCategory, targetWarmth]);
 
   // #12: Vibe-aware product sorting
   const filteredProducts = useMemo(() => {
@@ -592,13 +673,16 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
           outfit.vibe || '',
           outfit.gender,
           outfit.body_type,
-          outfitSeason
+          outfitSeason,
+          5,
+          3,
+          targetWarmth
         );
         map.set(slot.value, recs);
       }
     }
     return map;
-  }, [availableProducts, linkedItems, outfit.vibe, outfit.gender, outfit.body_type, outfitSeason]);
+  }, [availableProducts, linkedItems, outfit.vibe, outfit.gender, outfit.body_type, outfitSeason, targetWarmth]);
 
   const [expandedRecSlots, setExpandedRecSlots] = useState<Set<string>>(
     new Set(['outer', 'top', 'bottom', 'shoes'])
@@ -756,14 +840,28 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">코디 슬롯</h3>
-              <div className="text-sm text-gray-500 mb-3">
-                {outfit.gender} / {outfit.body_type} / {outfit.vibe}
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="text-sm text-gray-500">{outfit.gender} / {outfit.body_type} / {outfit.vibe}</span>
+                {outfitSeason && SEASON_BADGE[outfitSeason] && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${SEASON_BADGE[outfitSeason].className}`}>
+                    {SEASON_BADGE[outfitSeason].label}
+                    {outfit.target_season ? ' (설정)' : ' (추론)'}
+                  </span>
+                )}
+                {targetWarmth !== undefined && (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5">
+                    보온
+                    <WarmthDots value={targetWarmth} />
+                    <span className="font-medium text-gray-700">{targetWarmth.toFixed(1)}</span>
+                    {outfit.target_warmth !== undefined ? <span className="text-[8px] text-gray-400">(설정)</span> : <span className="text-[8px] text-gray-400">(추론)</span>}
+                  </span>
+                )}
               </div>
 
               <div className="space-y-3">
                 {SLOT_TYPES.map(slot => {
                   const item = getSlotItem(slot.value);
-                  const slotCtx: VibeScoreContext = { season: outfitSeason, slotType: slot.value };
+                  const slotCtx: VibeScoreContext = { season: outfitSeason, slotType: slot.value, targetWarmth };
                   const itemScore = item?.product ? scoreProductForVibe(item.product, outfit.vibe || '', slotCtx) : null;
                   return (
                     <div
@@ -812,6 +910,8 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                           onToggle={() => toggleRecSlot(slot.value)}
                           onQuickLink={(product) => handleQuickLink(slot.value, product)}
                           saving={saving}
+                          season={outfitSeason}
+                          targetWarmth={targetWarmth}
                         />
                       )}
                     </div>

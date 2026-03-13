@@ -145,6 +145,8 @@ export async function generateOutfitsAutomatically(
           flatlay_pins: [],
           on_model_pins: [],
           prompt_flatlay: '',
+          ...(targetWarmth !== undefined ? { target_warmth: targetWarmth } : {}),
+          ...(targetSeason ? { target_season: targetSeason } : {}),
         },
       ])
       .select()
