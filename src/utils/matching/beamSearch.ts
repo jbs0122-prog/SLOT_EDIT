@@ -170,6 +170,20 @@ function diversitySampleFromPool(
   }
 
   if (result.length < maxCount) {
+    const blackInResult = result.filter(
+      p => (resolveColorFamily(p.color || '', p.color_family) || 'unknown') === 'black'
+    ).length;
+    for (const { product } of scored) {
+      if (result.length >= maxCount) break;
+      if (usedIds.has(product.id)) continue;
+      const cf = resolveColorFamily(product.color || '', product.color_family) || 'unknown';
+      if (cf === 'black' && blackInResult >= maxBlack) continue;
+      result.push(product);
+      usedIds.add(product.id);
+    }
+  }
+
+  if (result.length < maxCount) {
     for (const { product } of scored) {
       if (result.length >= maxCount) break;
       if (!usedIds.has(product.id)) {

@@ -48,45 +48,57 @@ function greedySlotDedup(
 ): Array<{ outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }> {
   const result: Array<{ outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }> = [];
   const usedSlotProducts = new Map<string, Set<string>>();
+  const addedResultIds = new Set<string>();
 
   for (const slot of DEDUP_STRICT_SLOTS) {
     usedSlotProducts.set(slot, new Set<string>());
   }
 
-  const tryAdd = (candidate: { outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }): boolean => {
-    if (result.length >= topN) return false;
+  const getResultKey = (candidate: { outfit: OutfitCandidate }): string =>
+    DEDUP_STRICT_SLOTS
+      .map(slot => (candidate.outfit[slot] as Product | undefined)?.id ?? '')
+      .join('|');
 
-    const conflicts: Array<{ slot: string; id: string }> = [];
+  const countConflicts = (candidate: { outfit: OutfitCandidate }): number => {
+    let conflicts = 0;
     for (const slot of DEDUP_STRICT_SLOTS) {
       const product = candidate.outfit[slot] as Product | undefined;
-      if (product) {
-        const used = usedSlotProducts.get(slot)!;
-        if (used.has(product.id)) {
-          conflicts.push({ slot, id: product.id });
-        }
+      if (product && usedSlotProducts.get(slot)!.has(product.id)) {
+        conflicts++;
       }
     }
+    return conflicts;
+  };
 
-    if (conflicts.length > 1) return false;
-
+  const commit = (candidate: { outfit: OutfitCandidate; matchScore: MatchScore; result: OutfitResult }): void => {
     result.push(candidate);
+    addedResultIds.add(getResultKey(candidate));
     for (const slot of DEDUP_STRICT_SLOTS) {
       const product = candidate.outfit[slot] as Product | undefined;
       if (product) usedSlotProducts.get(slot)!.add(product.id);
     }
-    return true;
   };
 
   for (const candidate of primary) {
-    tryAdd(candidate);
     if (result.length >= topN) break;
+    if (countConflicts(candidate) === 0) commit(candidate);
+  }
+
+  if (result.length < topN) {
+    for (const candidate of primary) {
+      if (result.length >= topN) break;
+      const key = getResultKey(candidate);
+      if (addedResultIds.has(key)) continue;
+      if (countConflicts(candidate) <= 1) commit(candidate);
+    }
   }
 
   if (result.length < topN) {
     for (const candidate of fallback) {
-      if (result.includes(candidate)) continue;
-      tryAdd(candidate);
       if (result.length >= topN) break;
+      const key = getResultKey(candidate);
+      if (addedResultIds.has(key)) continue;
+      commit(candidate);
     }
   }
 
