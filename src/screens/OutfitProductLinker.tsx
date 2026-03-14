@@ -417,10 +417,15 @@ function UnregisteredRecCard({ rec }: { rec: UnregisteredRecommendation }) {
   );
 }
 
+const PRODUCTS_PAGE_SIZE = 50;
+
 export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }: OutfitProductLinkerProps) {
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+  const [productsPage, setProductsPage] = useState(0);
+  const [productsHasMore, setProductsHasMore] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
   const [linkedItems, setLinkedItems] = useState<OutfitItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [slotsLoading, setSlotsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [draggedProduct, setDraggedProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -436,12 +441,17 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const [downloadingModel, setDownloadingModel] = useState(false);
   const [vibeSort, setVibeSort] = useState(true);
   const [debouncedLinkedItems, setDebouncedLinkedItems] = useState<OutfitItem[]>([]);
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [, startTransition] = useTransition();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const productListRef = useRef<HTMLDivElement>(null);
+  const productSentinelRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef<number | null>(null);
   const recDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const productsLoadingRef = useRef(false);
+  const productsHasMoreRef = useRef(false);
+  const productsPageRef = useRef(0);
+  const searchFilterRef = useRef({ search: '', category: 'all' });
 
   const stopAutoScroll = useCallback(() => {
     if (autoScrollRef.current !== null) {
@@ -471,7 +481,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     }
   }, [stopAutoScroll]);
 
-  useEffect(() => { loadData(); }, [outfit.id]);
+  useEffect(() => { loadSlots(); loadProductsPage(true); }, [outfit.id]);
 
   useEffect(() => {
     if (recDebounceRef.current) clearTimeout(recDebounceRef.current);
@@ -486,52 +496,104 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 200);
+      searchFilterRef.current = { search: searchTerm, category: selectedCategory };
+      loadProductsPage(true);
+    }, 300);
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [searchTerm]);
+  }, [searchTerm, selectedCategory, loadProductsPage]);
 
-  const loadData = async () => {
-    setLoading(true);
+  useEffect(() => {
+    const sentinel = productSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadProductsPage(false);
+      },
+      { rootMargin: '100px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadProductsPage]);
+
+  const mapProduct = useCallback((p: any): Product => ({
+    id: p.id, brand: p.brand, name: p.name, category: p.category, gender: p.gender,
+    body_type: p.body_type || [], vibe: p.vibe || [], color: p.color || '', season: p.season || [],
+    silhouette: p.silhouette || '', image_url: p.image_url, nobg_image_url: p.nobg_image_url || null,
+    product_link: p.product_link || '', affiliate_link: p.affiliate_link || '', price: p.price,
+    stock_status: p.stock_status || 'in_stock', material: p.material || '',
+    color_family: p.color_family || '', color_tone: p.color_tone || '',
+    sub_category: p.sub_category || '', pattern: p.pattern || '', formality: p.formality, warmth: p.warmth,
+    image_features: p.image_features || undefined, vibe_scores: p.vibe_scores || undefined,
+    created_at: '', updated_at: '',
+  }), []);
+
+  const loadSlots = useCallback(async () => {
+    setSlotsLoading(true);
     try {
-      const PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,image_features,vibe_scores';
       const LINKED_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,image_features,vibe_scores';
-      const [productsResult, itemsResult] = await Promise.all([
-        supabase.from('products').select(PRODUCT_COLS).in('gender', [outfit.gender, 'UNISEX']).order('created_at', { ascending: false }),
-        supabase.from('outfit_items').select(`*, product:products(${LINKED_COLS})`).eq('outfit_id', outfit.id)
-      ]);
-      if (productsResult.error) throw productsResult.error;
-      if (itemsResult.error) throw itemsResult.error;
-
-      const mapProduct = (p: any): Product => ({
-        id: p.id, brand: p.brand, name: p.name, category: p.category, gender: p.gender,
-        body_type: p.body_type || [], vibe: p.vibe || [], color: p.color || '', season: p.season || [],
-        silhouette: p.silhouette || '', image_url: p.image_url, nobg_image_url: p.nobg_image_url || null,
-        product_link: p.product_link || '', affiliate_link: p.affiliate_link || '', price: p.price,
-        stock_status: p.stock_status || 'in_stock', material: p.material || '',
-        color_family: p.color_family || '', color_tone: p.color_tone || '',
-        sub_category: p.sub_category || '', pattern: p.pattern || '', formality: p.formality, warmth: p.warmth,
-        image_features: p.image_features || undefined, vibe_scores: p.vibe_scores || undefined,
-        created_at: '', updated_at: '',
-      });
-
-      const mappedProducts = productsResult.data?.map(mapProduct) || [];
-      setAvailableProducts(mappedProducts);
-
-      const mappedItems: OutfitItem[] = itemsResult.data?.map((item: any) => ({
+      const { data, error } = await supabase
+        .from('outfit_items')
+        .select(`*, product:products(${LINKED_COLS})`)
+        .eq('outfit_id', outfit.id);
+      if (error) throw error;
+      const mappedItems: OutfitItem[] = (data || []).map((item: any) => ({
         id: item.id, outfit_id: item.outfit_id, product_id: item.product_id,
         slot_type: item.slot_type, created_at: item.created_at,
         product: item.product ? mapProduct(item.product) : undefined,
-      })) || [];
+      }));
       setLinkedItems(mappedItems);
       setDebouncedLinkedItems(mappedItems);
     } catch (error) {
-      console.error('Load error:', error);
-      alert('데이터 로드 실패: ' + (error as Error).message);
+      console.error('Slots load error:', error);
     } finally {
-      setLoading(false);
+      setSlotsLoading(false);
     }
-  };
+  }, [outfit.id, mapProduct]);
+
+  const loadProductsPage = useCallback(async (reset = false) => {
+    if (productsLoadingRef.current) return;
+    if (!reset && !productsHasMoreRef.current) return;
+    productsLoadingRef.current = true;
+    setProductsLoading(true);
+    const page = reset ? 0 : productsPageRef.current;
+    const from = page * PRODUCTS_PAGE_SIZE;
+    const to = from + PRODUCTS_PAGE_SIZE - 1;
+    const { search, category } = searchFilterRef.current;
+    try {
+      const PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,image_features,vibe_scores';
+      let q = supabase
+        .from('products')
+        .select(PRODUCT_COLS)
+        .in('gender', [outfit.gender, 'UNISEX'])
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (search) q = q.or(`name.ilike.%${search}%,brand.ilike.%${search}%`);
+      if (category !== 'all') q = q.eq('category', category);
+      const { data, error } = await q;
+      if (error) throw error;
+      const mapped = (data || []).map(mapProduct);
+      if (reset) {
+        setAvailableProducts(mapped);
+      } else {
+        setAvailableProducts(prev => [...prev, ...mapped]);
+      }
+      const hasMore = mapped.length >= PRODUCTS_PAGE_SIZE;
+      productsHasMoreRef.current = hasMore;
+      setProductsHasMore(hasMore);
+      const nextPage = page + 1;
+      productsPageRef.current = nextPage;
+      setProductsPage(nextPage);
+    } catch (error) {
+      console.error('Products load error:', error);
+    } finally {
+      productsLoadingRef.current = false;
+      setProductsLoading(false);
+    }
+  }, [outfit.gender, mapProduct]);
+
+  const loadData = useCallback(async () => {
+    await loadSlots();
+  }, [loadSlots]);
 
   const handleDragStart = (product: Product) => { setDraggedProduct(product); };
   const handleDragEnd = () => { setDraggedProduct(null); setDragOverSlot(null); stopAutoScroll(); };
@@ -568,12 +630,12 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       }
       const { error } = await supabase.from('outfit_items').insert([{ outfit_id: outfit.id, product_id: product.id, slot_type: slotType }]);
       if (error) throw error;
-      loadData();
+      loadSlots();
       onLinksUpdated();
     } catch (error) {
       console.error('Link error:', error);
       alert('연결 실패: ' + (error as Error).message);
-      await loadData();
+      await loadSlots();
     } finally {
       setSaving(false);
     }
@@ -585,12 +647,12 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     try {
       const { error } = await supabase.from('outfit_items').delete().eq('id', itemId);
       if (error) throw error;
-      loadData();
+      loadSlots();
       onLinksUpdated();
     } catch (error) {
       console.error('Remove error:', error);
       alert('제거 실패: ' + (error as Error).message);
-      await loadData();
+      await loadSlots();
     } finally {
       setSaving(false);
     }
@@ -676,21 +738,13 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     targetWarmth,
   }), [outfitSeason, selectedCategory, targetWarmth]);
 
-  // #12: Vibe-aware product sorting
+  // #12: Vibe-aware product sorting (filtering done server-side)
   const filteredProducts = useMemo(() => {
-    const lowerSearch = debouncedSearchTerm.toLowerCase();
-    let products = availableProducts.filter(product => {
-      const matchesSearch = !lowerSearch ||
-        product.name.toLowerCase().includes(lowerSearch) ||
-        product.brand.toLowerCase().includes(lowerSearch);
-      const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
     if (vibeSort && outfit.vibe) {
-      return sortProductsByVibeCompat(products, outfit.vibe, vibeCtx);
+      return sortProductsByVibeCompat(availableProducts, outfit.vibe, vibeCtx);
     }
-    return products.map(p => ({ ...p, _vibeScore: scoreProductForVibe(p, outfit.vibe || '', vibeCtx) }));
-  }, [availableProducts, debouncedSearchTerm, selectedCategory, vibeSort, outfit.vibe, vibeCtx]);
+    return availableProducts.map(p => ({ ...p, _vibeScore: scoreProductForVibe(p, outfit.vibe || '', vibeCtx) }));
+  }, [availableProducts, vibeSort, outfit.vibe, vibeCtx]);
 
   // #13: Drag compatibility preview score
   const dragPreviewScore = useMemo<VibeCompatScore | null>(() => {
@@ -754,18 +808,18 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       }
       const { error } = await supabase.from('outfit_items').insert([{ outfit_id: outfit.id, product_id: product.id, slot_type: slotType }]);
       if (error) throw error;
-      loadData();
+      loadSlots();
       onLinksUpdated();
     } catch (error) {
       console.error('Quick link error:', error);
       alert('연결 실패: ' + (error as Error).message);
-      await loadData();
+      await loadSlots();
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
+  if (slotsLoading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-8">
@@ -1043,11 +1097,17 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                 </select>
               </div>
 
-              <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                {filteredProducts.length === 0 ? (
+              <div ref={productListRef} className="space-y-2 max-h-[600px] overflow-y-auto">
+                {productsLoading && filteredProducts.length === 0 ? (
+                  <div className="flex items-center justify-center py-8 gap-2 text-gray-400">
+                    <Loader size={16} className="animate-spin" />
+                    <span className="text-sm">제품 불러오는 중...</span>
+                  </div>
+                ) : filteredProducts.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">제품이 없습니다</div>
                 ) : (
-                  filteredProducts.map(product => {
+                  <>
+                  {filteredProducts.map(product => {
                     const score = (product as any)._vibeScore as VibeCompatScore | undefined;
                     return (
                       <div
@@ -1092,7 +1152,15 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
                         </div>
                       </div>
                     );
-                  })
+                  })}
+                  <div ref={productSentinelRef} className="h-1" />
+                  {productsLoading && (
+                    <div className="flex items-center justify-center py-3 gap-2 text-gray-400">
+                      <Loader size={14} className="animate-spin" />
+                      <span className="text-xs">더 불러오는 중...</span>
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
             </div>
