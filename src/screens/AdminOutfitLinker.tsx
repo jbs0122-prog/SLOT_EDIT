@@ -41,18 +41,6 @@ interface OutfitWithMeta extends Outfit {
   item_count?: number;
 }
 
-function computeOutfitWarmth(items: { category: string; warmth: number }[]): number | undefined {
-  const CLOTHING = ['outer', 'mid', 'top', 'bottom'];
-  const SHOES_WEIGHT = 0.4;
-  let sum = 0;
-  let weight = 0;
-  for (const item of items) {
-    if (CLOTHING.includes(item.category)) { sum += item.warmth * 1.0; weight += 1.0; }
-    else if (item.category === 'shoes') { sum += item.warmth * SHOES_WEIGHT; weight += SHOES_WEIGHT; }
-  }
-  return weight > 0 ? sum / weight : undefined;
-}
-
 const warmthToTempRangeF = outfitWarmthToTempRange;
 
 function warmthToSeasons(warmth: number): string[] {
@@ -85,15 +73,16 @@ function SeasonIcon({ season, size = 10 }: { season: string; size?: number }) {
   return <Wind size={size} className="text-green-500" />;
 }
 
+const OUTFIT_LIST_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_on_model,tpo,status,created_at,updated_at';
+
 async function fetchOutfitPage(
   from: number,
   to: number,
   filters: { gender: string; bodyType: string; vibe: string; season: string }
 ): Promise<{ data: OutfitWithMeta[]; count: number }> {
-  const OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,flatlay_pins,on_model_pins,tpo,status,created_at,updated_at';
   let query = supabase
     .from('outfits')
-    .select(OUTFIT_COLS, { count: 'estimated' })
+    .select(OUTFIT_LIST_COLS, { count: 'estimated' })
     .order('created_at', { ascending: false });
 
   if (filters.gender) query = query.eq('gender', filters.gender);
@@ -112,34 +101,17 @@ async function fetchOutfitPage(
 
   const outfitIds = rawOutfits.map((o: any) => o.id);
 
-  const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
-  const itemCountByOutfit: Record<string, number> = {};
-
-  const batchSize = 50;
-  for (let i = 0; i < outfitIds.length; i += batchSize) {
-    const batch = outfitIds.slice(i, i + batchSize);
-    const itemsResult = await supabase
-      .from('outfit_items')
-      .select('outfit_id, product:products(warmth, category)')
-      .in('outfit_id', batch);
-
-    if (itemsResult.data) {
-      for (const item of itemsResult.data) {
-        const oid = item.outfit_id;
-        if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
-        if (!itemCountByOutfit[oid]) itemCountByOutfit[oid] = 0;
-        itemCountByOutfit[oid]++;
-        const p = item.product as { warmth?: number; category?: string } | null;
-        if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
-          itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
-        }
-      }
+  const warmthResult = await supabase.rpc('get_outfit_warmth_batch', { outfit_ids: outfitIds });
+  const warmthMap: Record<string, { avg_warmth: number | null; item_count: number }> = {};
+  if (warmthResult.data) {
+    for (const row of warmthResult.data) {
+      warmthMap[row.outfit_id] = { avg_warmth: row.avg_warmth, item_count: row.item_count };
     }
   }
 
   const mapped: OutfitWithMeta[] = rawOutfits.map((row: any) => {
-    const items = itemsByOutfit[row.id] || [];
-    const avgWarmth = computeOutfitWarmth(items);
+    const w = warmthMap[row.id];
+    const avgWarmth = w?.avg_warmth != null ? Number(w.avg_warmth) : undefined;
     const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
 
     if (filters.season && !autoSeasons.includes(filters.season)) return null;
@@ -151,21 +123,21 @@ async function fetchOutfitPage(
       vibe: row.vibe,
       season: row.season || [],
       image_url_flatlay: row.image_url_flatlay || '',
-      image_url_flatlay_clean: row.image_url_flatlay_clean || '',
+      image_url_flatlay_clean: '',
       image_url_on_model: row.image_url_on_model || '',
-      insight_text: row['AI insight'] || '',
-      flatlay_pins: row.flatlay_pins || [],
-      on_model_pins: row.on_model_pins || [],
+      insight_text: '',
+      flatlay_pins: [],
+      on_model_pins: [],
       tpo: row.tpo || '',
       status: row.status || '',
-      prompt_flatlay: row.prompt_flatlay || '',
+      prompt_flatlay: '',
       created_at: row.created_at || '',
       updated_at: row.updated_at || '',
       items: [],
       avg_warmth: avgWarmth,
       temp_range_f: avgWarmth !== undefined ? warmthToTempRangeF(avgWarmth) : undefined,
       auto_seasons: autoSeasons,
-      item_count: itemCountByOutfit[row.id] || 0,
+      item_count: w?.item_count ?? 0,
     };
   }).filter(Boolean) as OutfitWithMeta[];
 

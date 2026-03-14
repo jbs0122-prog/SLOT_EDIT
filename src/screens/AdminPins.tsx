@@ -14,18 +14,6 @@ const SEASON_LABELS: Record<string, string> = {
   winter: '겨울',
 };
 
-function computeOutfitWarmth(items: { category: string; warmth: number }[]): number | undefined {
-  const CLOTHING = ['outer', 'mid', 'top', 'bottom'];
-  const SHOES_WEIGHT = 0.4;
-  let sum = 0;
-  let weight = 0;
-  for (const item of items) {
-    if (CLOTHING.includes(item.category)) { sum += item.warmth * 1.0; weight += 1.0; }
-    else if (item.category === 'shoes') { sum += item.warmth * SHOES_WEIGHT; weight += SHOES_WEIGHT; }
-  }
-  return weight > 0 ? sum / weight : undefined;
-}
-
 const warmthToTempRangeF = outfitWarmthToTempRange;
 
 function warmthToSeasons(warmth: number): string[] {
@@ -66,7 +54,7 @@ interface OutfitWithMeta extends Outfit {
   auto_seasons?: string[];
 }
 
-const PINS_OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,"AI insight",flatlay_pins,on_model_pins,tpo,status,prompt_flatlay,created_at,updated_at';
+const PINS_OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,tpo,status,created_at,updated_at';
 const PINS_PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,vibe_scores';
 
 export default function AdminPins() {
@@ -129,26 +117,18 @@ export default function AdminPins() {
     if (rawOutfits.length === 0) return { data: [] as OutfitWithMeta[], count };
 
     const outfitIds = rawOutfits.map((o: any) => o.id);
-    const itemsResult = await supabase
-      .from('outfit_items')
-      .select('outfit_id, product:products(warmth, category)')
-      .in('outfit_id', outfitIds);
 
-    const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
-    if (itemsResult.data) {
-      for (const item of itemsResult.data) {
-        const oid = item.outfit_id;
-        if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
-        const p = item.product as { warmth?: number; category?: string } | null;
-        if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
-          itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
-        }
+    const warmthResult = await supabase.rpc('get_outfit_warmth_batch', { outfit_ids: outfitIds });
+    const warmthMap: Record<string, { avg_warmth: number | null }> = {};
+    if (warmthResult.data) {
+      for (const row of warmthResult.data) {
+        warmthMap[row.outfit_id] = { avg_warmth: row.avg_warmth };
       }
     }
 
     const mapped = rawOutfits.map((row: any) => {
-      const items = itemsByOutfit[row.id] || [];
-      const avgWarmth = computeOutfitWarmth(items);
+      const w = warmthMap[row.id];
+      const avgWarmth = w?.avg_warmth != null ? Number(w.avg_warmth) : undefined;
       const autoSeasons = avgWarmth !== undefined ? warmthToSeasons(avgWarmth) : [];
 
       if (fs && !autoSeasons.includes(fs)) return null;
@@ -162,12 +142,12 @@ export default function AdminPins() {
         image_url_flatlay: row.image_url_flatlay || '',
         image_url_flatlay_clean: row.image_url_flatlay_clean || '',
         image_url_on_model: row.image_url_on_model || '',
-        insight_text: row['AI insight'] || '',
-        flatlay_pins: row.flatlay_pins || [],
-        on_model_pins: row.on_model_pins || [],
+        insight_text: '',
+        flatlay_pins: [],
+        on_model_pins: [],
         tpo: row.tpo || '',
         status: row.status || '',
-        prompt_flatlay: row.prompt_flatlay || '',
+        prompt_flatlay: '',
         created_at: row.created_at || '',
         updated_at: row.updated_at || '',
         items: [],
@@ -311,10 +291,25 @@ export default function AdminPins() {
     }
   };
 
-  const handleOutfitSelect = (outfit: Outfit) => {
-    setSelectedOutfit(outfit);
+  const handleOutfitSelect = async (outfit: Outfit) => {
+    const { data } = await supabase
+      .from('outfits')
+      .select('flatlay_pins,on_model_pins,"AI insight",image_url_flatlay_clean,prompt_flatlay')
+      .eq('id', outfit.id)
+      .maybeSingle();
+
+    const fullOutfit: Outfit = {
+      ...outfit,
+      flatlay_pins: data?.flatlay_pins || [],
+      on_model_pins: data?.on_model_pins || [],
+      insight_text: data?.['AI insight'] || '',
+      image_url_flatlay_clean: data?.image_url_flatlay_clean || outfit.image_url_flatlay_clean,
+      prompt_flatlay: data?.prompt_flatlay || '',
+    };
+
+    setSelectedOutfit(fullOutfit);
     setSelectedImage('flatlay');
-    setPins(outfit.flatlay_pins || []);
+    setPins(fullOutfit.flatlay_pins || []);
     setSelectedPinIndex(null);
     setTpo(outfit.tpo || '');
     loadProducts(outfit.gender);
