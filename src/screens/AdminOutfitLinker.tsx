@@ -90,7 +90,7 @@ async function fetchOutfitPage(
   to: number,
   filters: { gender: string; bodyType: string; vibe: string; season: string }
 ): Promise<{ data: OutfitWithMeta[]; count: number }> {
-  const OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,"AI insight",flatlay_pins,on_model_pins,tpo,status,prompt_flatlay,created_at,updated_at';
+  const OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,flatlay_pins,on_model_pins,tpo,status,created_at,updated_at';
   let query = supabase
     .from('outfits')
     .select(OUTFIT_COLS, { count: 'estimated' })
@@ -115,20 +115,24 @@ async function fetchOutfitPage(
   const itemsByOutfit: Record<string, { category: string; warmth: number }[]> = {};
   const itemCountByOutfit: Record<string, number> = {};
 
-  const itemsResult = await supabase
-    .from('outfit_items')
-    .select('outfit_id, product:products(warmth, category)')
-    .in('outfit_id', outfitIds);
+  const batchSize = 50;
+  for (let i = 0; i < outfitIds.length; i += batchSize) {
+    const batch = outfitIds.slice(i, i + batchSize);
+    const itemsResult = await supabase
+      .from('outfit_items')
+      .select('outfit_id, product:products(warmth, category)')
+      .in('outfit_id', batch);
 
-  if (itemsResult.data) {
-    for (const item of itemsResult.data) {
-      const oid = item.outfit_id;
-      if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
-      if (!itemCountByOutfit[oid]) itemCountByOutfit[oid] = 0;
-      itemCountByOutfit[oid]++;
-      const p = item.product as { warmth?: number; category?: string } | null;
-      if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
-        itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
+    if (itemsResult.data) {
+      for (const item of itemsResult.data) {
+        const oid = item.outfit_id;
+        if (!itemsByOutfit[oid]) itemsByOutfit[oid] = [];
+        if (!itemCountByOutfit[oid]) itemCountByOutfit[oid] = 0;
+        itemCountByOutfit[oid]++;
+        const p = item.product as { warmth?: number; category?: string } | null;
+        if (p && typeof p.warmth === 'number' && typeof p.category === 'string') {
+          itemsByOutfit[oid].push({ category: p.category, warmth: p.warmth });
+        }
       }
     }
   }
