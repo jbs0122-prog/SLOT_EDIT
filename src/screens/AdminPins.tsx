@@ -102,9 +102,7 @@ export default function AdminPins() {
     sessionStorage.setItem(PINS_FILTER_KEY, JSON.stringify({ filterGender, filterBodyType, filterVibe, filterSeason }));
   }, [filterGender, filterBodyType, filterVibe, filterSeason]);
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const [productsLoading, setProductsLoading] = useState(false);
 
   const fetchPage = useCallback(async (from: number, to: number) => {
     const { filterGender: fg, filterBodyType: fbt, filterVibe: fv, filterSeason: fs } = filtersRef.current;
@@ -236,13 +234,21 @@ export default function AdminPins() {
     return () => observer.disconnect();
   }, [loadMore, initialLoading, loadingMore, hasMore]);
 
-  const loadProducts = async () => {
+  const PRODUCT_SELECT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,vibe_scores';
+
+  const loadProducts = async (gender?: string) => {
+    setProductsLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('products')
-        .select('*')
+        .select(PRODUCT_SELECT_COLS)
         .order('created_at', { ascending: false });
 
+      if (gender) {
+        query = query.in('gender', [gender, 'UNISEX']);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
       setAllProducts(data?.map(p => ({
@@ -257,6 +263,7 @@ export default function AdminPins() {
         season: p.season || [],
         silhouette: p.silhouette || '',
         image_url: p.image_url,
+        nobg_image_url: p.nobg_image_url || null,
         product_link: p.product_link || '',
         affiliate_link: p.affiliate_link || '',
         price: p.price,
@@ -268,11 +275,14 @@ export default function AdminPins() {
         pattern: p.pattern || '',
         formality: p.formality,
         warmth: p.warmth,
-        created_at: p.created_at,
-        updated_at: p.updated_at,
+        vibe_scores: p.vibe_scores || undefined,
+        created_at: '',
+        updated_at: '',
       })) || []);
     } catch (error) {
       console.error('Failed to load products:', error);
+    } finally {
+      setProductsLoading(false);
     }
   };
 
@@ -282,6 +292,8 @@ export default function AdminPins() {
     setPins(outfit.flatlay_pins || []);
     setSelectedPinIndex(null);
     setTpo(outfit.tpo || '');
+    setAllProducts([]);
+    loadProducts(outfit.gender);
   };
 
   const handleImageTypeChange = (type: ImageType) => {
@@ -328,17 +340,10 @@ export default function AdminPins() {
 
     setSaving(true);
     try {
-      console.log('Saving pins:', pins);
-      console.log('Selected image:', selectedImage);
-      console.log('Outfit ID:', selectedOutfit.id);
-      console.log('TPO:', tpo);
-
       const updateData: Record<string, any> = {
         [`${selectedImage}_pins`]: pins,
         tpo: tpo || null,
       };
-
-      console.log('Update data:', updateData);
 
       const { data, error } = await supabase
         .from('outfits')
@@ -347,19 +352,6 @@ export default function AdminPins() {
         .select();
 
       if (error) throw error;
-
-      console.log('Save result:', data);
-
-      // Verify the save by reading back from database
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('outfits')
-        .select(`${selectedImage}_pins, tpo`)
-        .eq('id', selectedOutfit.id)
-        .single();
-
-      if (verifyError) throw verifyError;
-
-      console.log('Verified data from DB:', verifyData);
 
       alert('저장되었습니다!');
 
@@ -417,6 +409,19 @@ export default function AdminPins() {
     newPins[index].product_id = productId;
     setPins(newPins);
   };
+
+  const rankedAllProducts = useMemo(() => {
+    if (!selectedOutfit || allProducts.length === 0) return [];
+    return allProducts
+      .map(p => ({ ...p, _vs: scoreProductForVibe(p, selectedOutfit.vibe) }))
+      .sort((a, b) => b._vs.total - a._vs.total);
+  }, [allProducts, selectedOutfit?.vibe, selectedOutfit?.id]);
+
+  const productById = useMemo(() => {
+    const map = new Map<string, Product>();
+    for (const p of allProducts) map.set(p.id, p);
+    return map;
+  }, [allProducts]);
 
   if (initialLoading) {
     return (
@@ -690,13 +695,12 @@ export default function AdminPins() {
                     )}
                   </div>
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">모든 제품 - Vibe 호환순 ({allProducts.filter(p => p.gender === selectedOutfit.gender).length})</h4>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      모든 제품 - Vibe 호환순 ({rankedAllProducts.length})
+                      {productsLoading && <span className="ml-2 text-xs text-gray-400">로딩 중...</span>}
+                    </h4>
                     <div className="max-h-96 overflow-y-auto space-y-2">
-                      {allProducts
-                        .filter(p => p.gender === selectedOutfit.gender)
-                        .map(p => ({ ...p, _vs: scoreProductForVibe(p, selectedOutfit.vibe) }))
-                        .sort((a, b) => b._vs.total - a._vs.total)
-                        .map((product) => (
+                      {rankedAllProducts.map((product) => (
                           <div key={product.id} className="bg-white rounded p-3 border border-gray-200">
                             <div className="flex items-start gap-3">
                               <img
@@ -844,7 +848,7 @@ export default function AdminPins() {
                       vibeKey={selectedOutfit.vibe}
                       selectedId={pins[selectedPinIndex].product_id || ''}
                       onChange={(productId) => {
-                        const product = allProducts.find(p => p.id === productId);
+                        const product = productById.get(productId);
                         if (product) {
                           handleProductSelect(selectedPinIndex, product);
                         } else {
@@ -853,7 +857,7 @@ export default function AdminPins() {
                       }}
                     />
                     {pins[selectedPinIndex].product_id && (() => {
-                      const product = allProducts.find(p => p.id === pins[selectedPinIndex].product_id);
+                      const product = productById.get(pins[selectedPinIndex].product_id!);
                       return product ? (
                         <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
                           <p className="text-green-800 font-medium">
@@ -881,7 +885,7 @@ export default function AdminPins() {
                         const pin = pins[selectedPinIndex];
                         if (pin.url) return pin.url;
                         if (pin.product_id) {
-                          const product = allProducts.find(p => p.id === pin.product_id);
+                          const product = productById.get(pin.product_id);
                           if (product) {
                             return product.affiliate_link || product.product_link || '';
                           }
@@ -910,7 +914,7 @@ export default function AdminPins() {
                 <div className="space-y-2">
                   {pins.map((pin, index) => {
                     const displayUrl = pin.url || (pin.product_id ? (() => {
-                      const product = allProducts.find(p => p.id === pin.product_id);
+                      const product = productById.get(pin.product_id);
                       return product ? (product.affiliate_link || product.product_link || '') : '';
                     })() : '');
 

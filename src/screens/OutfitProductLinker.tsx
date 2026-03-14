@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useTransition } from 'react';
 import { Outfit, Product, OutfitItem } from '../data/outfits';
 import { supabase } from '../utils/supabase';
 import { X, Plus, Trash2, Image as ImageIcon, Send, RefreshCw, Loader, Download, ArrowUpDown, CheckCircle2, AlertTriangle, Info, Sparkles, ChevronDown, ChevronUp, Zap, PackagePlus, Palette, Layers, Ruler, Search, Copy } from 'lucide-react';
@@ -435,8 +435,13 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const [downloadingFlatlay, setDownloadingFlatlay] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
   const [vibeSort, setVibeSort] = useState(true);
+  const [debouncedLinkedItems, setDebouncedLinkedItems] = useState<OutfitItem[]>([]);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [, startTransition] = useTransition();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef<number | null>(null);
+  const recDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopAutoScroll = useCallback(() => {
     if (autoScrollRef.current !== null) {
@@ -468,18 +473,37 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   useEffect(() => { loadData(); }, [outfit.id]);
 
+  useEffect(() => {
+    if (recDebounceRef.current) clearTimeout(recDebounceRef.current);
+    recDebounceRef.current = setTimeout(() => {
+      startTransition(() => {
+        setDebouncedLinkedItems(linkedItems);
+      });
+    }, 400);
+    return () => { if (recDebounceRef.current) clearTimeout(recDebounceRef.current); };
+  }, [linkedItems]);
+
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 200);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [searchTerm]);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,image_features,vibe_scores,created_at,updated_at';
+      const PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,image_features,vibe_scores';
+      const LINKED_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,image_features,vibe_scores';
       const [productsResult, itemsResult] = await Promise.all([
         supabase.from('products').select(PRODUCT_COLS).in('gender', [outfit.gender, 'UNISEX']).order('created_at', { ascending: false }),
-        supabase.from('outfit_items').select(`*, product:products(${PRODUCT_COLS})`).eq('outfit_id', outfit.id)
+        supabase.from('outfit_items').select(`*, product:products(${LINKED_COLS})`).eq('outfit_id', outfit.id)
       ]);
       if (productsResult.error) throw productsResult.error;
       if (itemsResult.error) throw itemsResult.error;
 
-      setAvailableProducts(productsResult.data?.map(p => ({
+      const mapProduct = (p: any): Product => ({
         id: p.id, brand: p.brand, name: p.name, category: p.category, gender: p.gender,
         body_type: p.body_type || [], vibe: p.vibe || [], color: p.color || '', season: p.season || [],
         silhouette: p.silhouette || '', image_url: p.image_url, nobg_image_url: p.nobg_image_url || null,
@@ -488,28 +512,19 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
         color_family: p.color_family || '', color_tone: p.color_tone || '',
         sub_category: p.sub_category || '', pattern: p.pattern || '', formality: p.formality, warmth: p.warmth,
         image_features: p.image_features || undefined, vibe_scores: p.vibe_scores || undefined,
-        created_at: p.created_at, updated_at: p.updated_at,
-      } as Product)) || []);
+        created_at: '', updated_at: '',
+      });
 
-      setLinkedItems(itemsResult.data?.map((item: any) => ({
+      const mappedProducts = productsResult.data?.map(mapProduct) || [];
+      setAvailableProducts(mappedProducts);
+
+      const mappedItems: OutfitItem[] = itemsResult.data?.map((item: any) => ({
         id: item.id, outfit_id: item.outfit_id, product_id: item.product_id,
         slot_type: item.slot_type, created_at: item.created_at,
-        product: item.product ? {
-          id: item.product.id, brand: item.product.brand, name: item.product.name,
-          category: item.product.category, gender: item.product.gender,
-          body_type: item.product.body_type || [], vibe: item.product.vibe || [],
-          color: item.product.color || '', season: item.product.season || [],
-          silhouette: item.product.silhouette || '', image_url: item.product.image_url,
-          nobg_image_url: item.product.nobg_image_url || null,
-          product_link: item.product.product_link || '', affiliate_link: item.product.affiliate_link || '',
-          price: item.product.price, stock_status: item.product.stock_status || 'in_stock',
-          material: item.product.material || '', color_family: item.product.color_family || '',
-          color_tone: item.product.color_tone || '', sub_category: item.product.sub_category || '',
-          pattern: item.product.pattern || '', formality: item.product.formality, warmth: item.product.warmth,
-          image_features: item.product.image_features || undefined, vibe_scores: item.product.vibe_scores || undefined,
-          created_at: item.product.created_at, updated_at: item.product.updated_at,
-        } : undefined
-      })) || []);
+        product: item.product ? mapProduct(item.product) : undefined,
+      })) || [];
+      setLinkedItems(mappedItems);
+      setDebouncedLinkedItems(mappedItems);
     } catch (error) {
       console.error('Load error:', error);
       alert('데이터 로드 실패: ' + (error as Error).message);
@@ -623,7 +638,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const outfitSeason = useMemo(() => {
     if (outfit.target_season) return outfit.target_season;
     if (outfit.season && outfit.season.length > 0) return outfit.season[0];
-    const warmths = linkedItems
+    const warmths = debouncedLinkedItems
       .map(i => i.product?.warmth)
       .filter((w): w is number => typeof w === 'number');
     if (warmths.length > 0) {
@@ -638,14 +653,14 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     if (month >= 6 && month <= 8) return 'summer';
     if (month >= 9 && month <= 11) return 'fall';
     return 'winter';
-  }, [outfit.target_season, outfit.season, linkedItems]);
+  }, [outfit.target_season, outfit.season, debouncedLinkedItems]);
 
   const targetWarmth = useMemo<number | undefined>(() => {
     if (outfit.target_warmth !== undefined && outfit.target_warmth !== null) {
       return outfit.target_warmth;
     }
     const clothingSlots = ['outer', 'mid', 'top', 'bottom'];
-    const warmths = linkedItems
+    const warmths = debouncedLinkedItems
       .filter(i => clothingSlots.includes(i.slot_type))
       .map(i => i.product?.warmth)
       .filter((w): w is number => typeof w === 'number');
@@ -653,7 +668,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       return warmths.reduce((a, b) => a + b, 0) / warmths.length;
     }
     return undefined;
-  }, [outfit.target_warmth, linkedItems]);
+  }, [outfit.target_warmth, debouncedLinkedItems]);
 
   const vibeCtx = useMemo<VibeScoreContext>(() => ({
     season: outfitSeason,
@@ -663,9 +678,11 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   // #12: Vibe-aware product sorting
   const filteredProducts = useMemo(() => {
+    const lowerSearch = debouncedSearchTerm.toLowerCase();
     let products = availableProducts.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           product.brand.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = !lowerSearch ||
+        product.name.toLowerCase().includes(lowerSearch) ||
+        product.brand.toLowerCase().includes(lowerSearch);
       const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
@@ -673,7 +690,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       return sortProductsByVibeCompat(products, outfit.vibe, vibeCtx);
     }
     return products.map(p => ({ ...p, _vibeScore: scoreProductForVibe(p, outfit.vibe || '', vibeCtx) }));
-  }, [availableProducts, searchTerm, selectedCategory, vibeSort, outfit.vibe, vibeCtx]);
+  }, [availableProducts, debouncedSearchTerm, selectedCategory, vibeSort, outfit.vibe, vibeCtx]);
 
   // #13: Drag compatibility preview score
   const dragPreviewScore = useMemo<VibeCompatScore | null>(() => {
@@ -692,14 +709,14 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
 
   const slotRecommendationsMap = useMemo(() => {
     const map = new Map<string, SlotRecommendations>();
-    const filledSlots = new Set(linkedItems.map(item => item.slot_type));
+    const filledSlots = new Set(debouncedLinkedItems.map(item => item.slot_type));
 
     for (const slot of SLOT_TYPES) {
       if (!filledSlots.has(slot.value)) {
         const recs = getSlotRecommendations(
           slot.value,
           availableProducts,
-          linkedItems,
+          debouncedLinkedItems,
           outfit.vibe || '',
           outfit.gender,
           outfit.body_type,
@@ -712,7 +729,7 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
       }
     }
     return map;
-  }, [availableProducts, linkedItems, outfit.vibe, outfit.gender, outfit.body_type, outfitSeason, targetWarmth]);
+  }, [availableProducts, debouncedLinkedItems, outfit.vibe, outfit.gender, outfit.body_type, outfitSeason, targetWarmth]);
 
   const [expandedRecSlots, setExpandedRecSlots] = useState<Set<string>>(
     new Set(['outer', 'top', 'bottom', 'shoes'])
