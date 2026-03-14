@@ -31,6 +31,8 @@ interface OutfitProductLinkerProps {
   onLinksUpdated: () => void;
 }
 
+const PRODUCTS_PAGE_SIZE = 50;
+
 const SLOT_TYPES = [
   { value: 'outer', label: '아우터' },
   { value: 'mid', label: '미드레이어' },
@@ -416,8 +418,6 @@ function UnregisteredRecCard({ rec }: { rec: UnregisteredRecommendation }) {
     </div>
   );
 }
-
-const PRODUCTS_PAGE_SIZE = 50;
 
 export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }: OutfitProductLinkerProps) {
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
