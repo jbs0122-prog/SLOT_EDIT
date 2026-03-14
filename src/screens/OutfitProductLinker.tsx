@@ -22,6 +22,7 @@ import {
   type ColorKeyword,
   type MaterialKeyword,
   type FitKeyword,
+  type ScoreBreakdown,
   COLOR_CHIP_MAP,
 } from '../utils/slotRecommender';
 
@@ -78,6 +79,11 @@ const REASON_STYLES: Record<string, string> = {
   '비주얼 조화 우수': 'bg-slate-50 text-slate-600',
   '비주얼 이질감':    'bg-gray-100 text-gray-400',
   '소재 적합':        'bg-lime-50 text-lime-700',
+  '소재 호환 우수':   'bg-lime-50 text-lime-700',
+  '소재 호환 양호':   'bg-green-50 text-green-700',
+  '톤 조화 우수':     'bg-teal-50 text-teal-700',
+  '패턴 조화':        'bg-cyan-50 text-cyan-700',
+  '격식 완벽 매칭':   'bg-slate-50 text-slate-700',
 };
 
 const TONAL_LABEL: Record<string, string> = {
@@ -226,7 +232,40 @@ function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggl
   );
 }
 
+const BREAKDOWN_BARS = [
+  { key: 'vibe',      label: 'Vibe',  color: 'bg-blue-400' },
+  { key: 'color',     label: '컬러',  color: 'bg-emerald-400' },
+  { key: 'material',  label: '소재',  color: 'bg-lime-400' },
+  { key: 'formality', label: '격식',  color: 'bg-amber-400' },
+  { key: 'tonal',     label: '톤',    color: 'bg-teal-400' },
+  { key: 'pattern',   label: '패턴',  color: 'bg-cyan-400' },
+  { key: 'warmth',    label: '보온',  color: 'bg-orange-400' },
+] as const;
+
+function ScoreBreakdownBar({ breakdown }: { breakdown: ScoreBreakdown }) {
+  return (
+    <div className="mt-1.5 space-y-0.5">
+      {BREAKDOWN_BARS.map(({ key, label, color }) => {
+        const val = breakdown[key];
+        return (
+          <div key={key} className="flex items-center gap-1.5">
+            <span className="text-[8px] text-gray-400 w-6 shrink-0 text-right">{label}</span>
+            <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${color}`}
+                style={{ width: `${val}%` }}
+              />
+            </div>
+            <span className="text-[8px] text-gray-400 w-5 shrink-0">{val}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecommendation; onQuickLink: () => void; saving: boolean }) {
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const hasWarmth = rec.product.warmth !== undefined;
   const warmthBad = rec.reasons.includes('보온도 부적합');
   const warmthOk = rec.reasons.includes('보온도 보통');
@@ -234,49 +273,68 @@ function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecomm
   const displayReasons = rec.reasons.filter(r => r !== '보온도 최적' && r !== '보온도 보통' && r !== '보온도 부적합');
 
   return (
-    <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-2 hover:border-blue-300 hover:shadow-sm transition-all group/card">
-      <img
-        src={rec.product.nobg_image_url || rec.product.image_url}
-        alt={rec.product.name}
-        className="w-11 h-11 object-contain rounded shrink-0"
-      />
-      <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-medium text-gray-900 truncate">{rec.product.brand}</p>
-        <p className="text-[10px] text-gray-500 truncate">{rec.product.name}</p>
-        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-          <ScoreBadge score={rec.score} />
-          {rec.vibeScore.colorTier !== 'outside' && (
-            <span className={`text-[8px] px-1 py-0.5 rounded border ${COLOR_TIER_STYLES[rec.vibeScore.colorTier]}`}>
-              {COLOR_TIER_LABELS[rec.vibeScore.colorTier]}
-            </span>
+    <div className={`bg-white rounded-lg border transition-all group/card ${showBreakdown ? 'border-blue-300 shadow-sm' : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'}`}>
+      <div className="flex items-center gap-2 p-2">
+        <img
+          src={rec.product.nobg_image_url || rec.product.image_url}
+          alt={rec.product.name}
+          className="w-11 h-11 object-contain rounded shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-medium text-gray-900 truncate">{rec.product.brand}</p>
+          <p className="text-[10px] text-gray-500 truncate">{rec.product.name}</p>
+          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+            <ScoreBadge score={rec.score} />
+            {rec.vibeScore.colorTier !== 'outside' && (
+              <span className={`text-[8px] px-1 py-0.5 rounded border ${COLOR_TIER_STYLES[rec.vibeScore.colorTier]}`}>
+                {COLOR_TIER_LABELS[rec.vibeScore.colorTier]}
+              </span>
+            )}
+            {hasWarmth && (
+              <span className={`inline-flex items-center gap-0.5 ${warmthBad ? 'opacity-30' : ''}`} title={`보온도 ${rec.product.warmth}`}>
+                <WarmthDots value={rec.product.warmth!} />
+                {warmthGood && <span className="text-[8px] text-orange-500 font-semibold">✓</span>}
+                {warmthOk && <span className="text-[8px] text-yellow-500">~</span>}
+                {warmthBad && <span className="text-[8px] text-red-400">✗</span>}
+              </span>
+            )}
+            {displayReasons.slice(0, 3).map((r, i) => (
+              <span key={i} className={`text-[8px] px-1 py-0.5 rounded ${REASON_STYLES[r] ?? 'bg-gray-100 text-gray-500'}`}>{r}</span>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col items-center gap-1 shrink-0">
+          <button
+            onClick={onQuickLink}
+            disabled={saving}
+            className="p-1.5 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors disabled:opacity-50 opacity-0 group-hover/card:opacity-100"
+            title="바로 연결"
+          >
+            <Plus size={14} />
+          </button>
+          {rec.scoreBreakdown && (
+            <button
+              onClick={() => setShowBreakdown(v => !v)}
+              className="p-1 rounded text-gray-300 hover:text-blue-400 transition-colors opacity-0 group-hover/card:opacity-100"
+              title="점수 상세"
+            >
+              {showBreakdown ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            </button>
           )}
-          {hasWarmth && (
-            <span className={`inline-flex items-center gap-0.5 ${warmthBad ? 'opacity-30' : ''}`} title={`보온도 ${rec.product.warmth}`}>
-              <WarmthDots value={rec.product.warmth!} />
-              {warmthGood && <span className="text-[8px] text-orange-500 font-semibold">✓</span>}
-              {warmthOk && <span className="text-[8px] text-yellow-500">~</span>}
-              {warmthBad && <span className="text-[8px] text-red-400">✗</span>}
-            </span>
-          )}
-          {displayReasons.slice(0, 3).map((r, i) => (
-            <span key={i} className={`text-[8px] px-1 py-0.5 rounded ${REASON_STYLES[r] ?? 'bg-gray-100 text-gray-500'}`}>{r}</span>
-          ))}
         </div>
       </div>
-      <button
-        onClick={onQuickLink}
-        disabled={saving}
-        className="shrink-0 p-1.5 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors disabled:opacity-50 opacity-0 group-hover/card:opacity-100"
-        title="바로 연결"
-      >
-        <Plus size={14} />
-      </button>
+      {showBreakdown && rec.scoreBreakdown && (
+        <div className="px-3 pb-2.5 pt-0 border-t border-gray-100">
+          <ScoreBreakdownBar breakdown={rec.scoreBreakdown} />
+        </div>
+      )}
     </div>
   );
 }
 
 function UnregisteredRecCard({ rec }: { rec: UnregisteredRecommendation }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const affinityPct = Math.round(rec.vibeAffinity * 100);
   const affinityColor = affinityPct >= 80
     ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
@@ -284,135 +342,158 @@ function UnregisteredRecCard({ rec }: { rec: UnregisteredRecommendation }) {
     ? 'text-blue-700 bg-blue-50 border-blue-200'
     : 'text-gray-500 bg-gray-50 border-gray-200';
 
-  const handleCopyKeyword = () => {
-    navigator.clipboard.writeText(rec.searchKeyword).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+  const keywords = rec.searchKeywords && rec.searchKeywords.length > 0
+    ? rec.searchKeywords
+    : [rec.searchKeyword];
+
+  const handleCopy = (kw: string, idx: number) => {
+    navigator.clipboard.writeText(kw).then(() => {
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 1500);
     });
   };
 
   return (
     <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
       <div className="bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2 flex items-center justify-between gap-2 border-b border-amber-100">
-        <p className="text-[11px] font-bold text-gray-800 capitalize leading-tight flex-1 min-w-0 truncate">{rec.itemName}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-bold text-gray-800 capitalize leading-tight truncate">{rec.itemName}</p>
+          {rec.styleBrief && (
+            <p className="text-[9px] text-gray-500 mt-0.5 truncate leading-tight">{rec.styleBrief}</p>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-[9px] text-gray-400">{rec.lookName}</span>
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${affinityColor}`}>
             {affinityPct}%
           </span>
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="text-amber-400 hover:text-amber-600 transition-colors"
+          >
+            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
         </div>
       </div>
 
-      <div className="p-3 space-y-2.5">
-        <div>
-          <div className="flex items-center gap-1 mb-1.5">
-            <Palette size={10} className="text-amber-500" />
-            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">색상 키워드</span>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {rec.colorKeywords.slice(0, 5).map((ck, i) => (
-              <span
-                key={i}
-                className={`inline-flex items-center gap-1 px-1.5 py-0.5 bg-white rounded-full border border-gray-200 ${COLOR_TIER_CHIP[ck.tier]}`}
-                title={`${ck.harmonyLabel} (${ck.harmonyScore})`}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: COLOR_CHIP_MAP[ck.color] || '#ccc' }}
-                />
-                <span className="text-[9px] text-gray-700 font-medium">{ck.color}</span>
-                <span className={`text-[7px] font-semibold ${
-                  ck.harmonyScore >= 80 ? 'text-emerald-600' :
-                  ck.harmonyScore >= 65 ? 'text-blue-600' : 'text-gray-400'
-                }`}>{ck.harmonyScore}</span>
-              </span>
-            ))}
-            {rec.colorHarmonyNote && (
-              <span className="text-[8px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 font-medium self-center">
-                {rec.colorHarmonyNote}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center gap-1 mb-1.5">
-            <Layers size={10} className="text-blue-500" />
-            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">소재 키워드</span>
-            {rec.textureHint && (
-              <span className="ml-auto text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200">
-                {rec.textureHint}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {rec.materialKeywords.slice(0, 5).map((mk, i) => {
-              const style = MATERIAL_REASON_LABEL[mk.reason];
-              return (
+      {expanded && (
+        <div className="p-3 space-y-2.5 border-b border-amber-100">
+          <div>
+            <div className="flex items-center gap-1 mb-1.5">
+              <Palette size={10} className="text-amber-500" />
+              <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">색상 키워드</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {rec.colorKeywords.slice(0, 5).map((ck, i) => (
                 <span
                   key={i}
-                  className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border font-medium ${style.className}`}
-                  title={`${style.label} · 호환도 ${mk.compatScore}`}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 bg-white rounded-full border border-gray-200 ${COLOR_TIER_CHIP[ck.tier]}`}
+                  title={`${ck.harmonyLabel} (${ck.harmonyScore})`}
                 >
-                  {mk.material}
-                  <span className="opacity-50 text-[7px]">{mk.compatScore}</span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: COLOR_CHIP_MAP[ck.color] || '#ccc' }}
+                  />
+                  <span className="text-[9px] text-gray-700 font-medium">{ck.color}</span>
+                  <span className={`text-[7px] font-semibold ${
+                    ck.harmonyScore >= 80 ? 'text-emerald-600' :
+                    ck.harmonyScore >= 65 ? 'text-blue-600' : 'text-gray-400'
+                  }`}>{ck.harmonyScore}</span>
                 </span>
-              );
-            })}
+              ))}
+              {rec.colorHarmonyNote && (
+                <span className="text-[8px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 font-medium self-center">
+                  {rec.colorHarmonyNote}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-1 mb-1.5">
+              <Layers size={10} className="text-blue-500" />
+              <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">소재 키워드</span>
+              {rec.textureHint && (
+                <span className="ml-auto text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200">
+                  {rec.textureHint}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {rec.materialKeywords.slice(0, 5).map((mk, i) => {
+                const style = MATERIAL_REASON_LABEL[mk.reason];
+                return (
+                  <span
+                    key={i}
+                    className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border font-medium ${style.className}`}
+                    title={`${style.label} · 호환도 ${mk.compatScore}`}
+                  >
+                    {mk.material}
+                    <span className="opacity-50 text-[7px]">{mk.compatScore}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-1 mb-1.5">
+              <Ruler size={10} className="text-sky-500" />
+              <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">핏 키워드</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {rec.fitKeywords.map((fk, i) => (
+                <span
+                  key={i}
+                  className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${
+                    fk.dnaMatch
+                      ? 'bg-sky-50 text-sky-700 border-sky-200'
+                      : 'bg-gray-50 text-gray-500 border-gray-200'
+                  }`}
+                >
+                  {fk.label}
+                  {fk.dnaMatch && <span className="ml-0.5 text-sky-400">✓</span>}
+                </span>
+              ))}
+              <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ml-auto ${
+                rec.formalityHint.level >= 6
+                  ? 'bg-slate-100 text-slate-700 border-slate-200'
+                  : rec.formalityHint.level >= 4
+                  ? 'bg-gray-50 text-gray-600 border-gray-200'
+                  : 'bg-stone-50 text-stone-600 border-stone-200'
+              }`}>
+                {rec.formalityHint.label}
+              </span>
+              {rec.tonalHint && (
+                <span className="text-[8px] px-1.5 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-full">
+                  {TONAL_LABEL[rec.tonalHint] || rec.tonalHint}
+                </span>
+              )}
+            </div>
           </div>
         </div>
+      )}
 
-        <div>
-          <div className="flex items-center gap-1 mb-1.5">
-            <Ruler size={10} className="text-sky-500" />
-            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">핏 키워드</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-1">
-            {rec.fitKeywords.map((fk, i) => (
-              <span
-                key={i}
-                className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${
-                  fk.dnaMatch
-                    ? 'bg-sky-50 text-sky-700 border-sky-200'
-                    : 'bg-gray-50 text-gray-500 border-gray-200'
-                }`}
-              >
-                {fk.label}
-                {fk.dnaMatch && <span className="ml-0.5 text-sky-400">✓</span>}
-              </span>
-            ))}
-            <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ml-auto ${
-              rec.formalityHint.level >= 6
-                ? 'bg-slate-100 text-slate-700 border-slate-200'
-                : rec.formalityHint.level >= 4
-                ? 'bg-gray-50 text-gray-600 border-gray-200'
-                : 'bg-stone-50 text-stone-600 border-stone-200'
-            }`}>
-              {rec.formalityHint.label}
-            </span>
-            {rec.tonalHint && (
-              <span className="text-[8px] px-1.5 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-full">
-                {TONAL_LABEL[rec.tonalHint] || rec.tonalHint}
-              </span>
-            )}
-          </div>
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-1 mb-1.5">
+          <Search size={10} className="text-gray-400" />
+          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">검색 키워드</span>
         </div>
-
-        <div className="pt-1 border-t border-gray-100">
-          <div className="flex items-center gap-1 mb-1">
-            <Search size={10} className="text-gray-400" />
-            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">검색 키워드</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2 py-1.5 border border-gray-200">
-            <code className="text-[10px] text-gray-700 font-mono flex-1 min-w-0 truncate">{rec.searchKeyword}</code>
+        <div className="space-y-1">
+          {keywords.map((kw, idx) => (
             <button
-              onClick={handleCopyKeyword}
-              className="shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
-              title="키워드 복사"
+              key={idx}
+              onClick={() => handleCopy(kw, idx)}
+              className="w-full flex items-center gap-1.5 bg-gray-50 hover:bg-amber-50 rounded-lg px-2 py-1.5 border border-gray-200 hover:border-amber-300 transition-all group/kw text-left"
+              title="클릭하여 복사"
             >
-              {copied ? <CheckCircle2 size={11} className="text-emerald-500" /> : <Copy size={11} />}
+              <code className="text-[10px] text-gray-700 font-mono flex-1 min-w-0 truncate group-hover/kw:text-amber-800">{kw}</code>
+              {copiedIdx === idx
+                ? <CheckCircle2 size={11} className="shrink-0 text-emerald-500" />
+                : <Copy size={11} className="shrink-0 text-gray-300 group-hover/kw:text-amber-500" />
+              }
             </button>
-          </div>
+          ))}
         </div>
       </div>
     </div>
@@ -799,7 +880,19 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   };
 
   const handleQuickLink = async (slotType: string, product: Product) => {
-    applyOptimisticLink(slotType, product);
+    const filtered = linkedItems.filter(item => item.slot_type !== slotType);
+    const optimistic: OutfitItem = {
+      id: `optimistic-${slotType}-${Date.now()}`,
+      outfit_id: outfit.id,
+      product_id: product.id,
+      slot_type: slotType,
+      created_at: new Date().toISOString(),
+      product,
+    };
+    const nextLinkedItems = [...filtered, optimistic];
+    setLinkedItems(nextLinkedItems);
+    if (recDebounceRef.current) clearTimeout(recDebounceRef.current);
+    startTransition(() => { setDebouncedLinkedItems(nextLinkedItems); });
     setSaving(true);
     try {
       const existingItem = linkedItems.find(item => item.slot_type === slotType);

@@ -3,11 +3,21 @@ import { VIBE_ITEM_DATABASE, VibeKey, SlotCategory } from '../data/vibeItemDatab
 import { getVibeDNA, getLookDNA } from '../data/vibeItems/vibeDna';
 import { LookKey } from '../data/vibeItems/types';
 import { scoreProductForVibe, type VibeCompatScore, type VibeScoreContext } from './vibeCompatibility';
-import { resolveColorFamily, getColorHarmonyScore, getColorDNA, type ColorDNA } from './matching/colorDna';
+import { resolveColorFamily, getColorHarmonyScore, getColorDNA, getTonalHarmonyScore, type ColorDNA } from './matching/colorDna';
 import { getVibeItemAffinity } from './matching/vibeAffinity';
-import { inferMaterialGroup, getMaterialCompatScore, MATERIAL_GROUPS } from './matching/itemDna';
+import { inferMaterialGroup, getMaterialCompatScore, computeItemDNA, MATERIAL_GROUPS } from './matching/itemDna';
 import { ITEM_WARMTH_LIMITS } from './matching/beamSearch';
-import { computeImageFeatureScore } from './matching/contextLayer';
+import { computeImageFeatureScore, computePatternBalance } from './matching/contextLayer';
+
+export interface ScoreBreakdown {
+  vibe: number;
+  color: number;
+  formality: number;
+  material: number;
+  tonal: number;
+  pattern: number;
+  warmth: number;
+}
 
 export interface RegisteredRecommendation {
   product: Product;
@@ -15,6 +25,7 @@ export interface RegisteredRecommendation {
   vibeScore: VibeCompatScore;
   colorHarmonyAvg: number;
   reasons: string[];
+  scoreBreakdown: ScoreBreakdown;
 }
 
 export interface MaterialKeyword {
@@ -53,6 +64,8 @@ export interface UnregisteredRecommendation {
   fitKeywords: FitKeyword[];
   textureHint: string;
   searchKeyword: string;
+  styleBrief: string;
+  searchKeywords: string[];
 }
 
 export interface SlotRecommendations {
@@ -274,6 +287,95 @@ function computeBodyTypeMatch(product: Product, bodyType?: string): number {
   return types.includes(bodyType) ? 1 : -0.5;
 }
 
+interface CrossSlotSignals {
+  formalityCoherence: number;
+  materialCompat: number;
+  tonalHarmony: number;
+  patternBalance: number;
+  eraMoodOverlap: number;
+}
+
+function computeCrossSlotSignals(
+  product: Product,
+  linkedItems: OutfitItem[],
+  outfitVibe: string,
+  slotType: string,
+  existingItemsMap: Record<string, Product>
+): CrossSlotSignals {
+  const filled = linkedItems.filter(li => li.product);
+
+  // 1. Formality coherence: 기존 아이템들의 포멀도 범위 안에 후보가 드는가
+  let formalityCoherence = 60;
+  if (filled.length > 0) {
+    const existingFormalities = filled
+      .map(li => li.product!.formality)
+      .filter((f): f is number => typeof f === 'number');
+    if (existingFormalities.length > 0) {
+      const minF = Math.min(...existingFormalities);
+      const maxF = Math.max(...existingFormalities);
+      const candF = product.formality;
+      if (typeof candF === 'number') {
+        if (candF >= minF && candF <= maxF) formalityCoherence = 100;
+        else if (Math.abs(candF - minF) <= 1 || Math.abs(candF - maxF) <= 1) formalityCoherence = 72;
+        else formalityCoherence = 30;
+      }
+    }
+  }
+
+  // 2. Material compat: 기존 아이템 소재 그룹과 후보 소재의 호환도 평균
+  let materialCompat = 70;
+  if (filled.length > 0) {
+    const candidateGroup = inferMaterialGroup(product.material || '', product.name);
+    const scores = filled
+      .map(li => getMaterialCompatScore(candidateGroup, inferMaterialGroup(li.product!.material || '', li.product!.name)) * 100);
+    if (scores.length > 0) materialCompat = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length);
+  }
+
+  // 3. Tonal harmony: 후보 색상을 기존 색상 세트에 추가했을 때 톤 조화도
+  let tonalHarmony = 70;
+  if (filled.length > 0) {
+    const existingColors = filled
+      .map(li => {
+        const cf = resolveColorFamily(li.product!.color || '', li.product!.color_family);
+        return getColorDNA(cf);
+      })
+      .filter(d => d.family);
+    const candidateFamily = resolveColorFamily(product.color || '', product.color_family);
+    const candidateDNA = getColorDNA(candidateFamily);
+    if (candidateDNA.family) {
+      tonalHarmony = Math.min(100, getTonalHarmonyScore([...existingColors, candidateDNA]));
+    }
+  }
+
+  // 4. Pattern balance: 후보 추가 시 패턴 충돌 점수
+  let patternBalance = 50;
+  const hypothetical = { ...existingItemsMap, [slotType]: product };
+  const itemCount = Object.keys(hypothetical).length;
+  if (itemCount >= 2) {
+    patternBalance = computePatternBalance(hypothetical);
+  }
+
+  // 5. Era/mood overlap: 후보의 era mood tags와 vibe + 기존 아이템 태그의 Jaccard 유사도
+  let eraMoodOverlap = 60;
+  try {
+    const candidateTags = new Set(computeItemDNA(product).eraMoodTags);
+    const vibeLower = outfitVibe.toLowerCase().replace(/_/g, ' ');
+    const vibeTags = new Set(vibeLower.split(/[\s_]+/).filter(t => t.length > 2));
+    const existingTags = new Set(
+      filled.flatMap(li => computeItemDNA(li.product!).eraMoodTags)
+    );
+    const allContextTags = new Set([...vibeTags, ...existingTags]);
+    if (candidateTags.size > 0 && allContextTags.size > 0) {
+      const intersection = [...candidateTags].filter(t => allContextTags.has(t)).length;
+      const union = new Set([...candidateTags, ...allContextTags]).size;
+      eraMoodOverlap = union > 0 ? Math.round((intersection / union) * 100) : 50;
+      eraMoodOverlap = Math.min(100, eraMoodOverlap * 2.5 + 30);
+    }
+  } catch { /* ignore */ }
+
+  return { formalityCoherence, materialCompat, tonalHarmony, patternBalance, eraMoodOverlap };
+}
+
 function buildReasons(
   vibeScore: VibeCompatScore,
   colorHarmonyAvg: number,
@@ -281,7 +383,8 @@ function buildReasons(
   vibeItemAffinity: number,
   imageCoherenceScore?: number,
   warmthDiff?: number,
-  bodyTypeMatch?: number
+  bodyTypeMatch?: number,
+  crossSlot?: CrossSlotSignals
 ): string[] {
   const reasons: string[] = [];
 
@@ -300,6 +403,14 @@ function buildReasons(
   else if (vibeItemAffinity >= 0.5) reasons.push('스타일 유사');
 
   if (vibeScore.materialScore >= 85) reasons.push('소재 적합');
+
+  if (crossSlot) {
+    if (crossSlot.materialCompat >= 85) reasons.push('소재 호환 우수');
+    else if (crossSlot.materialCompat >= 70) reasons.push('소재 호환 양호');
+    if (crossSlot.tonalHarmony >= 85) reasons.push('톤 조화 우수');
+    if (crossSlot.patternBalance >= 88) reasons.push('패턴 조화');
+    if (crossSlot.formalityCoherence >= 100) reasons.push('격식 완벽 매칭');
+  }
 
   if (vibeScore.seasonScore !== undefined) {
     if (vibeScore.seasonScore >= 90) reasons.push('시즌 적합');
@@ -407,9 +518,22 @@ export function getSlotRecommendations(
     const bodyTypeBonus = bodyTypeMatch * 8;
     const vibeAffinityBonus = vibeItemAffinity >= 0.8 ? 12 : vibeItemAffinity >= 0.5 ? 7 : vibeItemAffinity >= 0.3 ? 2 : -3;
 
+    const crossSlot = computeCrossSlotSignals(product, linkedItems, outfitVibe, slotType, existingItemsMap);
+
+    const warmthScoreNorm = vibeScore.warmthScore !== undefined
+      ? vibeScore.warmthScore
+      : warmthDiff !== undefined
+        ? Math.max(0, 100 - warmthDiff * 30)
+        : 60;
+
     const score = Math.round(
-      vibeScore.total * 0.38 +
-      colorHarmonyAvg * 0.27 +
+      vibeScore.total           * 0.30 +
+      colorHarmonyAvg           * 0.20 +
+      crossSlot.materialCompat  * 0.10 +
+      crossSlot.formalityCoherence * 0.07 +
+      crossSlot.tonalHarmony    * 0.05 +
+      crossSlot.patternBalance  * 0.04 +
+      crossSlot.eraMoodOverlap  * 0.03 +
       bodyTypeBonus +
       vibeAffinityBonus +
       seasonFallback +
@@ -417,9 +541,23 @@ export function getSlotRecommendations(
       warmthBonus
     );
 
-    const reasons = buildReasons(vibeScore, colorHarmonyAvg, vibeScore.seasonScore === undefined ? computeSeasonMatch(product, outfitSeason) : 1, vibeItemAffinity, imageCoherence, warmthDiff, bodyTypeMatch);
+    const scoreBreakdown: ScoreBreakdown = {
+      vibe: Math.round(vibeScore.total),
+      color: Math.round(colorHarmonyAvg),
+      formality: Math.round(crossSlot.formalityCoherence),
+      material: Math.round(crossSlot.materialCompat),
+      tonal: Math.round(crossSlot.tonalHarmony),
+      pattern: Math.round(crossSlot.patternBalance),
+      warmth: Math.round(warmthScoreNorm),
+    };
 
-    return { product, score, vibeScore, colorHarmonyAvg, reasons };
+    const reasons = buildReasons(
+      vibeScore, colorHarmonyAvg,
+      vibeScore.seasonScore === undefined ? computeSeasonMatch(product, outfitSeason) : 1,
+      vibeItemAffinity, imageCoherence, warmthDiff, bodyTypeMatch, crossSlot
+    );
+
+    return { product, score, vibeScore, colorHarmonyAvg, reasons, scoreBreakdown };
   });
 
   scored.sort((a, b) => {
@@ -665,6 +803,8 @@ function getUnregisteredRecommendations(
     const textureHint = buildTextureHint(dna.material_preferences, linkedItems, item.name);
     const formalityHint = { level: formality, label: getFormalityLabel(formality) };
     const searchKeyword = buildSearchKeyword(item.name, colorKeywords, materialKeywords, fitKeywords, formalityHint);
+    const styleBrief = buildStyleBrief(item.name, colorKeywords, materialKeywords, textureHint, tonalHint, formalityHint);
+    const searchKeywords = buildSearchKeywords(item.name, colorKeywords, materialKeywords, fitKeywords, formalityHint);
 
     return {
       itemName: item.name,
@@ -682,6 +822,8 @@ function getUnregisteredRecommendations(
       fitKeywords,
       textureHint,
       searchKeyword,
+      styleBrief,
+      searchKeywords,
     };
   });
 }
@@ -947,6 +1089,73 @@ function buildSearchKeyword(
   else if (formalityHint.level <= 2) parts.push('casual');
 
   return parts.slice(0, 4).join(' ');
+}
+
+function buildStyleBrief(
+  itemName: string,
+  colorKeywords: ColorKeyword[],
+  materialKeywords: MaterialKeyword[],
+  textureHint: string,
+  tonalHint: string,
+  formalityHint: { level: number; label: string }
+): string {
+  const TONAL_SHORT: Record<string, string> = {
+    'warm tone-on-tone': '웜톤',
+    'cool tone-on-tone': '쿨톤',
+    'tone-on-tone': '동일톤',
+    'tone-in-tone': '유사톤',
+    'contrast': '대비톤',
+  };
+  const parts: string[] = [];
+
+  const tonal = TONAL_SHORT[tonalHint];
+  if (tonal) parts.push(tonal);
+
+  const topColors = colorKeywords
+    .filter(c => c.tier === 'primary' || (c.tier === 'secondary' && colorKeywords.filter(x => x.tier === 'primary').length === 0))
+    .slice(0, 2)
+    .map(c => c.color);
+  if (topColors.length > 0) parts.push(topColors.join('/') + ' 계열');
+
+  if (textureHint) parts.push(textureHint);
+
+  const topMat = materialKeywords.find(m => m.reason === 'slot_fit') ?? materialKeywords[0];
+  if (topMat && !textureHint.toLowerCase().includes(topMat.material.toLowerCase())) {
+    parts.push(topMat.material);
+  }
+
+  if (formalityHint.level >= 7) parts.push('포멀');
+  else if (formalityHint.level <= 2) parts.push('캐주얼');
+
+  parts.push(itemName);
+  return parts.join(' · ');
+}
+
+function buildSearchKeywords(
+  itemName: string,
+  colorKeywords: ColorKeyword[],
+  materialKeywords: MaterialKeyword[],
+  fitKeywords: FitKeyword[],
+  formalityHint: { level: number; label: string }
+): string[] {
+  const keywords: string[] = [];
+
+  const primaryColor = colorKeywords.find(c => c.tier === 'primary' && c.harmonyScore >= 70);
+  const secondaryColor = colorKeywords.find(c => c.tier === 'secondary' && c.harmonyScore >= 70);
+  const topMat = materialKeywords.find(m => m.reason === 'slot_fit') ?? materialKeywords.find(m => m.reason === 'vibe_preferred');
+  const dnaFit = fitKeywords.find(f => f.dnaMatch && f.silhouette !== 'regular');
+  const formalityKw = formalityHint.level >= 7 ? 'formal' : formalityHint.level <= 2 ? 'casual' : '';
+
+  const kw1Parts = [itemName, primaryColor?.color].filter(Boolean);
+  keywords.push(kw1Parts.slice(0, 3).join(' '));
+
+  const kw2Parts = [itemName, topMat?.material, dnaFit?.silhouette].filter(Boolean);
+  keywords.push(kw2Parts.slice(0, 3).join(' '));
+
+  const kw3Parts = [itemName, formalityKw || secondaryColor?.color, topMat?.material].filter(Boolean);
+  keywords.push(kw3Parts.slice(0, 3).join(' '));
+
+  return keywords.filter((k, i, arr) => k.trim().length > 0 && arr.indexOf(k) === i);
 }
 
 function getSuggestedColorsForSlot(
