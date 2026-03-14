@@ -73,6 +73,118 @@ const SLOT_LABEL_MAP: Record<string, string> = {
   accessory_2: '액세서리 2',
 };
 
+const SILHOUETTE_KEYWORDS: Record<string, string[]> = {
+  oversized: ['oversized', 'boxy', 'oversize', 'baggy', 'wide', 'loose', 'relaxed', 'boyfriend'],
+  fitted: ['fitted', 'slim', 'skinny', 'tailored', 'cigarette', 'pencil', 'structured', 'cropped'],
+  regular: ['regular', 'straight', 'classic', 'standard'],
+  flared: ['flared', 'flare', 'bootcut', 'a-line', 'pleated', 'wide-leg'],
+  layered: ['layered', 'wrap', 'draped', 'asymmetric', 'double-breasted', 'cape'],
+};
+
+const FORMALITY_ITEM_KEYWORDS: Record<string, number> = {
+  tuxedo: 9, blazer: 7, trench: 7, coat: 6, dress_shirt: 7, slacks: 7,
+  loafer: 6, oxford: 7, heel: 7, derby: 7, clutch: 6, briefcase: 7,
+  blouse: 5, cardigan: 4, polo: 4, chino: 4, vest: 5, knit: 4,
+  turtleneck: 5, shirt: 5, boot: 4, tote: 4, watch: 5,
+  hoodie: 2, sweatshirt: 2, t_shirt: 2, tee: 2, jeans: 2, denim: 2,
+  sneaker: 2, jogger: 1, shorts: 2, cargo: 2, sandal: 1, cap: 1,
+  backpack: 2, beanie: 2, puffer: 2, track: 1, windbreaker: 1,
+};
+
+const SILHOUETTE_KOREAN: Record<string, string> = {
+  oversized: '오버사이즈',
+  fitted: '피티드',
+  regular: '레귤러',
+  flared: '플레어',
+  layered: '레이어드',
+};
+
+const DNA_SILHOUETTE_TO_LABEL: Record<string, string> = {
+  I: '슬림/스트레이트',
+  V: '오버사이즈/와이드',
+  X: '아워글래스',
+  A: '플레어/와이드레그',
+  Y: '탑헤비',
+  O: '볼드/라운드',
+};
+
+const TEXTURE_GROUP_LABEL: Record<string, string> = {
+  smooth: '매끄러운 소재',
+  structured: '구조감 있는 소재',
+  matte: '무광 매트 소재',
+  soft: '부드러운 소재',
+  textured: '텍스처 소재',
+  sheer: '시스루 소재',
+  puffy: '볼륨감 있는 소재',
+};
+
+const SLOT_MATERIAL_AFFINITY: Record<string, string[]> = {
+  outer:     ['wool', 'leather', 'cashmere', 'tweed', 'suede', 'nylon', 'cotton', 'down', 'shearling', 'corduroy'],
+  mid:       ['wool', 'cashmere', 'knit', 'cotton', 'fleece', 'merino', 'ribbed', 'cable-knit', 'mohair'],
+  top:       ['cotton', 'silk', 'linen', 'cashmere', 'jersey', 'satin', 'chiffon', 'poplin', 'chambray'],
+  bottom:    ['denim', 'cotton', 'wool', 'leather', 'linen', 'corduroy', 'satin', 'velvet', 'tweed'],
+  shoes:     ['leather', 'suede', 'canvas', 'rubber', 'nylon', 'mesh'],
+  bag:       ['leather', 'canvas', 'nylon', 'suede', 'woven', 'straw'],
+  accessory: ['metal', 'leather', 'silk', 'gold', 'silver', 'pearl', 'ceramic', 'resin', 'stone', 'wood'],
+};
+
+const VIBE_MATERIAL_MAP: Record<string, Record<string, string[]>> = {
+  elevated_cool: {
+    outer:     ['fine wool', 'leather', 'cashmere', 'gabardine'],
+    mid:       ['cashmere', 'fine wool', 'ribbed cotton'],
+    top:       ['silk', 'poplin', 'cotton', 'satin'],
+    bottom:    ['gabardine', 'wool', 'leather', 'denim'],
+    shoes:     ['leather', 'suede'],
+    bag:       ['leather', 'suede'],
+    accessory: ['silver', 'metal', 'leather', 'silk'],
+  },
+  effortless_natural: {
+    outer:     ['linen', 'cotton', 'canvas', 'waxed cotton'],
+    mid:       ['cashmere', 'wool', 'cotton knit'],
+    top:       ['linen', 'cotton', 'gauze', 'raw silk'],
+    bottom:    ['linen', 'cotton', 'denim', 'canvas'],
+    shoes:     ['leather', 'canvas', 'suede'],
+    bag:       ['canvas', 'leather', 'woven'],
+    accessory: ['wood', 'ceramic', 'leather', 'cotton'],
+  },
+  artistic_minimal: {
+    outer:     ['wool', 'neoprene', 'cotton', 'leather'],
+    mid:       ['wool', 'cotton', 'ribbed knit'],
+    top:       ['cotton', 'silk', 'linen', 'jersey'],
+    bottom:    ['wool', 'cotton', 'leather', 'denim'],
+    shoes:     ['leather', 'canvas', 'rubber'],
+    bag:       ['leather', 'canvas', 'nylon'],
+    accessory: ['metal', 'stone', 'leather', 'resin'],
+  },
+  retro_luxe: {
+    outer:     ['tweed', 'wool', 'cashmere', 'leather', 'suede'],
+    mid:       ['cashmere', 'wool', 'mohair', 'boucle'],
+    top:       ['silk', 'velvet', 'satin', 'cotton'],
+    bottom:    ['velvet', 'corduroy', 'wool', 'suede'],
+    shoes:     ['leather', 'suede', 'velvet'],
+    bag:       ['leather', 'suede', 'velvet'],
+    accessory: ['gold', 'pearl', 'silk', 'leather'],
+  },
+  sport_modern: {
+    outer:     ['nylon', 'gore-tex', 'fleece', 'mesh'],
+    mid:       ['fleece', 'cotton', 'jersey', 'merino'],
+    top:       ['jersey', 'mesh', 'cotton', 'tech fabric'],
+    bottom:    ['nylon', 'cotton', 'jersey', 'denim'],
+    shoes:     ['mesh', 'rubber', 'nylon', 'canvas'],
+    bag:       ['nylon', 'canvas', 'mesh'],
+    accessory: ['rubber', 'nylon', 'metal', 'silicone'],
+  },
+  creative_layered: {
+    outer:     ['denim', 'leather', 'flannel', 'velvet'],
+    mid:       ['cotton', 'knit', 'fleece', 'jersey'],
+    top:       ['cotton', 'jersey', 'silk', 'lace'],
+    bottom:    ['denim', 'velvet', 'corduroy', 'leather'],
+    shoes:     ['leather', 'canvas', 'rubber'],
+    bag:       ['leather', 'canvas', 'woven'],
+    accessory: ['metal', 'leather', 'resin', 'chain'],
+  },
+};
+
 const SLOT_TO_CATEGORY: Record<string, string> = {
   outer: 'outer',
   mid: 'mid',
@@ -334,24 +446,6 @@ export function getSlotRecommendations(
     unregistered,
   };
 }
-
-const SILHOUETTE_KEYWORDS: Record<string, string[]> = {
-  oversized: ['oversized', 'boxy', 'oversize', 'baggy', 'wide', 'loose', 'relaxed', 'boyfriend'],
-  fitted: ['fitted', 'slim', 'skinny', 'tailored', 'cigarette', 'pencil', 'structured', 'cropped'],
-  regular: ['regular', 'straight', 'classic', 'standard'],
-  flared: ['flared', 'flare', 'bootcut', 'a-line', 'pleated', 'wide-leg'],
-  layered: ['layered', 'wrap', 'draped', 'asymmetric', 'double-breasted', 'cape'],
-};
-
-const FORMALITY_ITEM_KEYWORDS: Record<string, number> = {
-  tuxedo: 9, blazer: 7, trench: 7, coat: 6, dress_shirt: 7, slacks: 7,
-  loafer: 6, oxford: 7, heel: 7, derby: 7, clutch: 6, briefcase: 7,
-  blouse: 5, cardigan: 4, polo: 4, chino: 4, vest: 5, knit: 4,
-  turtleneck: 5, shirt: 5, boot: 4, tote: 4, watch: 5,
-  hoodie: 2, sweatshirt: 2, t_shirt: 2, tee: 2, jeans: 2, denim: 2,
-  sneaker: 2, jogger: 1, shorts: 2, cargo: 2, sandal: 1, cap: 1,
-  backpack: 2, beanie: 2, puffer: 2, track: 1, windbreaker: 1,
-};
 
 function inferFormalityFromName(itemName: string): number {
   const lower = itemName.toLowerCase();
@@ -630,33 +724,6 @@ function getSlotSpecificMaterials(
   return [...matched, ...lookMaterials.filter(m => !matched.includes(m))].slice(0, 4);
 }
 
-const SILHOUETTE_KOREAN: Record<string, string> = {
-  oversized: '오버사이즈',
-  fitted: '피티드',
-  regular: '레귤러',
-  flared: '플레어',
-  layered: '레이어드',
-};
-
-const DNA_SILHOUETTE_TO_LABEL: Record<string, string> = {
-  I: '슬림/스트레이트',
-  V: '오버사이즈/와이드',
-  X: '아워글래스',
-  A: '플레어/와이드레그',
-  Y: '탑헤비',
-  O: '볼드/라운드',
-};
-
-const TEXTURE_GROUP_LABEL: Record<string, string> = {
-  smooth: '매끄러운 소재',
-  structured: '구조감 있는 소재',
-  matte: '무광 매트 소재',
-  soft: '부드러운 소재',
-  textured: '텍스처 소재',
-  sheer: '시스루 소재',
-  puffy: '볼륨감 있는 소재',
-};
-
 function buildColorKeywords(
   palette: { primary: string[]; secondary: string[]; accent: string[] },
   existingColors: string[],
@@ -691,73 +758,6 @@ function buildColorKeywords(
   result.sort((a, b) => b.harmonyScore - a.harmonyScore);
   return result.slice(0, 5);
 }
-
-const SLOT_MATERIAL_AFFINITY: Record<string, string[]> = {
-  outer:     ['wool', 'leather', 'cashmere', 'tweed', 'suede', 'nylon', 'cotton', 'down', 'shearling', 'corduroy'],
-  mid:       ['wool', 'cashmere', 'knit', 'cotton', 'fleece', 'merino', 'ribbed', 'cable-knit', 'mohair'],
-  top:       ['cotton', 'silk', 'linen', 'cashmere', 'jersey', 'satin', 'chiffon', 'poplin', 'chambray'],
-  bottom:    ['denim', 'cotton', 'wool', 'leather', 'linen', 'corduroy', 'satin', 'velvet', 'tweed'],
-  shoes:     ['leather', 'suede', 'canvas', 'rubber', 'nylon', 'mesh'],
-  bag:       ['leather', 'canvas', 'nylon', 'suede', 'woven', 'straw'],
-  accessory: ['metal', 'leather', 'silk', 'gold', 'silver', 'pearl', 'ceramic', 'resin', 'stone', 'wood'],
-};
-
-const VIBE_MATERIAL_MAP: Record<string, Record<string, string[]>> = {
-  elevated_cool: {
-    outer:     ['fine wool', 'leather', 'cashmere', 'gabardine'],
-    mid:       ['cashmere', 'fine wool', 'ribbed cotton'],
-    top:       ['silk', 'poplin', 'cotton', 'satin'],
-    bottom:    ['gabardine', 'wool', 'leather', 'denim'],
-    shoes:     ['leather', 'suede'],
-    bag:       ['leather', 'suede'],
-    accessory: ['silver', 'metal', 'leather', 'silk'],
-  },
-  effortless_natural: {
-    outer:     ['linen', 'cotton', 'canvas', 'waxed cotton'],
-    mid:       ['cashmere', 'wool', 'cotton knit'],
-    top:       ['linen', 'cotton', 'gauze', 'raw silk'],
-    bottom:    ['linen', 'cotton', 'denim', 'canvas'],
-    shoes:     ['leather', 'canvas', 'suede'],
-    bag:       ['canvas', 'leather', 'woven'],
-    accessory: ['wood', 'ceramic', 'leather', 'cotton'],
-  },
-  artistic_minimal: {
-    outer:     ['wool', 'neoprene', 'cotton', 'leather'],
-    mid:       ['wool', 'cotton', 'ribbed knit'],
-    top:       ['cotton', 'silk', 'linen', 'jersey'],
-    bottom:    ['wool', 'cotton', 'leather', 'denim'],
-    shoes:     ['leather', 'canvas', 'rubber'],
-    bag:       ['leather', 'canvas', 'nylon'],
-    accessory: ['metal', 'stone', 'leather', 'resin'],
-  },
-  retro_luxe: {
-    outer:     ['tweed', 'wool', 'cashmere', 'leather', 'suede'],
-    mid:       ['cashmere', 'wool', 'mohair', 'boucle'],
-    top:       ['silk', 'velvet', 'satin', 'cotton'],
-    bottom:    ['velvet', 'corduroy', 'wool', 'suede'],
-    shoes:     ['leather', 'suede', 'velvet'],
-    bag:       ['leather', 'suede', 'velvet'],
-    accessory: ['gold', 'pearl', 'silk', 'leather'],
-  },
-  sport_modern: {
-    outer:     ['nylon', 'gore-tex', 'fleece', 'mesh'],
-    mid:       ['fleece', 'cotton', 'jersey', 'merino'],
-    top:       ['cotton', 'jersey', 'mesh', 'nylon'],
-    bottom:    ['nylon', 'cotton', 'jersey', 'spandex'],
-    shoes:     ['rubber', 'mesh', 'nylon', 'leather'],
-    bag:       ['nylon', 'canvas', 'mesh'],
-    accessory: ['rubber', 'nylon', 'metal', 'silicone'],
-  },
-  creative_layered: {
-    outer:     ['denim', 'leather', 'flannel', 'velvet'],
-    mid:       ['cotton', 'knit', 'fleece', 'jersey'],
-    top:       ['cotton', 'jersey', 'silk', 'lace'],
-    bottom:    ['denim', 'velvet', 'corduroy', 'leather'],
-    shoes:     ['leather', 'canvas', 'rubber'],
-    bag:       ['leather', 'canvas', 'woven'],
-    accessory: ['metal', 'leather', 'resin', 'chain'],
-  },
-};
 
 function buildMaterialKeywords(
   lookMaterials: string[],

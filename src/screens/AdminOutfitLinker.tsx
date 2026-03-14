@@ -239,29 +239,21 @@ export default function AdminOutfitLinker() {
     loadInitial();
   }, [loadInitial]);
 
-  const sentinelIntersectingRef = useRef(false);
-
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        sentinelIntersectingRef.current = entries[0].isIntersecting;
-        if (entries[0].isIntersecting) {
-          loadMore();
-        }
-      },
-      { rootMargin: '400px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
+    const handleScroll = () => {
+      if (!hasMoreRef.current || loadingMoreRef.current) return;
+      const sentinel = sentinelRef.current;
+      if (!sentinel) return;
+      const rect = sentinel.getBoundingClientRect();
+      if (rect.top <= window.innerHeight + 600) {
+        loadMore();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
   }, [loadMore]);
-
-  useEffect(() => {
-    if (!loadingMore && hasMore && sentinelIntersectingRef.current) {
-      loadMore();
-    }
-  }, [loadingMore, hasMore, loadMore]);
 
   const reloadCurrent = () => loadInitial();
 
