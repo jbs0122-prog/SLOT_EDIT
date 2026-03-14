@@ -43,6 +43,8 @@ interface OutfitWithMeta extends Outfit {
 
 const warmthToTempRangeF = outfitWarmthToTempRange;
 
+const OUTFIT_LIST_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_on_model,tpo,status,created_at,updated_at';
+
 function warmthToSeasons(warmth: number): string[] {
   if (warmth >= 3.8) return ['winter'];
   if (warmth >= 3.0) return ['winter', 'fall'];
@@ -72,8 +74,6 @@ function SeasonIcon({ season, size = 10 }: { season: string; size?: number }) {
   if (season === 'fall') return <Leaf size={size} className="text-orange-500" />;
   return <Wind size={size} className="text-green-500" />;
 }
-
-const OUTFIT_LIST_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_on_model,tpo,status,created_at,updated_at';
 
 async function fetchOutfitPage(
   from: number,

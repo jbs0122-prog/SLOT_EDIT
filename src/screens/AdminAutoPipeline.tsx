@@ -112,6 +112,22 @@ const SEASON_SLOT_DISPLAY: Record<string, { required: string[]; optional: string
   winter: { required: ['top', 'bottom', 'shoes', 'outer', 'mid'], optional: [], excluded: [] },
 };
 
+const SCORE_LABELS: Record<string, string> = {
+  tonalHarmony: 'Tonal',
+  formalityCoherence: 'Formal',
+  materialCompat: 'Material',
+  vibeMatch: 'Vibe',
+  seasonFit: 'Season',
+  colorDepth: 'Color',
+  patternBalance: 'Pattern',
+  accessoryHarmony: 'Acc.Harm',
+  warmthFit: 'Warmth',
+  proportionBalance: 'Proportion',
+};
+
+const PIPELINE_SESSION_KEY = 'auto_pipeline_session';
+const PIPELINE_HISTORY_KEY = 'auto_pipeline_history';
+
 function getStepPhase(events: PipelineEvent[]): Record<string, EventStatus | 'idle'> {
   const phases: Record<string, EventStatus | 'idle'> = {};
   for (const step of PIPELINE_STEPS) {
@@ -165,19 +181,6 @@ function StepIndicator({ step, phase }: { step: string; phase: EventStatus | 'id
     </div>
   );
 }
-
-const SCORE_LABELS: Record<string, string> = {
-  tonalHarmony: 'Tonal',
-  formalityCoherence: 'Formal',
-  materialCompat: 'Material',
-  vibeMatch: 'Vibe',
-  seasonFit: 'Season',
-  colorDepth: 'Color',
-  patternBalance: 'Pattern',
-  accessoryHarmony: 'Acc.Harm',
-  warmthFit: 'Warmth',
-  proportionBalance: 'Proportion',
-};
 
 function scoreColor(val: number): string {
   if (val >= 80) return 'bg-emerald-500';
@@ -280,9 +283,6 @@ function OutfitCandidateCard({ candidate, index, selected, onToggle }: {
     </div>
   );
 }
-
-const PIPELINE_SESSION_KEY = 'auto_pipeline_session';
-const PIPELINE_HISTORY_KEY = 'auto_pipeline_history';
 
 interface PipelineSession {
   gender: Gender; bodyType: BodyType; vibe: Vibe; season: Season;

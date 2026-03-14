@@ -16,6 +16,9 @@ const SEASON_LABELS: Record<string, string> = {
 
 const warmthToTempRangeF = outfitWarmthToTempRange;
 
+const PINS_OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,tpo,status,created_at,updated_at';
+const PINS_PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,vibe_scores';
+
 function warmthToSeasons(warmth: number): string[] {
   if (warmth >= 3.8) return ['winter'];
   if (warmth >= 3.0) return ['winter', 'fall'];
@@ -53,9 +56,6 @@ interface OutfitWithMeta extends Outfit {
   temp_range_f?: { min: number; max: number };
   auto_seasons?: string[];
 }
-
-const PINS_OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,tpo,status,created_at,updated_at';
-const PINS_PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,vibe_scores';
 
 export default function AdminPins() {
   const [outfits, setOutfits] = useState<OutfitWithMeta[]>([]);

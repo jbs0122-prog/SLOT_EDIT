@@ -54,11 +54,6 @@ const PRODUCT_CATEGORIES = [
   { value: 'accessory', label: '액세서리' },
 ];
 
-function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 80 ? 'text-emerald-600 bg-emerald-50' : score >= 60 ? 'text-blue-600 bg-blue-50' : score >= 40 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50';
-  return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>{score}</span>;
-}
-
 const SEASON_BADGE: Record<string, { label: string; className: string }> = {
   spring: { label: '봄', className: 'bg-rose-50 text-rose-600 border-rose-200' },
   summer: { label: '여름', className: 'bg-sky-50 text-sky-600 border-sky-200' },
@@ -105,6 +100,11 @@ const COLOR_TIER_CHIP: Record<ColorKeyword['tier'], string> = {
   secondary: 'ring-1 ring-blue-300',
   accent: 'ring-1 ring-gray-300',
 };
+
+function ScoreBadge({ score }: { score: number }) {
+  const color = score >= 80 ? 'text-emerald-600 bg-emerald-50' : score >= 60 ? 'text-blue-600 bg-blue-50' : score >= 40 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50';
+  return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>{score}</span>;
+}
 
 function WarmthDots({ value }: { value: number }) {
   const filled = Math.round(value);
@@ -481,40 +481,6 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
     }
   }, [stopAutoScroll]);
 
-  useEffect(() => { loadSlots(); loadProductsPage(true); }, [outfit.id]);
-
-  useEffect(() => {
-    if (recDebounceRef.current) clearTimeout(recDebounceRef.current);
-    recDebounceRef.current = setTimeout(() => {
-      startTransition(() => {
-        setDebouncedLinkedItems(linkedItems);
-      });
-    }, 400);
-    return () => { if (recDebounceRef.current) clearTimeout(recDebounceRef.current); };
-  }, [linkedItems]);
-
-  useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => {
-      searchFilterRef.current = { search: searchTerm, category: selectedCategory };
-      loadProductsPage(true);
-    }, 300);
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [searchTerm, selectedCategory, loadProductsPage]);
-
-  useEffect(() => {
-    const sentinel = productSentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) loadProductsPage(false);
-      },
-      { rootMargin: '100px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [loadProductsPage]);
-
   const mapProduct = useCallback((p: any): Product => ({
     id: p.id, brand: p.brand, name: p.name, category: p.category, gender: p.gender,
     body_type: p.body_type || [], vibe: p.vibe || [], color: p.color || '', season: p.season || [],
@@ -594,6 +560,40 @@ export default function OutfitProductLinker({ outfit, onClose, onLinksUpdated }:
   const loadData = useCallback(async () => {
     await loadSlots();
   }, [loadSlots]);
+
+  useEffect(() => { loadSlots(); loadProductsPage(true); }, [outfit.id]);
+
+  useEffect(() => {
+    if (recDebounceRef.current) clearTimeout(recDebounceRef.current);
+    recDebounceRef.current = setTimeout(() => {
+      startTransition(() => {
+        setDebouncedLinkedItems(linkedItems);
+      });
+    }, 400);
+    return () => { if (recDebounceRef.current) clearTimeout(recDebounceRef.current); };
+  }, [linkedItems]);
+
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      searchFilterRef.current = { search: searchTerm, category: selectedCategory };
+      loadProductsPage(true);
+    }, 300);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [searchTerm, selectedCategory, loadProductsPage]);
+
+  useEffect(() => {
+    const sentinel = productSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadProductsPage(false);
+      },
+      { rootMargin: '100px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadProductsPage]);
 
   const handleDragStart = (product: Product) => { setDraggedProduct(product); };
   const handleDragEnd = () => { setDraggedProduct(null); setDragOverSlot(null); stopAutoScroll(); };
