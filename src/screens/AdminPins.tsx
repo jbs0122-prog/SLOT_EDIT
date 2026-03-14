@@ -74,6 +74,9 @@ export default function AdminPins() {
   const imageRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const filterVersionRef = useRef(0);
+  const outfitsLengthRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(false);
   const PINS_FILTER_KEY = 'admin_pins_filters';
   const savedPinsFilters = (() => { try { const v = sessionStorage.getItem(PINS_FILTER_KEY); return v ? JSON.parse(v) : null; } catch { return null; } })();
   const [filterGender, setFilterGenderRaw] = useState<string>(savedPinsFilters?.filterGender ?? '');
@@ -164,13 +167,18 @@ export default function AdminPins() {
     const version = ++filterVersionRef.current;
     setInitialLoading(true);
     setOutfits([]);
+    outfitsLengthRef.current = 0;
+    hasMoreRef.current = false;
     setHasMore(false);
     try {
       const { data, count } = await fetchPage(0, PAGE_SIZE - 1);
       if (version !== filterVersionRef.current) return;
       setOutfits(data);
+      outfitsLengthRef.current = data.length;
       setTotalCount(count);
-      setHasMore(data.length >= PAGE_SIZE);
+      const more = data.length >= PAGE_SIZE;
+      hasMoreRef.current = more;
+      setHasMore(more);
     } catch (error) {
       if (version !== filterVersionRef.current) return;
       console.error('Failed to load outfits:', error);
@@ -180,24 +188,29 @@ export default function AdminPins() {
   }, [fetchPage, filterGender, filterBodyType, filterVibe, filterSeason]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
     const version = filterVersionRef.current;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const from = outfits.length;
+      const from = outfitsLengthRef.current;
       const to = from + PAGE_SIZE - 1;
       const { data, count } = await fetchPage(from, to);
       if (version !== filterVersionRef.current) return;
       setOutfits(prev => [...prev, ...data]);
+      outfitsLengthRef.current = from + data.length;
       setTotalCount(count);
-      setHasMore(data.length >= PAGE_SIZE);
+      const more = data.length >= PAGE_SIZE;
+      hasMoreRef.current = more;
+      setHasMore(more);
     } catch (error) {
       if (version !== filterVersionRef.current) return;
       console.error('Failed to load more outfits:', error);
     } finally {
+      loadingMoreRef.current = false;
       if (version === filterVersionRef.current) setLoadingMore(false);
     }
-  }, [fetchPage, loadingMore, hasMore, outfits.length]);
+  }, [fetchPage]);
 
   useEffect(() => {
     loadInitial();
@@ -208,15 +221,15 @@ export default function AdminPins() {
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !initialLoading && !loadingMore && hasMore) {
+        if (entries[0].isIntersecting) {
           loadMore();
         }
       },
-      { rootMargin: '100px' }
+      { rootMargin: '200px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadMore, initialLoading, loadingMore, hasMore]);
+  }, [loadMore]);
 
   const loadProducts = async (gender?: string) => {
     const cacheKey = gender || 'all';

@@ -156,6 +156,7 @@ export default function AdminOutfitLinker() {
   const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement>(null);
   const filterVersionRef = useRef(0);
+  const outfitsLengthRef = useRef(0);
 
   const savedFilters = loadSavedOutfitFilters();
   const [outfitFilterGender, setOutfitFilterGenderRaw] = useState(savedFilters?.outfitFilterGender ?? '');
@@ -177,17 +178,25 @@ export default function AdminOutfitLinker() {
   const setOutfitFilterVibe = (v: string) => { setOutfitFilterVibeRaw(v); saveOutfitFilters({ outfitFilterVibe: v }); };
   const setOutfitFilterSeason = (v: string) => { setOutfitFilterSeasonRaw(v); saveOutfitFilters({ outfitFilterSeason: v }); };
 
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(false);
+
   const loadInitial = useCallback(async () => {
     const version = ++filterVersionRef.current;
     setInitialLoading(true);
     setOutfits([]);
+    outfitsLengthRef.current = 0;
+    hasMoreRef.current = false;
     setHasMore(false);
     try {
       const { data, count } = await fetchOutfitPage(0, PAGE_SIZE - 1, filtersRef.current);
       if (version !== filterVersionRef.current) return;
       setOutfits(data);
+      outfitsLengthRef.current = data.length;
       setTotalCount(count);
-      setHasMore(data.length >= PAGE_SIZE);
+      const more = data.length >= PAGE_SIZE;
+      hasMoreRef.current = more;
+      setHasMore(more);
     } catch (error) {
       if (version !== filterVersionRef.current) return;
       console.error('Failed to load outfits:', error);
@@ -197,24 +206,29 @@ export default function AdminOutfitLinker() {
   }, [outfitFilterGender, outfitFilterBodyType, outfitFilterVibe, outfitFilterSeason]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
     const version = filterVersionRef.current;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const from = outfits.length;
+      const from = outfitsLengthRef.current;
       const to = from + PAGE_SIZE - 1;
       const { data, count } = await fetchOutfitPage(from, to, filtersRef.current);
       if (version !== filterVersionRef.current) return;
       setOutfits(prev => [...prev, ...data]);
+      outfitsLengthRef.current = from + data.length;
       setTotalCount(count);
-      setHasMore(data.length >= PAGE_SIZE);
+      const more = data.length >= PAGE_SIZE;
+      hasMoreRef.current = more;
+      setHasMore(more);
     } catch (error) {
       if (version !== filterVersionRef.current) return;
       console.error('Failed to load more outfits:', error);
     } finally {
+      loadingMoreRef.current = false;
       if (version === filterVersionRef.current) setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, outfits.length]);
+  }, []);
 
   useEffect(() => {
     loadInitial();
@@ -225,15 +239,15 @@ export default function AdminOutfitLinker() {
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !initialLoading && !loadingMore && hasMore) {
+        if (entries[0].isIntersecting) {
           loadMore();
         }
       },
-      { rootMargin: '100px' }
+      { rootMargin: '200px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadMore, initialLoading, loadingMore, hasMore]);
+  }, [loadMore]);
 
   const reloadCurrent = () => loadInitial();
 
