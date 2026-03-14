@@ -141,7 +141,7 @@ async function fetchOutfitPage(
     };
   }).filter(Boolean) as OutfitWithMeta[];
 
-  return { data: mapped, count: totalCount };
+  return { data: mapped, count: totalCount, rawCount: rawOutfits.length };
 }
 
 export default function AdminOutfitLinker() {
@@ -181,20 +181,24 @@ export default function AdminOutfitLinker() {
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(false);
 
+  const dbOffsetRef = useRef(0);
+
   const loadInitial = useCallback(async () => {
     const version = ++filterVersionRef.current;
     setInitialLoading(true);
     setOutfits([]);
     outfitsLengthRef.current = 0;
+    dbOffsetRef.current = 0;
     hasMoreRef.current = false;
     setHasMore(false);
     try {
-      const { data, count } = await fetchOutfitPage(0, PAGE_SIZE - 1, filtersRef.current);
+      const { data, count, rawCount } = await fetchOutfitPage(0, PAGE_SIZE - 1, filtersRef.current);
       if (version !== filterVersionRef.current) return;
       setOutfits(data);
       outfitsLengthRef.current = data.length;
+      dbOffsetRef.current = rawCount;
       setTotalCount(count);
-      const more = data.length >= PAGE_SIZE;
+      const more = rawCount >= PAGE_SIZE;
       hasMoreRef.current = more;
       setHasMore(more);
     } catch (error) {
@@ -211,14 +215,15 @@ export default function AdminOutfitLinker() {
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const from = outfitsLengthRef.current;
+      const from = dbOffsetRef.current;
       const to = from + PAGE_SIZE - 1;
-      const { data, count } = await fetchOutfitPage(from, to, filtersRef.current);
+      const { data, count, rawCount } = await fetchOutfitPage(from, to, filtersRef.current);
       if (version !== filterVersionRef.current) return;
       setOutfits(prev => [...prev, ...data]);
-      outfitsLengthRef.current = from + data.length;
+      outfitsLengthRef.current += data.length;
+      dbOffsetRef.current = from + rawCount;
       setTotalCount(count);
-      const more = data.length >= PAGE_SIZE;
+      const more = rawCount >= PAGE_SIZE;
       hasMoreRef.current = more;
       setHasMore(more);
     } catch (error) {
