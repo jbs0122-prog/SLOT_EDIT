@@ -246,19 +246,35 @@ export default function AdminPins() {
     }
     setProductsLoading(true);
     try {
-      let query = supabase
-        .from('products')
-        .select(PINS_PRODUCT_COLS)
-        .order('created_at', { ascending: false });
+      const BATCH = 200;
+      let allData: any[] = [];
+      let from = 0;
+      let hasMore = true;
 
-      if (gender) {
-        query = query.in('gender', [gender, 'UNISEX']);
+      while (hasMore) {
+        let query = supabase
+          .from('products')
+          .select(PINS_PRODUCT_COLS)
+          .order('created_at', { ascending: false })
+          .range(from, from + BATCH - 1);
+
+        if (gender) {
+          query = query.in('gender', [gender, 'UNISEX']);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          hasMore = false;
+        } else {
+          allData = [...allData, ...data];
+          hasMore = data.length === BATCH;
+          from += BATCH;
+        }
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const mapped = data?.map(p => ({
+      const mapped = allData.map(p => ({
         id: p.id,
         brand: p.brand,
         name: p.name,
@@ -285,7 +301,7 @@ export default function AdminPins() {
         vibe_scores: p.vibe_scores || undefined,
         created_at: '',
         updated_at: '',
-      })) || [];
+      }));
       productsCacheRef.current[cacheKey] = mapped;
       setAllProducts(mapped);
     } catch (error) {
