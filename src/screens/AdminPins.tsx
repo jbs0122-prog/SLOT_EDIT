@@ -66,6 +66,9 @@ interface OutfitWithMeta extends Outfit {
   auto_seasons?: string[];
 }
 
+const PINS_OUTFIT_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_flatlay_clean,image_url_on_model,"AI insight",flatlay_pins,on_model_pins,tpo,status,prompt_flatlay,created_at,updated_at';
+const PINS_PRODUCT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,vibe_scores';
+
 export default function AdminPins() {
   const [outfits, setOutfits] = useState<OutfitWithMeta[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -79,6 +82,7 @@ export default function AdminPins() {
   const [saving, setSaving] = useState(false);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [showProductsPanel, setShowProductsPanel] = useState(false);
+  const productsCacheRef = useRef<Record<string, Product[]>>({});
   const imageRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const filterVersionRef = useRef(0);
@@ -108,7 +112,7 @@ export default function AdminPins() {
     const { filterGender: fg, filterBodyType: fbt, filterVibe: fv, filterSeason: fs } = filtersRef.current;
     let query = supabase
       .from('outfits')
-      .select('*', { count: 'exact' })
+      .select(PINS_OUTFIT_COLS, { count: 'estimated' })
       .order('created_at', { ascending: false });
 
     if (fg) query = query.eq('gender', fg);
@@ -193,7 +197,7 @@ export default function AdminPins() {
     } finally {
       if (version === filterVersionRef.current) setInitialLoading(false);
     }
-  }, [fetchPage, filterGender, filterBodyType, filterVibe, filterSeason]);
+  }, [fetchPage, filterGender, filterBodyType, filterVibe, filterSeason]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -234,14 +238,17 @@ export default function AdminPins() {
     return () => observer.disconnect();
   }, [loadMore, initialLoading, loadingMore, hasMore]);
 
-  const PRODUCT_SELECT_COLS = 'id,brand,name,category,gender,body_type,vibe,color,season,silhouette,image_url,nobg_image_url,product_link,affiliate_link,price,stock_status,material,color_family,color_tone,sub_category,pattern,formality,warmth,vibe_scores';
-
   const loadProducts = async (gender?: string) => {
+    const cacheKey = gender || 'all';
+    if (productsCacheRef.current[cacheKey]) {
+      setAllProducts(productsCacheRef.current[cacheKey]);
+      return;
+    }
     setProductsLoading(true);
     try {
       let query = supabase
         .from('products')
-        .select(PRODUCT_SELECT_COLS)
+        .select(PINS_PRODUCT_COLS)
         .order('created_at', { ascending: false });
 
       if (gender) {
@@ -251,7 +258,7 @@ export default function AdminPins() {
       const { data, error } = await query;
       if (error) throw error;
 
-      setAllProducts(data?.map(p => ({
+      const mapped = data?.map(p => ({
         id: p.id,
         brand: p.brand,
         name: p.name,
@@ -278,7 +285,9 @@ export default function AdminPins() {
         vibe_scores: p.vibe_scores || undefined,
         created_at: '',
         updated_at: '',
-      })) || []);
+      })) || [];
+      productsCacheRef.current[cacheKey] = mapped;
+      setAllProducts(mapped);
     } catch (error) {
       console.error('Failed to load products:', error);
     } finally {
@@ -292,7 +301,6 @@ export default function AdminPins() {
     setPins(outfit.flatlay_pins || []);
     setSelectedPinIndex(null);
     setTpo(outfit.tpo || '');
-    setAllProducts([]);
     loadProducts(outfit.gender);
   };
 
