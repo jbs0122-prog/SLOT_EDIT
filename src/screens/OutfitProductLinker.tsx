@@ -66,6 +66,46 @@ const SEASON_BADGE: Record<string, { label: string; className: string }> = {
   winter: { label: '겨울', className: 'bg-blue-50 text-blue-700 border-blue-200' },
 };
 
+const REASON_STYLES: Record<string, string> = {
+  'Vibe 일치':        'bg-blue-50 text-blue-700',
+  '팔레트 Primary':   'bg-amber-50 text-amber-700',
+  '팔레트 Secondary': 'bg-sky-50 text-sky-700',
+  '컬러 조화 우수':   'bg-emerald-50 text-emerald-700',
+  '컬러 조화 양호':   'bg-teal-50 text-teal-700',
+  '스타일 정확 매칭': 'bg-violet-50 text-violet-700',
+  '스타일 유사':      'bg-purple-50 text-purple-600',
+  '시즌 적합':        'bg-rose-50 text-rose-600',
+  '시즌 부적합':      'bg-red-50 text-red-600',
+  '보온도 최적':      'bg-orange-50 text-orange-700',
+  '보온도 보통':      'bg-yellow-50 text-yellow-700',
+  '보온도 부적합':    'bg-red-50 text-red-500',
+  '비주얼 코히런스 ★':'bg-indigo-50 text-indigo-700',
+  '비주얼 조화 우수': 'bg-slate-50 text-slate-600',
+  '비주얼 이질감':    'bg-gray-100 text-gray-400',
+  '소재 적합':        'bg-lime-50 text-lime-700',
+};
+
+const TONAL_LABEL: Record<string, string> = {
+  'tone-on-tone': '톤온톤',
+  'tone-in-tone': '톤인톤',
+  'contrast': '대비',
+  'warm tone-on-tone': '웜 톤온톤',
+  'cool tone-on-tone': '쿨 톤온톤',
+};
+
+const MATERIAL_REASON_LABEL: Record<MaterialKeyword['reason'], { label: string; className: string }> = {
+  vibe_preferred: { label: 'Vibe', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+  slot_fit: { label: '슬롯 적합', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  harmony_with_existing: { label: '기존 조화', className: 'bg-gray-50 text-gray-600 border-gray-200' },
+  texture_contrast: { label: '텍스처 대비', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+};
+
+const COLOR_TIER_CHIP: Record<ColorKeyword['tier'], string> = {
+  primary: 'ring-2 ring-amber-400',
+  secondary: 'ring-1 ring-blue-300',
+  accent: 'ring-1 ring-gray-300',
+};
+
 function WarmthDots({ value }: { value: number }) {
   const filled = Math.round(value);
   return (
@@ -186,25 +226,6 @@ function SlotRecommendationPanel({ slotValue, recommendations, expanded, onToggl
   );
 }
 
-const REASON_STYLES: Record<string, string> = {
-  'Vibe 일치':        'bg-blue-50 text-blue-700',
-  '팔레트 Primary':   'bg-amber-50 text-amber-700',
-  '팔레트 Secondary': 'bg-sky-50 text-sky-700',
-  '컬러 조화 우수':   'bg-emerald-50 text-emerald-700',
-  '컬러 조화 양호':   'bg-teal-50 text-teal-700',
-  '스타일 정확 매칭': 'bg-violet-50 text-violet-700',
-  '스타일 유사':      'bg-purple-50 text-purple-600',
-  '시즌 적합':        'bg-rose-50 text-rose-600',
-  '시즌 부적합':      'bg-red-50 text-red-600',
-  '보온도 최적':      'bg-orange-50 text-orange-700',
-  '보온도 보통':      'bg-yellow-50 text-yellow-700',
-  '보온도 부적합':    'bg-red-50 text-red-500',
-  '비주얼 코히런스 ★':'bg-indigo-50 text-indigo-700',
-  '비주얼 조화 우수': 'bg-slate-50 text-slate-600',
-  '비주얼 이질감':    'bg-gray-100 text-gray-400',
-  '소재 적합':        'bg-lime-50 text-lime-700',
-};
-
 function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecommendation; onQuickLink: () => void; saving: boolean }) {
   const hasWarmth = rec.product.warmth !== undefined;
   const warmthBad = rec.reasons.includes('보온도 부적합');
@@ -253,27 +274,6 @@ function RegisteredRecCard({ rec, onQuickLink, saving }: { rec: RegisteredRecomm
     </div>
   );
 }
-
-const TONAL_LABEL: Record<string, string> = {
-  'tone-on-tone': '톤온톤',
-  'tone-in-tone': '톤인톤',
-  'contrast': '대비',
-  'warm tone-on-tone': '웜 톤온톤',
-  'cool tone-on-tone': '쿨 톤온톤',
-};
-
-const MATERIAL_REASON_LABEL: Record<MaterialKeyword['reason'], { label: string; className: string }> = {
-  vibe_preferred: { label: 'Vibe', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-  slot_fit: { label: '슬롯 적합', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  harmony_with_existing: { label: '기존 조화', className: 'bg-gray-50 text-gray-600 border-gray-200' },
-  texture_contrast: { label: '텍스처 대비', className: 'bg-orange-50 text-orange-700 border-orange-200' },
-};
-
-const COLOR_TIER_CHIP: Record<ColorKeyword['tier'], string> = {
-  primary: 'ring-2 ring-amber-400',
-  secondary: 'ring-1 ring-blue-300',
-  accent: 'ring-1 ring-gray-300',
-};
 
 function UnregisteredRecCard({ rec }: { rec: UnregisteredRecommendation }) {
   const [copied, setCopied] = useState(false);
