@@ -57,6 +57,13 @@ const ITEM_WARMTH_LIMITS: Record<string, Record<string, { min: number; max: numb
   },
 };
 
+const SEASON_WARMTH: Record<string, { min: number; max: number; ideal: number }> = {
+  spring: { min: 1.5, max: 3.5, ideal: 2.5 },
+  summer: { min: 1, max: 2.5, ideal: 1.5 },
+  fall: { min: 2.5, max: 4, ideal: 3.2 },
+  winter: { min: 3.5, max: 5, ideal: 4.2 },
+};
+
 interface SlotPool {
   slot: SlotName;
   products: Product[];
@@ -530,12 +537,5 @@ export async function assembleOutfits(
 
   return results;
 }
-
-const SEASON_WARMTH: Record<string, { min: number; max: number; ideal: number }> = {
-  spring: { min: 1.5, max: 3.5, ideal: 2.5 },
-  summer: { min: 1, max: 2.5, ideal: 1.5 },
-  fall: { min: 2.5, max: 4, ideal: 3.2 },
-  winter: { min: 3.5, max: 5, ideal: 4.2 },
-};
 
 export { SEASON_WARMTH, ITEM_WARMTH_LIMITS };
