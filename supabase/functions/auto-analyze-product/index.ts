@@ -1043,7 +1043,7 @@ Return ONLY valid JSON with English values:
       body_type: bodyTypes,
       season: seasonArray,
       formality,
-      warmth,
+      warmth: Math.round(warmth),
       vibe_scores: vibeScores,
       look_affinity: lookAffinity,
       stock_status: "in_stock",
