@@ -255,6 +255,12 @@ function shuffleArray<T>(arr: T[]): T[] {
   return result;
 }
 
+interface DnaSlotData {
+  items: string[];
+  materials: string[];
+  colors: string[];
+}
+
 function generateKeywordsForSlotByLook(
   slot: string,
   lookKey: string,
@@ -263,7 +269,8 @@ function generateKeywordsForSlotByLook(
   vibe: string,
   season: string,
   bodyType: string,
-  topPerformers: KeywordPerformance[]
+  topPerformers: KeywordPerformance[],
+  dnaSlot?: DnaSlotData
 ): string[] {
   const dna = VIBE_DNA[vibe];
   if (!dna) return [];
@@ -278,6 +285,18 @@ function generateKeywordsForSlotByLook(
   const keywords: string[] = [];
   const seen = new Set<string>();
 
+  if (dnaSlot && dnaSlot.items.length > 0) {
+    const dnaColors = dnaSlot.colors.length > 0 ? dnaSlot.colors : allColors;
+    const dnaMaterials = dnaSlot.materials.length > 0 ? dnaSlot.materials : look.materials;
+    for (let i = 0; i < Math.min(2, dnaSlot.items.length); i++) {
+      const item = dnaSlot.items[i];
+      const color = dnaColors[i % dnaColors.length];
+      const material = dnaMaterials[i % dnaMaterials.length];
+      const kw = `${genderLabel}'s ${color} ${material} ${item}`.replace(/\s+/g, " ").trim();
+      if (!seen.has(kw)) { seen.add(kw); keywords.push(kw); }
+    }
+  }
+
   const topPerformerKws = topPerformers
     .filter(p => p.score >= 0.5)
     .map(p => p.keyword);
@@ -287,11 +306,13 @@ function generateKeywordsForSlotByLook(
 
   const items = look.items[slot] || [];
   const materials = look.materials;
-  if (items.length === 0) return keywords;
+  if (items.length === 0 && keywords.length === 0) return keywords;
 
   const isCore = ["top", "bottom", "shoes", "outer"].includes(slot);
-  const maxKws = isCore ? 3 : 2;
+  const maxKws = isCore ? (dnaSlot ? 5 : 3) : (dnaSlot ? 3 : 2);
   const itemCount = isCore ? 2 : 1;
+
+  if (items.length === 0) return keywords.slice(0, maxKws);
 
   const selectedItems = shuffleArray(items).slice(0, itemCount);
   const selectedMaterials = shuffleArray(materials).slice(0, itemCount);
@@ -335,7 +356,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { gender, body_type, vibe, season } = await req.json();
+    const body = await req.json();
+    const { gender, body_type, vibe, season } = body;
 
     if (!gender || !vibe) {
       return new Response(JSON.stringify({ error: "gender and vibe are required" }), {
@@ -348,12 +370,13 @@ Deno.serve(async (req: Request) => {
     const seasonLabel = (season || "fall").toLowerCase();
     const bodyTypeLabel = (body_type || "regular").toLowerCase();
 
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
     let topPerformers: Record<string, KeywordPerformance[]> = {};
     try {
-      const adminClient = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
       const { data: perfData } = await adminClient
         .from("keyword_performance")
         .select("keyword, slot, score")
@@ -373,6 +396,78 @@ Deno.serve(async (req: Request) => {
       topPerformers = {};
     }
 
+    const dnaMode = (body as Record<string, unknown>).dna_mode as string || "auto";
+    let dnaRulesMap: Record<string, Record<string, DnaSlotData>> = {};
+    let dnaEnhanced = false;
+    let dnaCellCount = 0;
+
+    if (dnaMode !== "skip") {
+      try {
+        const statusFilter = dnaMode === "force" ? ["ready", "in_progress"] : ["ready"];
+        const { data: cells } = await adminClient
+          .from("style_dna_cells")
+          .select("id, look_key, status")
+          .eq("gender", gender)
+          .eq("body_type", body_type || "regular")
+          .eq("vibe", vibe)
+          .eq("season", season || "fall")
+          .in("status", statusFilter);
+
+        if (cells && cells.length > 0) {
+          const cellIds = cells.map((c: { id: string }) => c.id);
+          const cellLookMap = new Map(cells.map((c: { id: string; look_key: string }) => [c.id, c.look_key]));
+
+          const { data: rules } = await adminClient
+            .from("style_dna_learned_rules")
+            .select("cell_id, rule_type, rule_data, confidence")
+            .in("cell_id", cellIds)
+            .gte("confidence", 0.3);
+
+          if (rules && rules.length > 0) {
+            for (const rule of rules) {
+              const lookKey = cellLookMap.get(rule.cell_id) || "";
+              if (!lookKey) continue;
+              if (!dnaRulesMap[lookKey]) dnaRulesMap[lookKey] = {};
+              const rd = rule.rule_data as Record<string, unknown>;
+
+              if (rule.rule_type === "keyword" && rd.by_slot) {
+                const bySlot = rd.by_slot as Record<string, string[]>;
+                const slotMats = (rd.slot_materials || {}) as Record<string, string[]>;
+                for (const [slot, items] of Object.entries(bySlot)) {
+                  if (!dnaRulesMap[lookKey][slot]) dnaRulesMap[lookKey][slot] = { items: [], materials: [], colors: [] };
+                  dnaRulesMap[lookKey][slot].items.push(...items.slice(0, 3));
+                }
+                for (const [slot, mats] of Object.entries(slotMats)) {
+                  if (!dnaRulesMap[lookKey][slot]) dnaRulesMap[lookKey][slot] = { items: [], materials: [], colors: [] };
+                  dnaRulesMap[lookKey][slot].materials.push(...mats.slice(0, 3));
+                }
+              }
+
+              if (rule.rule_type === "color_palette" && rd.dominant_colors) {
+                const colors = (rd.dominant_colors as string[]).slice(0, 4);
+                for (const slot of Object.keys(dnaRulesMap[lookKey] || {})) {
+                  dnaRulesMap[lookKey][slot].colors = colors;
+                }
+              }
+
+              if (rule.rule_type === "material_combo" && rd.primary_materials) {
+                const mats = (rd.primary_materials as string[]).slice(0, 4);
+                for (const slot of Object.keys(dnaRulesMap[lookKey] || {})) {
+                  if (dnaRulesMap[lookKey][slot].materials.length === 0) {
+                    dnaRulesMap[lookKey][slot].materials = mats;
+                  }
+                }
+              }
+            }
+            dnaCellCount = cells.length;
+            dnaEnhanced = true;
+          }
+        }
+      } catch {
+        dnaRulesMap = {};
+      }
+    }
+
     const SLOTS = ["top", "bottom", "shoes", "outer", "mid", "bag", "accessory"];
     const vibeData = VIBE_LOOKS[vibeKey];
 
@@ -386,7 +481,8 @@ Deno.serve(async (req: Request) => {
       const lookCategories: Record<string, string[]> = {};
       for (const slot of SLOTS) {
         const slotPerformers = topPerformers[slot] || [];
-        const kws = generateKeywordsForSlotByLook(slot, lookKey, look, genderLabel, vibeKey, seasonLabel, bodyTypeLabel, slotPerformers);
+        const dnaSlot = dnaRulesMap[lookKey]?.[slot];
+        const kws = generateKeywordsForSlotByLook(slot, lookKey, look, genderLabel, vibeKey, seasonLabel, bodyTypeLabel, slotPerformers, dnaSlot);
         if (kws.length > 0) {
           lookCategories[slot] = kws;
           if (!categories[slot]) categories[slot] = [];
@@ -408,6 +504,8 @@ Deno.serve(async (req: Request) => {
         }, {}),
         source: "rule-based",
         vibeKey,
+        dnaEnhanced,
+        dnaCellCount,
         colorHints: VIBE_DNA[vibeKey] ? {
           primary: VIBE_DNA[vibeKey].colors.primary,
           secondary: VIBE_DNA[vibeKey].colors.secondary,

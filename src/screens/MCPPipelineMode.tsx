@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Server, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight,
   BarChart3, ThumbsUp, ThumbsDown, Check, X, TrendingUp, Lightbulb,
-  Package, ExternalLink, RefreshCw, Brain,
+  Package, ExternalLink, RefreshCw, Brain, Dna, FlaskConical,
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
@@ -47,6 +47,21 @@ interface LearningInsights {
   topItems: { slot: string; item_name: string; score: number; success_count: number; fail_count: number }[];
   acceptanceRate: number | null;
   totalFeedback: number;
+}
+
+type DnaMode = 'auto' | 'force' | 'skip';
+
+interface DnaCellStatus {
+  look_key: string;
+  status: 'empty' | 'in_progress' | 'ready';
+  reference_count: number;
+  rules_count: number;
+  has_brief: boolean;
+}
+
+interface DnaStatusResponse {
+  cells: DnaCellStatus[];
+  recommendation: string;
 }
 
 const STEP_META: Record<string, { label: string }> = {
@@ -139,8 +154,8 @@ function MCPOutfitCard({ candidate, selected, onToggle }: {
 
       {candidate.insight && (
         <div className="px-4 pb-2 pt-0">
-          <div className="flex items-start gap-1.5 bg-white/4 rounded-lg px-3 py-2">
-            <Lightbulb className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
+          <div className={`flex items-start gap-1.5 rounded-lg px-3 py-2 ${(candidate as any).dnaEnhanced ? 'bg-teal-500/5 border border-teal-500/10' : 'bg-white/4'}`}>
+            {(candidate as any).dnaEnhanced ? <Dna className="w-3 h-3 text-teal-400 mt-0.5 shrink-0" /> : <Lightbulb className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />}
             <p className="text-[10px] text-zinc-400 leading-relaxed">{candidate.insight}</p>
           </div>
         </div>
@@ -305,6 +320,119 @@ function LearningInsightsPanel({ vibe, season }: { vibe: Vibe; season: Season })
   );
 }
 
+function DnaStatusPanel({ gender, bodyType, vibe, season, dnaMode, onDnaModeChange }: {
+  gender: Gender; bodyType: BodyType; vibe: Vibe; season: Season;
+  dnaMode: DnaMode; onDnaModeChange: (m: DnaMode) => void;
+}) {
+  const [status, setStatus] = useState<DnaStatusResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      let authHeader = `Bearer ${anonKey}`;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) authHeader = `Bearer ${session.access_token}`;
+      } catch { /**/ }
+
+      const params = new URLSearchParams({ action: 'dna-status', gender, bodyType, vibe, season });
+      const r = await fetch(`${supabaseUrl}/functions/v1/mcp-pipeline-orchestrator?${params}`, {
+        headers: { Authorization: authHeader, apikey: anonKey },
+      });
+      if (r.ok) setStatus(await r.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [gender, bodyType, vibe, season, supabaseUrl, anonKey]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const readyCount = (status?.cells || []).filter(c => c.status === 'ready').length;
+  const hasAnyDna = readyCount > 0;
+
+  const DNA_MODE_OPTIONS: { value: DnaMode; label: string; desc: string }[] = [
+    { value: 'auto', label: 'Auto', desc: 'ready cells only' },
+    { value: 'force', label: 'Force', desc: 'include in-progress' },
+    { value: 'skip', label: 'Skip', desc: 'no DNA' },
+  ];
+
+  return (
+    <div className="bg-white/5 rounded-2xl border border-white/8 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4">
+        <div className="flex items-center gap-2.5">
+          <Dna className="w-4 h-4 text-teal-400" />
+          <span className="text-xs font-semibold text-zinc-300">Style DNA Lab</span>
+          {loading ? (
+            <Loader2 className="w-3 h-3 text-zinc-500 animate-spin" />
+          ) : hasAnyDna ? (
+            <span className="text-[10px] bg-teal-500/15 text-teal-400 px-2 py-0.5 rounded-full border border-teal-500/20">
+              {readyCount}/3 looks ready
+            </span>
+          ) : (
+            <span className="text-[10px] bg-white/8 text-zinc-500 px-2 py-0.5 rounded-full">
+              no data
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5">
+          {DNA_MODE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => onDnaModeChange(opt.value)}
+              className={`px-2.5 py-1.5 rounded-md text-[10px] font-medium transition-all ${
+                dnaMode === opt.value
+                  ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              title={opt.desc}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {status && status.cells.length > 0 && (
+        <div className="border-t border-white/5 px-5 py-3">
+          <div className="flex gap-2">
+            {status.cells.map(cell => (
+              <div key={cell.look_key} className={`flex-1 rounded-xl p-3 border transition-all ${
+                cell.status === 'ready'
+                  ? 'bg-teal-500/8 border-teal-500/20'
+                  : cell.status === 'in_progress'
+                  ? 'bg-amber-500/8 border-amber-500/20'
+                  : 'bg-white/3 border-white/8'
+              }`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-bold text-zinc-300">Look {cell.look_key}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    cell.status === 'ready' ? 'bg-teal-400' :
+                    cell.status === 'in_progress' ? 'bg-amber-400' : 'bg-zinc-600'
+                  }`} />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[9px] text-zinc-500">
+                    {cell.reference_count} refs / {cell.rules_count} rules
+                  </div>
+                  {cell.has_brief && (
+                    <div className="text-[9px] text-teal-500 flex items-center gap-0.5">
+                      <FlaskConical className="w-2.5 h-2.5" /> brief
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-2">{status.recommendation}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MCPPipelineMode({
   gender, bodyType, vibe, season, productsPerSlot,
 }: {
@@ -319,6 +447,7 @@ export default function MCPPipelineMode({
   const [selectedOutfitIds, setSelectedOutfitIds] = useState<Set<string>>(new Set());
   const [showLogs, setShowLogs] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  const [dnaMode, setDnaMode] = useState<DnaMode>('auto');
   const logEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastLogTimeRef = useRef<string>('');
@@ -392,7 +521,7 @@ export default function MCPPipelineMode({
       const r = await fetch(`${supabaseUrl}/functions/v1/mcp-pipeline-orchestrator`, {
         method: 'POST',
         headers: { Authorization: authHeader, apikey: anonKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'start', gender, bodyType, vibe, season, productsPerSlot }),
+        body: JSON.stringify({ action: 'start', gender, bodyType, vibe, season, productsPerSlot, dnaMode }),
       });
       if (!r.ok) throw new Error(`Start failed: ${r.status}`);
       const { batchId } = await r.json();
@@ -474,6 +603,9 @@ export default function MCPPipelineMode({
 
       {/* Learning Insights */}
       <LearningInsightsPanel vibe={vibe} season={season} />
+
+      {/* DNA Status */}
+      <DnaStatusPanel gender={gender} bodyType={bodyType} vibe={vibe} season={season} dnaMode={dnaMode} onDnaModeChange={setDnaMode} />
 
       {/* Start button */}
       <button
@@ -682,7 +814,10 @@ export default function MCPPipelineMode({
                               log.status === 'success' ? 'text-emerald-400' :
                               log.status === 'error' ? 'text-red-400' :
                               log.status === 'start' ? 'text-blue-400' : 'text-zinc-400'
-                            }`}>{log.message}</span>
+                            }`}>
+                              {log.message.includes('DNA') && <Dna className="w-3 h-3 text-teal-400 inline mr-1" />}
+                              {log.message}
+                            </span>
                           </div>
                         ))}
                       </div>

@@ -77,31 +77,92 @@ function isValidSearchResult(item: any): boolean {
   );
 }
 
+interface DnaContext {
+  enabled: boolean;
+  mode: string;
+  colorsByLook: Record<string, string[]>;
+  materialsByLook: Record<string, string[]>;
+  briefsByLook: Record<string, string>;
+  cellCount: number;
+}
+
+async function loadDnaContext(db: ReturnType<typeof adminClient>, gender: string, bodyType: string, vibe: string, season: string, dnaMode: string): Promise<DnaContext> {
+  const ctx: DnaContext = { enabled: false, mode: dnaMode, colorsByLook: {}, materialsByLook: {}, briefsByLook: {}, cellCount: 0 };
+  if (dnaMode === "skip") return ctx;
+
+  try {
+    const statusFilter = dnaMode === "force" ? ["ready", "in_progress"] : ["ready"];
+    const { data: cells } = await db
+      .from("style_dna_cells")
+      .select("id, look_key, status, style_brief, learned_palette, learned_materials")
+      .eq("gender", gender)
+      .eq("body_type", bodyType)
+      .eq("vibe", vibe)
+      .eq("season", season)
+      .in("status", statusFilter);
+
+    if (!cells || cells.length === 0) return ctx;
+
+    ctx.cellCount = cells.length;
+    ctx.enabled = true;
+
+    for (const cell of cells) {
+      const lk = cell.look_key;
+      if (cell.style_brief) ctx.briefsByLook[lk] = cell.style_brief;
+      if (cell.learned_palette?.dominant_colors) {
+        ctx.colorsByLook[lk] = (cell.learned_palette.dominant_colors as string[]).slice(0, 6);
+      }
+      if (cell.learned_materials && Array.isArray(cell.learned_materials)) {
+        ctx.materialsByLook[lk] = (cell.learned_materials as string[]).slice(0, 6);
+      }
+    }
+  } catch { /* silent */ }
+  return ctx;
+}
+
+function scoreDnaRelevance(item: any, dnaColors: string[], dnaMaterials: string[]): number {
+  if (dnaColors.length === 0 && dnaMaterials.length === 0) return 0;
+  const title = ((item.title || "") + " " + (item.color || "")).toLowerCase();
+  let score = 0;
+  for (const c of dnaColors) {
+    if (title.includes(c.toLowerCase())) { score += 2; break; }
+  }
+  for (const m of dnaMaterials) {
+    if (title.includes(m.toLowerCase())) { score += 1; break; }
+  }
+  return score;
+}
+
 async function runPipeline(batchId: string, config: {
-  gender: string; bodyType: string; vibe: string; season: string; productsPerSlot: number;
+  gender: string; bodyType: string; vibe: string; season: string; productsPerSlot: number; dnaMode: string;
 }, authHeader: string) {
   const db = adminClient();
-  const { gender, bodyType, vibe, season, productsPerSlot } = config;
+  const { gender, bodyType, vibe, season, productsPerSlot, dnaMode } = config;
 
   try {
     await updateRun(batchId, { status: "running", phase: "keywords" });
-    await log(batchId, "system", "start", `MCP Pipeline started — ${vibe} / ${season} / ${gender}`);
+    await log(batchId, "system", "start", `MCP Pipeline started — ${vibe} / ${season} / ${gender} (DNA: ${dnaMode})`);
 
     const vibeKey = vibe.toLowerCase().replace(/\s+/g, "_");
     const seasonLabel = season.toLowerCase();
 
-    // ── STEP 1: Keywords (reads keyword_performance for top performers) ──────
-    await log(batchId, "keywords", "start", "Generating keywords via rule engine + learning data...");
-    const kwData = await callFunction("auto-generate-keywords", { gender, body_type: bodyType, vibe, season }, authHeader);
+    const dna = await loadDnaContext(db, gender, bodyType, vibe, seasonLabel, dnaMode);
+    if (dna.enabled) {
+      await log(batchId, "system", "progress", `DNA Lab active: ${dna.cellCount} cells, ${Object.keys(dna.briefsByLook).length} briefs loaded`);
+    }
+
+    // ── STEP 1: Keywords (reads keyword_performance + DNA rules) ─────────────
+    await log(batchId, "keywords", "start", `Generating keywords via rule engine + learning data${dna.enabled ? " + DNA Lab" : ""}...`);
+    const kwData = await callFunction("auto-generate-keywords", { gender, body_type: bodyType, vibe, season, dna_mode: dnaMode }, authHeader);
     const byLook: Record<string, Record<string, string[]>> = kwData.byLook || {};
     const lookNames: Record<string, string> = kwData.lookNames || {};
     const lookKeys = Object.keys(byLook);
     const totalKw = Object.values(kwData.categories || {}).reduce((a: number, b: unknown) => a + (b as string[]).length, 0);
+    const dnaTag = kwData.dnaEnhanced ? ` [DNA-enhanced: ${kwData.dnaCellCount} cells]` : "";
 
-    // Load keyword_performance scores to re-sort search order
     const kwScores = await loadKeywordScores(db, vibeKey, seasonLabel);
     const learnedCount = kwScores.size;
-    await log(batchId, "keywords", "success", `${totalKw} keywords across ${lookKeys.length} looks (${learnedCount} learned scores loaded)`);
+    await log(batchId, "keywords", "success", `${totalKw} keywords across ${lookKeys.length} looks (${learnedCount} learned scores loaded)${dnaTag}`);
 
     // Apply learning scores: re-sort keywords per slot per look
     for (const lookKey of lookKeys) {
@@ -161,11 +222,18 @@ async function runPipeline(batchId: string, config: {
               await log(batchId, "search", "progress", `[${lookKey}/${slot}] "${kw}" failed: ${(e as Error).message.slice(0, 80)}`);
             }
           }
-          for (const item of results as any[]) {
-            if (item.asin && !lookSeenAsins.has(item.asin) && !existingAsinSet.has(item.asin) && candidates.length < slotLimit) {
-              lookSeenAsins.add(item.asin);
-              candidates.push(item);
-            }
+          const lookDnaColors = dna.colorsByLook[lookKey] || [];
+          const lookDnaMaterials = dna.materialsByLook[lookKey] || [];
+          const eligible = (results as any[]).filter(
+            (item: any) => item.asin && !lookSeenAsins.has(item.asin) && !existingAsinSet.has(item.asin)
+          );
+          if (dna.enabled && (lookDnaColors.length > 0 || lookDnaMaterials.length > 0)) {
+            eligible.sort((a: any, b: any) => scoreDnaRelevance(b, lookDnaColors, lookDnaMaterials) - scoreDnaRelevance(a, lookDnaColors, lookDnaMaterials));
+          }
+          for (const item of eligible) {
+            if (candidates.length >= slotLimit) break;
+            lookSeenAsins.add(item.asin);
+            candidates.push(item);
           }
         }
 
@@ -293,11 +361,12 @@ async function runPipeline(batchId: string, config: {
       await log(batchId, "outfits", "success", `[Look ${c.lookKey || "?"}] Score: ${c.matchScore ?? "?"}`);
     }
 
-    // ── STEP 7: Generate outfit insights (template-based, zero GPT cost) ─────
-    await log(batchId, "outfits", "progress", "Generating styling insights (template engine)...");
+    // ── STEP 7: Generate outfit insights (template + DNA brief) ────────────
+    await log(batchId, "outfits", "progress", `Generating styling insights (template engine${dna.enabled ? " + DNA briefs" : ""})...`);
     const insightedCandidates = outfitCandidates.map((c: any) => ({
       ...c,
-      insight: generateTemplateInsight(c, vibe, season),
+      insight: generateTemplateInsight(c, vibe, season, dna.briefsByLook[c.lookKey]),
+      dnaEnhanced: !!dna.briefsByLook[c.lookKey],
     }));
 
     // ── DONE ─────────────────────────────────────────────────────────────────
@@ -318,12 +387,19 @@ async function runPipeline(batchId: string, config: {
   }
 }
 
-function generateTemplateInsight(candidate: any, vibe: string, season: string): string {
+function generateTemplateInsight(candidate: any, vibe: string, season: string, dnaBrief?: string): string {
   const items = (candidate.items || []) as any[];
   const colors = [...new Set(items.map((i: any) => i.color).filter(Boolean))].slice(0, 3);
   const slots = items.map((i: any) => i.slot);
   const hasOuter = slots.includes("outer") || slots.includes("mid");
   const score = candidate.matchScore || 0;
+
+  if (dnaBrief) {
+    const briefFirst = dnaBrief.split(".").slice(0, 2).join(".").trim();
+    const colorStory = colors.length >= 2 ? `${colors.slice(0, 2).join(" & ")} palette.` : colors[0] ? `${colors[0]} tones.` : "";
+    const qualityNote = score >= 75 ? " High-scoring combination." : score >= 55 ? " Well-balanced." : "";
+    return `${briefFirst}. ${colorStory}${qualityNote}`.replace(/\.\./g, ".").trim();
+  }
 
   const VIBE_VOICE: Record<string, string> = {
     ELEVATED_COOL: "Sharp and intentional",
@@ -363,6 +439,60 @@ Deno.serve(async (req: Request) => {
 
     // ── GET: Poll run status + logs ──────────────────────────────────────────
     if (req.method === "GET") {
+      const getAction = url.searchParams.get("action");
+
+      if (getAction === "dna-status") {
+        const gender = url.searchParams.get("gender") || "FEMALE";
+        const bodyType = url.searchParams.get("bodyType") || "regular";
+        const gVibe = url.searchParams.get("vibe") || "ELEVATED_COOL";
+        const gSeason = url.searchParams.get("season") || "fall";
+        const db = adminClient();
+
+        const { data: cells } = await db
+          .from("style_dna_cells")
+          .select("id, look_key, status, reference_count, style_brief")
+          .eq("gender", gender)
+          .eq("body_type", bodyType)
+          .eq("vibe", gVibe)
+          .eq("season", gSeason)
+          .order("look_key");
+
+        const cellIds = (cells || []).map((c: any) => c.id);
+        let ruleCountByLook: Record<string, number> = {};
+
+        if (cellIds.length > 0) {
+          const { data: rules } = await db
+            .from("style_dna_learned_rules")
+            .select("cell_id")
+            .in("cell_id", cellIds);
+
+          const cellIdToLook = new Map((cells || []).map((c: any) => [c.id, c.look_key]));
+          for (const r of rules || []) {
+            const lk = cellIdToLook.get(r.cell_id) || "";
+            if (lk) ruleCountByLook[lk] = (ruleCountByLook[lk] || 0) + 1;
+          }
+        }
+
+        const cellResults = (cells || []).map((c: any) => ({
+          look_key: c.look_key,
+          status: c.status,
+          reference_count: c.reference_count,
+          rules_count: ruleCountByLook[c.look_key] || 0,
+          has_brief: !!c.style_brief,
+        }));
+
+        const readyCount = cellResults.filter((c: any) => c.status === "ready").length;
+        const recommendation = readyCount === 3
+          ? "All looks are DNA-enhanced."
+          : readyCount > 0
+          ? `${readyCount}/3 looks DNA-enhanced. Others use fallback rules.`
+          : "No DNA data available. Pipeline will use default rules.";
+
+        return new Response(JSON.stringify({ cells: cellResults, recommendation }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const batchId = url.searchParams.get("batchId");
       if (!batchId) {
         return new Response(JSON.stringify({ error: "batchId required" }), {
@@ -387,7 +517,7 @@ Deno.serve(async (req: Request) => {
 
     // ── POST action: start ───────────────────────────────────────────────────
     if (act === "start") {
-      const { gender = "FEMALE", bodyType = "regular", vibe = "ELEVATED_COOL", season = "fall", productsPerSlot = 3 } = body;
+      const { gender = "FEMALE", bodyType = "regular", vibe = "ELEVATED_COOL", season = "fall", productsPerSlot = 3, dnaMode = "auto" } = body;
       const batchId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const db = adminClient();
       await db.from("mcp_pipeline_runs").insert({
@@ -395,9 +525,9 @@ Deno.serve(async (req: Request) => {
         vibe, season, products_per_slot: productsPerSlot,
       });
 
-      EdgeRuntime.waitUntil(runPipeline(batchId, { gender, bodyType, vibe, season, productsPerSlot }, authHeader));
+      EdgeRuntime.waitUntil(runPipeline(batchId, { gender, bodyType, vibe, season, productsPerSlot, dnaMode }, authHeader));
 
-      return new Response(JSON.stringify({ batchId, status: "started" }), {
+      return new Response(JSON.stringify({ batchId, status: "started", dnaMode }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
