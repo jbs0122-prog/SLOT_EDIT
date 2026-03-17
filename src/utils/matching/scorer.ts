@@ -1,5 +1,5 @@
 import { Product } from '../../data/outfits';
-import { CompositionScore, AssemblyContext } from './types';
+import { CompositionScore, AssemblyContext, DnaLabRules } from './types';
 import { evaluateAllRules } from './rules';
 import { computeSeasonFit, computeWarmthFit, computeAccessoryHarmony, computeImageFeatureScore, computePatternBalance } from './contextLayer';
 import { resolveColorFamily, isNeutralColor, analyzeColorComposition } from './colorDna';
@@ -144,6 +144,72 @@ function scoreColorDepth(items: Record<string, Product>): number {
   return Math.max(0, Math.min(100, score));
 }
 
+function applyClientDnaBonus(items: Record<string, Product>, dna: DnaLabRules | null | undefined): number {
+  if (!dna) return 0;
+  let bonus = 0;
+  const all = Object.values(items).filter(Boolean);
+
+  if (dna.color_palette?.dominant_colors?.length) {
+    const learned = dna.color_palette.dominant_colors.map(c => c.toLowerCase());
+    const itemColors = all.map(p => resolveColorFamily(p.color || '', p.color_family).toLowerCase()).filter(Boolean);
+    const matches = itemColors.filter(c => learned.includes(c)).length;
+    const matchRatio = matches / Math.max(1, itemColors.length);
+    bonus += Math.min(12, matchRatio * 15);
+    if (matchRatio >= 0.7) bonus += 3;
+  }
+
+  if (dna.color_palette?.primary_strategy) {
+    const strategy = dna.color_palette.primary_strategy.toLowerCase();
+    const itemColors = all.map(p => resolveColorFamily(p.color || '', p.color_family)).filter(Boolean);
+    const neutralCount = itemColors.filter(c => isNeutralColor(c)).length;
+    const neutralRatio = neutralCount / Math.max(1, itemColors.length);
+    if (strategy.includes('neutral') && neutralRatio >= 0.6) bonus += 4;
+    if (strategy.includes('monochrome')) {
+      const unique = new Set(itemColors);
+      if (unique.size <= 2) bonus += 4;
+    }
+    if (strategy.includes('earth') || strategy.includes('warm')) {
+      const earthColors = new Set(['brown', 'tan', 'camel', 'olive', 'khaki', 'sage', 'rust', 'mustard', 'burgundy', 'wine']);
+      const earthCount = itemColors.filter(c => earthColors.has(c)).length;
+      if (earthCount >= 2) bonus += 3;
+    }
+  }
+
+  if (dna.material_combo?.primary_materials?.length) {
+    const learned = dna.material_combo.primary_materials.map(m => m.toLowerCase());
+    const itemMats = all.map(p => (p.material || '').toLowerCase()).filter(Boolean);
+    const matches = itemMats.filter(m => learned.some(l => m.includes(l))).length;
+    const matchRatio = matches / Math.max(1, itemMats.length);
+    bonus += Math.min(10, matchRatio * 12);
+    if (matchRatio >= 0.6) bonus += 3;
+  }
+
+  if (dna.silhouette?.preferred?.length) {
+    const preferred = dna.silhouette.preferred.map(s => s.toLowerCase());
+    const itemSils = all.map(p => (p.silhouette || '').toLowerCase()).filter(Boolean);
+    const matches = itemSils.filter(s => preferred.some(pref => s.includes(pref) || pref.includes(s))).length;
+    bonus += Math.min(6, (matches / Math.max(1, itemSils.length)) * 8);
+  }
+
+  if (dna.formality?.average) {
+    const formalities = all.map(p => typeof p.formality === 'number' ? p.formality : 3);
+    const avg = formalities.reduce((a, b) => a + b, 0) / Math.max(1, formalities.length);
+    const diff = Math.abs(avg - dna.formality.average);
+    if (diff <= 0.5) bonus += 6;
+    else if (diff <= 1) bonus += 4;
+    else if (diff <= 2) bonus += 2;
+    else bonus -= 3;
+
+    if (dna.formality.range) {
+      const [lo, hi] = dna.formality.range;
+      const outOfRange = formalities.filter(f => f < lo || f > hi).length;
+      if (outOfRange > 0) bonus -= outOfRange * 2;
+    }
+  }
+
+  return bonus;
+}
+
 export function scoreComposition(
   items: Record<string, Product>,
   context: AssemblyContext
@@ -194,6 +260,8 @@ export function scoreComposition(
   total += breakdown.colorDepth * SCORE_WEIGHTS.colorDepth;
   total += breakdown.materialCompat * SCORE_WEIGHTS.materialCompat;
   total += breakdown.contextFit * SCORE_WEIGHTS.contextFit;
+
+  total += applyClientDnaBonus(items, context.dnaRules);
 
   return {
     total: Math.round(total),

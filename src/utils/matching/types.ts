@@ -56,6 +56,13 @@ export interface CompositionScore {
   };
 }
 
+export interface DnaLabRules {
+  color_palette?: { dominant_colors?: string[]; primary_strategy?: string };
+  material_combo?: { primary_materials?: string[] };
+  silhouette?: { preferred?: string[] };
+  formality?: { average?: number; range?: [number, number] };
+}
+
 export interface AssemblyContext {
   vibe?: string;
   look?: string;
@@ -63,6 +70,7 @@ export interface AssemblyContext {
   bodyType?: string;
   targetSeason?: string;
   targetWarmth?: number;
+  dnaRules?: DnaLabRules | null;
 }
 
 export type SlotName = 'outer' | 'mid' | 'top' | 'bottom' | 'shoes' | 'bag' | 'accessory' | 'accessory_2';

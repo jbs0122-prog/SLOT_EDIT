@@ -4,6 +4,7 @@ import { findBestOutfits, OutfitCandidate, AnchorItem, MatchScore } from './matc
 import { removeBackground } from './backgroundRemoval';
 import { getSlotRecommendations } from './slotRecommender';
 import { ITEM_WARMTH_LIMITS, shouldIncludeOuter, getMidTier } from './matching/beamSearch';
+import { DnaLabRules } from './matching/types';
 
 export interface GenerateOutfitsParams {
   gender: string;
@@ -29,14 +30,47 @@ export interface GeneratedOutfit {
 
 export const MAX_OUTFIT_USAGE = 3;
 
+async function fetchDnaRules(gender: string, bodyType: string, vibe: string, season?: string): Promise<DnaLabRules | null> {
+  try {
+    const { data: cell } = await supabase
+      .from('style_dna_cells')
+      .select('id')
+      .eq('gender', gender)
+      .eq('body_type', bodyType)
+      .eq('vibe', vibe)
+      .eq('season', season || 'fall')
+      .eq('status', 'ready')
+      .limit(1)
+      .maybeSingle();
+
+    if (!cell?.id) return null;
+
+    const { data: rules } = await supabase
+      .from('style_dna_learned_rules')
+      .select('rule_type, rule_data')
+      .eq('cell_id', cell.id);
+
+    if (!rules || rules.length === 0) return null;
+
+    const merged: DnaLabRules = {};
+    for (const r of rules) {
+      (merged as Record<string, unknown>)[r.rule_type] = r.rule_data;
+    }
+    return merged;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateOutfitsAutomatically(
   params: GenerateOutfitsParams
 ): Promise<GeneratedOutfit[]> {
   const { gender, bodyType, vibe, count = 5, targetWarmth, targetSeason, anchorProductId, anchorSlot, unusedOnly = false } = params;
 
-  const [productsResult, usageResult] = await Promise.all([
+  const [productsResult, usageResult, dnaRules] = await Promise.all([
     supabase.from('products').select('*'),
     supabase.from('outfit_items').select('product_id'),
+    fetchDnaRules(gender, bodyType, vibe, targetSeason),
   ]);
 
   if (productsResult.error) throw productsResult.error;
@@ -114,6 +148,7 @@ export async function generateOutfitsAutomatically(
       vibe,
       targetWarmth,
       targetSeason,
+      dnaRules,
     },
     aiCandidateCount,
     anchor,

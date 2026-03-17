@@ -698,7 +698,24 @@ function scoreMaterialCompat(items: Record<string, any>): number {
   return Math.max(0, Math.min(100, Math.round((compatCount > 0 ? compatTotal / compatCount : 0.5) * 100)));
 }
 
-function scoreVibeMatch(items: Record<string, any>, vibe: string): number {
+function getLookAffinityScore(product: any, vibe: string, lookKey: string): number {
+  if (product.look_affinity?.[vibe]?.[lookKey] !== undefined) {
+    return product.look_affinity[vibe][lookKey] / 100;
+  }
+  const category = product.category as string;
+  const slotKey = category === "mid" ? "top" : category;
+  const pool = VIBE_ITEM_POOLS[vibe];
+  if (!pool) return 0;
+  const itemPool = pool[slotKey];
+  if (!itemPool?.length) return 0;
+  const terms: string[] = [];
+  if (product.sub_category) terms.push(product.sub_category);
+  if (product.name) terms.push(product.name);
+  if (!terms.length) return 0;
+  return fuzzyMatchScore(terms, itemPool);
+}
+
+function scoreVibeMatch(items: Record<string, any>, vibe: string, lookKey?: string): number {
   const all = Object.values(items).filter(Boolean);
   if (all.length === 0) return 15;
 
@@ -714,7 +731,20 @@ function scoreVibeMatch(items: Record<string, any>, vibe: string): number {
     else if (isVibeSecondary) totalAffinity += 0.3;
     else totalAffinity += 0.05;
   }
-  const avgAffinity = totalAffinity / all.length;
+  let avgAffinity = totalAffinity / all.length;
+
+  if (lookKey) {
+    const coreKeys = ["outer", "mid", "top", "bottom", "shoes"];
+    const coreItems = coreKeys.map(k => items[k]).filter(Boolean);
+    if (coreItems.length >= 2) {
+      const lookScores = coreItems.map((p: any) => getLookAffinityScore(p, vibe, lookKey));
+      const avgLookScore = lookScores.reduce((s: number, a: number) => s + a, 0) / lookScores.length;
+      const lookHighCount = lookScores.filter((s: number) => s >= 0.5).length;
+      avgAffinity += avgLookScore * 0.15;
+      if (lookHighCount >= coreItems.length * 0.6) avgAffinity += 0.05;
+    }
+  }
+
   return Math.max(0, Math.min(100, Math.round(avgAffinity * 100)));
 }
 
@@ -934,28 +964,64 @@ function applyDnaBonus(items: Record<string, any>, dna: DnaLabRules | null): num
     const learned = dna.color_palette.dominant_colors.map((c: string) => c.toLowerCase());
     const itemColors = all.map((p: any) => resolveColorFamily(p.color || "", p.color_family).toLowerCase()).filter(Boolean);
     const matches = itemColors.filter((c: string) => learned.includes(c)).length;
-    bonus += Math.min(8, (matches / Math.max(1, itemColors.length)) * 10);
+    const matchRatio = matches / Math.max(1, itemColors.length);
+    bonus += Math.min(12, matchRatio * 15);
+    if (matchRatio >= 0.7) bonus += 3;
+  }
+
+  if (dna.color_palette?.primary_strategy) {
+    const strategy = dna.color_palette.primary_strategy.toLowerCase();
+    const itemColors = all.map((p: any) => resolveColorFamily(p.color || "", p.color_family)).filter(Boolean);
+    const neutralCount = itemColors.filter((c: string) => isNeutralColor(c)).length;
+    const neutralRatio = neutralCount / Math.max(1, itemColors.length);
+    if (strategy.includes("neutral") && neutralRatio >= 0.6) bonus += 4;
+    if (strategy.includes("monochrome")) {
+      const unique = new Set(itemColors);
+      if (unique.size <= 2) bonus += 4;
+    }
+    if (strategy.includes("earth") || strategy.includes("warm")) {
+      const earthColors = new Set(["brown", "tan", "camel", "olive", "khaki", "sage", "rust", "mustard", "burgundy", "wine"]);
+      const earthCount = itemColors.filter((c: string) => earthColors.has(c)).length;
+      if (earthCount >= 2) bonus += 3;
+    }
   }
 
   if (dna.material_combo?.primary_materials?.length) {
     const learned = dna.material_combo.primary_materials.map((m: string) => m.toLowerCase());
     const itemMats = all.map((p: any) => (p.material || "").toLowerCase()).filter(Boolean);
     const matches = itemMats.filter((m: string) => learned.some((l: string) => m.includes(l))).length;
-    bonus += Math.min(6, (matches / Math.max(1, itemMats.length)) * 8);
+    const matchRatio = matches / Math.max(1, itemMats.length);
+    bonus += Math.min(10, matchRatio * 12);
+    if (matchRatio >= 0.6) bonus += 3;
+  }
+
+  if (dna.silhouette?.preferred?.length) {
+    const preferred = dna.silhouette.preferred.map((s: string) => s.toLowerCase());
+    const itemSils = all.map((p: any) => (p.silhouette || "").toLowerCase()).filter(Boolean);
+    const matches = itemSils.filter((s: string) => preferred.some((pref: string) => s.includes(pref) || pref.includes(s))).length;
+    bonus += Math.min(6, (matches / Math.max(1, itemSils.length)) * 8);
   }
 
   if (dna.formality?.average) {
     const formalities = all.map(getFormality);
     const avg = formalities.reduce((a: number, b: number) => a + b, 0) / Math.max(1, formalities.length);
     const diff = Math.abs(avg - dna.formality.average);
-    if (diff <= 1) bonus += 4;
+    if (diff <= 0.5) bonus += 6;
+    else if (diff <= 1) bonus += 4;
     else if (diff <= 2) bonus += 2;
+    else bonus -= 3;
+
+    if (dna.formality.range) {
+      const [lo, hi] = dna.formality.range;
+      const outOfRange = formalities.filter((f: number) => f < lo || f > hi).length;
+      if (outOfRange > 0) bonus -= outOfRange * 2;
+    }
   }
 
   return bonus;
 }
 
-function scoreComposition(items: Record<string, any>, vibe: string, season: string, dnaRules?: DnaLabRules | null): {
+function scoreComposition(items: Record<string, any>, vibe: string, season: string, dnaRules?: DnaLabRules | null, lookKey?: string): {
   total: number;
   breakdown: Record<string, number>;
 } {
@@ -963,7 +1029,7 @@ function scoreComposition(items: Record<string, any>, vibe: string, season: stri
     tonalHarmony: scoreTonalHarmony(items),
     formalityCoherence: scoreFormalityCoherence(items),
     materialCompat: scoreMaterialCompat(items),
-    vibeMatch: scoreVibeMatch(items, vibe),
+    vibeMatch: scoreVibeMatch(items, vibe, lookKey),
     seasonFit: scoreSeasonFit(items, season),
     warmthFit: scoreWarmthFit(items, season),
     colorDepth: scoreColorDepth(items),
@@ -1094,7 +1160,8 @@ function assembleForLook(
   products: any[],
   vibe: string,
   season: string,
-  lookKey: string
+  lookKey: string,
+  dnaRules?: DnaLabRules | null
 ): ScoredOutfit | null {
   const slotConfig = SEASONAL_SLOT_CONFIG[season] || SEASONAL_SLOT_CONFIG["fall"];
   const activeSlots = [...slotConfig.required, ...slotConfig.optional];
@@ -1198,7 +1265,7 @@ function assembleForLook(
 
           if (!checkWarmthBudget(items, season)) continue;
 
-          const { total, breakdown } = scoreComposition(items, vibe, season);
+          const { total, breakdown } = scoreComposition(items, vibe, season, dnaRules, lookKey);
 
           if (total >= 75 && breakdown.tonalHarmony >= 65 && breakdown.vibeMatch >= 55 && breakdown.formalityCoherence >= 55) {
             combos.push({ items, score: total, breakdown, lookKey });
@@ -1236,7 +1303,7 @@ function assembleForLook(
             }
             if (bySlot["bag"]?.length) items.bag = bySlot["bag"][0];
             if (bySlot["accessory"]?.length) items.accessory = bySlot["accessory"][0];
-            const { total, breakdown } = scoreComposition(items, vibe, season);
+            const { total, breakdown } = scoreComposition(items, vibe, season, dnaRules, lookKey);
             if (total >= minTotal && breakdown.tonalHarmony >= minTonal && breakdown.vibeMatch >= minVibe && breakdown.formalityCoherence >= minFormality) {
               fb.push({ items, score: total, breakdown, lookKey });
             }
@@ -1264,7 +1331,8 @@ function assembleLookIsolated(
   allProducts: any[],
   vibe: string,
   season: string,
-  lookBatchIds: { lookKey: string; batchId: string }[]
+  lookBatchIds: { lookKey: string; batchId: string }[],
+  dnaRulesMap?: Record<string, DnaLabRules>
 ): ScoredOutfit[] {
   const results: ScoredOutfit[] = [];
   const usedProductIds = new Set<string>();
@@ -1303,7 +1371,8 @@ function assembleLookIsolated(
       toUse = merged;
     }
 
-    const outfit = assembleForLook(toUse, vibe, season, lookKey);
+    const lookDna = dnaRulesMap?.[lookKey] || null;
+    const outfit = assembleForLook(toUse, vibe, season, lookKey, lookDna);
     if (outfit) {
       results.push(outfit);
       const ids = Object.values(outfit.items).filter(Boolean).map((p: any) => p.id);
@@ -1369,7 +1438,7 @@ Deno.serve(async (req: Request) => {
       const batchPrefix = batchId.replace(/-[A-C]$/, "");
       const { data: batchProducts } = await adminClient
         .from("products")
-        .select("id, name, category, sub_category, color, color_family, color_tone, vibe, season, warmth, formality, silhouette, material, pattern, image_url, nobg_image_url, price, body_type, batch_id, vibe_scores")
+        .select("id, name, category, sub_category, color, color_family, color_tone, vibe, season, warmth, formality, silhouette, material, pattern, image_url, nobg_image_url, price, body_type, batch_id, vibe_scores, look_affinity")
         .like("batch_id", `${batchPrefix}%`);
 
       if (!batchProducts || batchProducts.length === 0) {
@@ -1409,9 +1478,9 @@ Deno.serve(async (req: Request) => {
       let selectedCombos: ScoredOutfit[] = [];
 
       if (lookBatchIds && lookBatchIds.length > 0) {
-        selectedCombos = assembleLookIsolated(batchProducts, vibe, season || "fall", lookBatchIds);
+        selectedCombos = assembleLookIsolated(batchProducts, vibe, season || "fall", lookBatchIds, dnaRulesMap);
       } else {
-        const result = assembleForLook(batchProducts, vibe, season || "fall", "A");
+        const result = assembleForLook(batchProducts, vibe, season || "fall", "A", dnaRulesMap["A"] || null);
         if (result) selectedCombos = [result];
       }
 

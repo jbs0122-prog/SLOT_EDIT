@@ -1,8 +1,9 @@
 import { Product } from '../../data/outfits';
-import { AssemblyContext, SlotName } from './types';
+import { AssemblyContext, DnaLabRules, SlotName } from './types';
 import { evaluateAllRules } from './rules';
-import { resolveColorFamily, getColorHarmonyScore } from './colorDna';
+import { resolveColorFamily, getColorHarmonyScore, isNeutralColor } from './colorDna';
 import { getVibeItemAffinity, getLookAffinityBonus } from './vibeAffinity';
+import { inferMaterialGroup } from './itemDna';
 import { getLookDNA, getVibeDNA } from '../../data/vibeItems/vibeDna';
 import { VibeKey, LookKey, VibeDNA } from '../../data/vibeItems/types';
 
@@ -74,6 +75,50 @@ function yieldToMain(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
 
+function scoreDnaFit(product: Product, dna: DnaLabRules): number {
+  let bonus = 0;
+
+  if (dna.color_palette?.dominant_colors?.length) {
+    const cf = resolveColorFamily(product.color || '', product.color_family).toLowerCase();
+    if (cf && dna.color_palette.dominant_colors.some(c => c.toLowerCase() === cf)) {
+      bonus += 15;
+    }
+  }
+
+  if (dna.color_palette?.primary_strategy) {
+    const strategy = dna.color_palette.primary_strategy.toLowerCase();
+    const cf = resolveColorFamily(product.color || '', product.color_family);
+    if (strategy.includes('neutral') && isNeutralColor(cf)) bonus += 5;
+    if (strategy.includes('earth') || strategy.includes('warm')) {
+      const earthColors = new Set(['brown', 'tan', 'camel', 'olive', 'khaki', 'sage', 'rust', 'mustard', 'burgundy', 'wine']);
+      if (earthColors.has(cf)) bonus += 8;
+    }
+  }
+
+  if (dna.material_combo?.primary_materials?.length) {
+    const mat = (product.material || '').toLowerCase();
+    if (mat && dna.material_combo.primary_materials.some(m => mat.includes(m.toLowerCase()))) {
+      bonus += 10;
+    }
+  }
+
+  if (dna.silhouette?.preferred?.length) {
+    const sil = (product.silhouette || '').toLowerCase();
+    if (sil && dna.silhouette.preferred.some(s => sil.includes(s.toLowerCase()) || s.toLowerCase().includes(sil))) {
+      bonus += 8;
+    }
+  }
+
+  if (dna.formality?.range) {
+    const f = typeof product.formality === 'number' ? product.formality : 3;
+    const [lo, hi] = dna.formality.range;
+    if (f >= lo && f <= hi) bonus += 5;
+    else bonus -= 10;
+  }
+
+  return bonus;
+}
+
 function scoreProductForSlot(
   product: Product,
   context: AssemblyContext,
@@ -114,6 +159,10 @@ function scoreProductForSlot(
   if (usage === 0) score += 20;
   else if (usage === 1) score += 8;
   else if (usage >= 2) score -= usage * 12;
+
+  if (context.dnaRules) {
+    score += scoreDnaFit(product, context.dnaRules);
+  }
 
   return score;
 }
