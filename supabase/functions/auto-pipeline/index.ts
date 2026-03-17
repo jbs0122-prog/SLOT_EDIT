@@ -1626,7 +1626,9 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({ product, gender, body_type, vibe, season, batchId, slotHint }),
       });
       if (!res.ok) {
-        return new Response(JSON.stringify({ success: false, error: "Analysis failed" }), {
+        let errDetail = `Analysis failed (HTTP ${res.status})`;
+        try { const errBody = await res.json(); errDetail = errBody.error || errDetail; } catch {}
+        return new Response(JSON.stringify({ success: false, error: errDetail, warmth_rejected: res.status === 422 }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

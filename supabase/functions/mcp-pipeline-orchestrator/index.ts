@@ -294,17 +294,27 @@ async function runPipeline(batchId: string, config: {
       for (const slot of PRIORITY_SLOTS) {
         const products = (slotCandidates[slot] || []) as any[];
         for (const product of products) {
-          try {
-            const d = await callFunction("auto-pipeline", {
-              action: "register-product", product, gender, body_type: bodyType, vibe, season,
-              batchId: lookBatchId, slotHint: slot,
-            }, authHeader);
-            if (d.success) {
-              if (product.asin) existingAsinSet.add(product.asin);
-              lookReg++;
-              totalRegistered++;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              const d = await callFunction("auto-pipeline", {
+                action: "register-product", product, gender, body_type: bodyType, vibe, season,
+                batchId: lookBatchId, slotHint: slot,
+              }, authHeader);
+              if (d.success) {
+                if (product.asin) existingAsinSet.add(product.asin);
+                lookReg++;
+                totalRegistered++;
+              } else {
+                const reason = d.error || d.warmth_rejected ? `warmth gate (${d.error || ""})` : (d.error || "unknown");
+                await log(batchId, "register", "progress", `[${lookKey}/${slot}] Failed: ${reason.slice(0, 120)}`);
+              }
+              break;
+            } catch (e) {
+              if (attempt === 2) {
+                await log(batchId, "register", "progress", `[${lookKey}/${slot}] Error: ${(e as Error).message.slice(0, 120)}`);
+              }
             }
-          } catch { /* silent — retry once */ }
+          }
         }
       }
       await log(batchId, "register", "success", `[Look ${lookKey}] Registered ${lookReg} products`);
