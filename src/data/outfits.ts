@@ -31,6 +31,7 @@ export interface Product {
   warmth?: number;
   nobg_image_url?: string;
   vibe_scores?: Record<string, number>;
+  look_affinity?: Record<string, Record<string, number>>;
   image_features?: {
     dominantColors: string[];
     texture: string;

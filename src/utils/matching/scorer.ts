@@ -3,7 +3,7 @@ import { CompositionScore, AssemblyContext } from './types';
 import { evaluateAllRules } from './rules';
 import { computeSeasonFit, computeWarmthFit, computeAccessoryHarmony, computeImageFeatureScore, computePatternBalance } from './contextLayer';
 import { resolveColorFamily, isNeutralColor, analyzeColorComposition } from './colorDna';
-import { getVibeItemAffinity } from './vibeAffinity';
+import { getVibeItemAffinity, getLookAffinityScore } from './vibeAffinity';
 import { getMaterialCompatScore, inferMaterialGroup } from './itemDna';
 import { getVibeDistance, getLookDNA, getVibeDNA } from '../../data/vibeItems/vibeDna';
 import { VibeKey, VibeDNA, LookKey } from '../../data/vibeItems/types';
@@ -32,7 +32,7 @@ function getVibeDNAForContext(context: AssemblyContext): VibeDNA | undefined {
   }
 }
 
-function scoreVibeAffinity(items: Record<string, Product>, vibe?: string): number {
+function scoreVibeAffinity(items: Record<string, Product>, vibe?: string, look?: string): number {
   if (!vibe) return 50;
 
   const coreKeys = ['outer', 'mid', 'top', 'bottom', 'shoes'];
@@ -46,6 +46,16 @@ function scoreVibeAffinity(items: Record<string, Product>, vibe?: string): numbe
   let score = 50 + avgAffinity * 40;
   if (highCount >= coreItems.length * 0.6) score += 10;
   if (highCount >= coreItems.length * 0.8) score += 5;
+
+  if (look) {
+    const lookKey = look as LookKey;
+    const lookScores = coreItems.map(p => getLookAffinityScore(p, vibe, lookKey));
+    const avgLookScore = lookScores.reduce((s, a) => s + a, 0) / lookScores.length;
+    const lookHighCount = lookScores.filter(s => s >= 0.5).length;
+
+    score += avgLookScore * 15;
+    if (lookHighCount >= coreItems.length * 0.6) score += 5;
+  }
 
   const vibeArrays = coreItems.map(p => p.vibe || []).filter(v => v.length > 0);
   if (vibeArrays.length >= 2) {
@@ -160,7 +170,7 @@ export function scoreComposition(
     imageFeature * 0.15
   );
 
-  const vibeAffinity = scoreVibeAffinity(items, context.vibe);
+  const vibeAffinity = scoreVibeAffinity(items, context.vibe, context.look);
   const colorDepth = scoreColorDepth(items);
   const materialCompat = scoreMaterialCompat(items);
 

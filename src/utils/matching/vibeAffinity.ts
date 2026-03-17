@@ -174,6 +174,21 @@ export function getVibeItemAffinityForLook(
   return fuzzyMatchScore(searchTerms, itemPool);
 }
 
+export function getLookAffinityScore(product: Product, vibe: string, look: LookKey): number {
+  if (product.look_affinity?.[vibe]?.[look] !== undefined) {
+    return product.look_affinity[vibe][look] / 100;
+  }
+  return getVibeItemAffinityForLook(product, vibe, look);
+}
+
+export function getLookAffinityBonus(product: Product, vibe: string, look: LookKey): number {
+  const score = getLookAffinityScore(product, vibe, look);
+  if (score >= 0.7) return 20;
+  if (score >= 0.5) return 12;
+  if (score >= 0.3) return 5;
+  return -3;
+}
+
 export function isItemInVibePool(product: Product, vibe: string): boolean {
   return getVibeItemAffinity(product, vibe) >= 0.3;
 }

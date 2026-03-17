@@ -533,6 +533,100 @@ const VIBE_ITEM_POOLS_ANALYZE: Record<string, Record<string, string[]>> = {
   },
 };
 
+const VIBE_LOOK_SIGNATURES: Record<string, Record<string, { keywords: string[]; materials: string[]; formality: [number, number] }>> = {
+  ELEVATED_COOL: {
+    A: { keywords: ["wool coat", "structured trench", "leather blazer", "tailored", "poplin shirt", "silk blouse", "wide-leg trousers", "pleated trousers", "cigarette pants", "square-toe boots", "chunky loafers", "architectural heels", "geometric tote", "box bag"], materials: ["fine wool", "smooth leather", "cashmere", "silk", "gabardine", "poplin", "satin"], formality: [5, 9] },
+    B: { keywords: ["varsity jacket", "bomber", "peacoat", "harrington", "polo shirt", "oxford shirt", "rugby shirt", "argyle", "cable vest", "chinos", "raw denim", "loafers with socks", "derby", "retro sneakers", "satchel", "canvas tote"], materials: ["tweed", "corduroy", "denim", "cable-knit", "velvet", "waxed cotton", "suede"], formality: [3, 7] },
+    C: { keywords: ["puffer vest", "technical bomber", "coach jacket", "anorak", "windbreaker", "track jacket", "hoodie", "graphic tee", "cargo sweats", "parachute pants", "leather joggers", "high-top sneakers", "dad sneakers", "foam runners", "sling bag", "chest rig"], materials: ["nylon", "tech-fleece", "mesh", "neoprene", "jersey", "rubber", "reflective"], formality: [2, 6] },
+  },
+  EFFORTLESS_NATURAL: {
+    A: { keywords: ["collarless liner", "noragi", "kimono cardigan", "linen tunic", "waffle henley", "wrap top", "wide linen trousers", "drawstring pants", "culottes", "suede mules", "tabi flats", "babouche", "canvas sneakers", "soft hobo", "knot bag"], materials: ["linen", "raw silk", "organic cotton", "gauze", "hemp", "tencel"], formality: [2, 5] },
+    B: { keywords: ["soft blazer", "chore coat", "linen jacket", "breton stripe tee", "chambray shirt", "boat neck", "vintage denim", "white jeans", "corduroy pants", "ballet flats", "mary janes", "desert boots", "leather shoulder bag", "baguette"], materials: ["cotton", "chambray", "jersey", "denim", "wool blend"], formality: [3, 6] },
+    C: { keywords: ["field jacket", "barn jacket", "waxed jacket", "flannel shirt", "logger shirt", "baseball tee", "fatigue pants", "carpenter jeans", "overalls", "work boots", "hiking boots", "wallabees", "backpack", "tool bag", "satchel"], materials: ["waxed cotton", "flannel", "canvas", "heavy cotton", "suede", "thick denim"], formality: [1, 4] },
+  },
+  ARTISTIC_MINIMAL: {
+    A: { keywords: ["collarless coat", "kimono jacket", "stand-collar", "tunic shirt", "asymmetric knit", "mock neck", "culottes", "wide cropped trousers", "pleated skirt", "tabi boots", "derby", "square flats", "pleated tote", "geometric bag", "portfolio"], materials: ["structured cotton", "Japanese denim", "stiff linen", "technical wool"], formality: [4, 8] },
+    B: { keywords: ["crushed velvet jacket", "faux fur vest", "shaggy jacket", "mohair knit", "crushed satin", "organza blouse", "velvet top", "satin pants", "leather skirt", "metallic pants", "velvet slippers", "patent loafers", "metallic boots", "fur bag", "velvet clutch", "beaded bag"], materials: ["mohair", "organza", "velvet", "satin", "boucle", "angora"], formality: [3, 7] },
+    C: { keywords: ["cape", "draped cardigan", "shawl coat", "blanket coat", "cowl neck", "wrap top", "draped jersey", "balloon pants", "sarouel pants", "jersey pants", "soft boots", "flat mules", "gladiator sandals", "slouchy sack", "knot bag", "hobo bag"], materials: ["jersey", "soft knit", "flowing wool", "modal", "bamboo"], formality: [2, 5] },
+  },
+  RETRO_LUXE: {
+    A: { keywords: ["shearling coat", "velvet blazer", "cape", "afghan coat", "tapestry jacket", "embroidered blouse", "lace top", "peasant blouse", "velvet trousers", "tiered skirt", "embroidered jeans", "lace-up boots", "mary janes", "clogs", "tapestry bag", "beaded pouch"], materials: ["velvet", "tapestry", "embroidered", "lace", "brocade", "shearling"], formality: [3, 7] },
+    B: { keywords: ["suede jacket", "faux fur", "leather trench", "safari jacket", "halter top", "ringer tee", "disco top", "flared jeans", "bell-bottoms", "patchwork jeans", "platform boots", "knee boots", "wedge sandals", "suede hobo", "fringe bag"], materials: ["suede", "faux fur", "patent leather", "denim", "crochet", "macrame"], formality: [2, 6] },
+    C: { keywords: ["tweed jacket", "camel coat", "gold button blazer", "navy blazer", "oxford shirt", "white shirt", "striped shirt", "wool trousers", "chinos", "riding pants", "horsebit loafers", "penny loafers", "ballet flats", "structured handbag", "monogram bag"], materials: ["tweed", "cashmere", "fine wool", "cotton broadcloth", "silk", "leather"], formality: [5, 8] },
+  },
+  SPORT_MODERN: {
+    A: { keywords: ["3-layer shell", "tech trench", "anorak", "utility vest", "merino base layer", "performance tee", "cargo pants", "waterproof trousers", "convertible pants", "gore-tex sneakers", "trail runners", "trekking boots", "sacoche", "chest rig", "dry bag"], materials: ["gore-tex", "merino", "ripstop", "cordura", "technical nylon", "softshell"], formality: [1, 3] },
+    B: { keywords: ["cropped puffer", "yoga jacket", "teddy jacket", "ribbed crop tee", "sports bra", "seamless top", "leggings", "biker shorts", "yoga pants", "flare leggings", "sock sneakers", "platform sneakers", "fashion trainers", "belt bag", "gym bag", "yoga bag"], materials: ["stretch fabric", "neoprene", "compression", "seamless knit", "scuba"], formality: [1, 4] },
+    C: { keywords: ["varsity bomber", "stadium parka", "training jacket", "soccer jersey", "rugby shirt", "polo", "jorts", "nylon shorts", "warm-up pants", "track pants", "terrace sneakers", "indoor soccer shoes", "gum soles", "drawstring bag", "shoebox bag"], materials: ["jersey", "mesh", "polyester", "cotton blend", "nylon"], formality: [1, 3] },
+  },
+  CREATIVE_LAYERED: {
+    A: { keywords: ["leather biker", "studs jacket", "vinyl trench", "band tee", "corset", "mesh bodysuit", "fishnet", "ripped jeans", "leather pants", "vinyl skirt", "combat boots", "platform boots", "studded boots", "chain bag", "studded bag", "safety pin bag"], materials: ["leather", "vinyl", "mesh", "metal", "studded", "distressed denim"], formality: [1, 4] },
+    B: { keywords: ["leopard coat", "patchwork jacket", "flannel shirt", "floral shirt", "polka dot", "hawaiian shirt", "tie-dye", "animal print", "plaid skirt", "checkered pants", "colored denim", "creepers", "clogs", "printed boots", "patchwork bag", "novelty bag"], materials: ["printed cotton", "patchwork", "crochet", "plaid wool", "corduroy", "faux fur"], formality: [1, 4] },
+    C: { keywords: ["kimono", "tapestry coat", "poncho", "cape", "vintage tee", "peasant top", "crochet top", "overalls", "tiered skirt", "velvet skirt", "corduroy pants", "moccasins", "espadrilles", "vintage loafers", "tapestry bag", "wicker basket bag"], materials: ["vintage fabric", "crochet", "tapestry", "velvet", "corduroy", "embroidered"], formality: [1, 5] },
+  },
+};
+
+function computeLookAffinity(
+  category: string,
+  subCategory: string,
+  name: string,
+  material: string,
+  colorFamily: string,
+  formality: number,
+  vibeScores: Record<string, number>
+): Record<string, Record<string, number>> {
+  const ALL_VIBES = ["ELEVATED_COOL", "EFFORTLESS_NATURAL", "ARTISTIC_MINIMAL", "RETRO_LUXE", "SPORT_MODERN", "CREATIVE_LAYERED"];
+  const LOOKS: string[] = ["A", "B", "C"];
+  const result: Record<string, Record<string, number>> = {};
+  const terms: string[] = [];
+  if (subCategory) terms.push(subCategory);
+  if (name) terms.push(name);
+  const matLower = (material || "").toLowerCase();
+
+  for (const vibe of ALL_VIBES) {
+    const vibeScore = vibeScores[vibe] || 0;
+    if (vibeScore < 10) {
+      result[vibe] = { A: 0, B: 0, C: 0 };
+      continue;
+    }
+
+    const lookSigs = VIBE_LOOK_SIGNATURES[vibe];
+    if (!lookSigs) { result[vibe] = { A: 0, B: 0, C: 0 }; continue; }
+
+    const lookScores: Record<string, number> = {};
+    for (const look of LOOKS) {
+      const sig = lookSigs[look];
+      if (!sig) { lookScores[look] = 0; continue; }
+
+      const keywordScore = terms.length > 0 ? fuzzyMatchScoreAnalyze(terms, sig.keywords) : 0;
+
+      let materialBonus = 0;
+      if (matLower) {
+        for (const pref of sig.materials) {
+          if (matLower.includes(pref) || pref.includes(matLower)) {
+            materialBonus = 12;
+            break;
+          }
+        }
+      }
+
+      let formalityFit = 0;
+      if (typeof formality === "number") {
+        const [fMin, fMax] = sig.formality;
+        if (formality >= fMin && formality <= fMax) formalityFit = 10;
+        else if (formality >= fMin - 1 && formality <= fMax + 1) formalityFit = 5;
+      }
+
+      const raw = Math.round(keywordScore * 68 + materialBonus + formalityFit + vibeScore * 0.1);
+      lookScores[look] = Math.min(100, Math.max(0, raw));
+    }
+
+    result[vibe] = lookScores;
+  }
+
+  return result;
+}
+
 function normalizeTextForMatch(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
 }
@@ -912,6 +1006,7 @@ Return ONLY valid JSON with English values:
     const rawSeasonArray = inferSeason(materialStr, normalizedCategory, subCat, season);
     const seasonArray = crossValidateSeasonWarmth(rawSeasonArray, warmth, normalizedCategory);
     const vibeScores = computeVibeScores(normalizedCategory, subCat, core.name || product.title, materialStr, normalizedColorFamily, vibe);
+    const lookAffinity = computeLookAffinity(normalizedCategory, subCat, core.name || product.title, materialStr, normalizedColorFamily, formality, vibeScores);
     const bodyTypes = [body_type || "regular"];
     if (!bodyTypes.includes("regular") && body_type !== "regular") bodyTypes.push("regular");
 
@@ -950,6 +1045,7 @@ Return ONLY valid JSON with English values:
       formality,
       warmth,
       vibe_scores: vibeScores,
+      look_affinity: lookAffinity,
       stock_status: "in_stock",
       image_url: upgradeImageResolution(product.image || ""),
       product_link: productLink,

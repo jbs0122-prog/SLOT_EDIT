@@ -2,7 +2,7 @@ import { Product } from '../../data/outfits';
 import { AssemblyContext, SlotName } from './types';
 import { evaluateAllRules } from './rules';
 import { resolveColorFamily, getColorHarmonyScore } from './colorDna';
-import { getVibeItemAffinity } from './vibeAffinity';
+import { getVibeItemAffinity, getLookAffinityBonus } from './vibeAffinity';
 import { getLookDNA, getVibeDNA } from '../../data/vibeItems/vibeDna';
 import { VibeKey, LookKey, VibeDNA } from '../../data/vibeItems/types';
 
@@ -92,6 +92,10 @@ function scoreProductForSlot(
     else if (affinity >= 0.5) score += 15;
     else if (affinity >= 0.3) score += 5;
     else score -= 5;
+  }
+
+  if (context.vibe && context.look) {
+    score += getLookAffinityBonus(product, context.vibe, context.look as LookKey);
   }
 
   if (context.targetSeason && product.season?.length) {

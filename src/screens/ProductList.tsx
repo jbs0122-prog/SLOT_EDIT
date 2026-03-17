@@ -111,6 +111,23 @@ export default function ProductList({ products, onProductDeleted, onProductCopie
     }
   };
 
+  const VIBE_SHORT: Record<string, string> = {
+    ELEVATED_COOL: 'EC', EFFORTLESS_NATURAL: 'EN', ARTISTIC_MINIMAL: 'AM',
+    RETRO_LUXE: 'RL', SPORT_MODERN: 'SM', CREATIVE_LAYERED: 'CL',
+  };
+
+  const getTopLookAffinities = (affinity?: Record<string, Record<string, number>>): Array<{ vibe: string; look: string; score: number }> => {
+    if (!affinity) return [];
+    const pairs: Array<{ vibe: string; look: string; score: number }> = [];
+    for (const [vibe, looks] of Object.entries(affinity)) {
+      for (const [look, score] of Object.entries(looks)) {
+        if (score >= 30) pairs.push({ vibe, look, score });
+      }
+    }
+    pairs.sort((a, b) => b.score - a.score);
+    return pairs.slice(0, 3);
+  };
+
   const getItemLabel = (category: string) => {
     const labels: Record<string, string> = {
       outer: '아우터',
@@ -315,6 +332,28 @@ export default function ProductList({ products, onProductDeleted, onProductCopie
                     {getItemLabel(product.category)} · {product.gender}
                   </span>
                 </div>
+                {(() => {
+                  const topLooks = getTopLookAffinities(product.look_affinity);
+                  if (topLooks.length === 0) return null;
+                  return (
+                    <div className="mt-1 flex flex-wrap gap-0.5">
+                      {topLooks.map((l, i) => (
+                        <span
+                          key={i}
+                          className={`inline-flex items-center px-1 py-px rounded text-[9px] font-medium ${
+                            l.score >= 70 ? 'bg-emerald-100 text-emerald-700' :
+                            l.score >= 50 ? 'bg-sky-100 text-sky-700' :
+                            'bg-gray-100 text-gray-500'
+                          }`}
+                          title={`${l.vibe} Look ${l.look}: ${l.score}점`}
+                        >
+                          {VIBE_SHORT[l.vibe] || l.vibe.slice(0, 2)}{l.look}
+                          <span className="ml-0.5 opacity-70">{l.score}</span>
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );

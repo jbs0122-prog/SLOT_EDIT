@@ -59,6 +59,7 @@ function mapRowToProduct(p: any): Product {
     pattern: p.pattern || '',
     formality: p.formality,
     warmth: p.warmth,
+    look_affinity: p.look_affinity || undefined,
     created_at: p.created_at,
     updated_at: p.updated_at,
   } as Product;
