@@ -4,7 +4,7 @@ import { supabase } from '../utils/supabase';
 import OutfitProductLinker from './OutfitProductLinker';
 import AutoOutfitGenerator from './AutoOutfitGenerator';
 import { outfitWarmthToTempRange } from '../utils/weather';
-import { Sparkles, Trash2, CheckSquare, Square, XSquare, Link2, Thermometer, Snowflake, Sun, Leaf, Wind, Loader2 } from 'lucide-react';
+import { Sparkles, Trash2, CheckSquare, Square, XSquare, Link2, Thermometer, Snowflake, Sun, Leaf, Wind, Loader2, Dna } from 'lucide-react';
 
 const SEASON_LABELS: Record<string, string> = {
   spring: '봄',
@@ -38,12 +38,13 @@ interface OutfitWithMeta extends Outfit {
   temp_range_f?: { min: number; max: number };
   auto_seasons?: string[];
   look_number?: number;
+  look_key?: string;
   item_count?: number;
 }
 
 const warmthToTempRangeF = outfitWarmthToTempRange;
 
-const OUTFIT_LIST_COLS = 'id,gender,body_type,vibe,season,image_url_flatlay,image_url_on_model,tpo,status,created_at,updated_at';
+const OUTFIT_LIST_COLS = 'id,gender,body_type,vibe,season,look_key,image_url_flatlay,image_url_on_model,tpo,status,created_at,updated_at';
 
 function warmthToSeasons(warmth: number): string[] {
   if (warmth >= 3.8) return ['winter'];
@@ -122,6 +123,7 @@ async function fetchOutfitPage(
       body_type: row.body_type,
       vibe: row.vibe,
       season: row.season || [],
+      look_key: row.look_key || undefined,
       image_url_flatlay: row.image_url_flatlay || '',
       image_url_flatlay_clean: '',
       image_url_on_model: row.image_url_on_model || '',
@@ -524,9 +526,25 @@ export default function AdminOutfitLinker() {
                     </div>
 
                     <div className="px-2 pt-1.5 pb-2 space-y-1.5">
-                      <p className="text-[11px] text-gray-700 font-medium leading-tight truncate">
-                        {outfit.gender} · {outfit.body_type} · {outfit.vibe}
-                      </p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-[11px] text-gray-700 font-medium leading-tight truncate flex-1">
+                          {outfit.gender} · {outfit.body_type} · {outfit.vibe}
+                        </p>
+                        {outfit.look_key && (
+                          <a
+                            href={`#admin-style-dna`}
+                            className={`shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                              outfit.look_key === 'A' ? 'bg-sky-100 text-sky-600' :
+                              outfit.look_key === 'B' ? 'bg-emerald-100 text-emerald-600' :
+                              'bg-rose-100 text-rose-600'
+                            }`}
+                            title="View in DNA Lab"
+                          >
+                            <Dna size={8} />
+                            {outfit.look_key}
+                          </a>
+                        )}
+                      </div>
 
                       <div className="flex items-center gap-1">
                         <span className="text-[10px] text-gray-400">

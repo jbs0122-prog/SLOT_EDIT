@@ -918,7 +918,44 @@ const WARMTH_BUDGET: Record<string, { min: number; max: number }> = {
   winter: { min: 16, max: 25 },
 };
 
-function scoreComposition(items: Record<string, any>, vibe: string, season: string): {
+interface DnaLabRules {
+  color_palette?: { dominant_colors?: string[]; primary_strategy?: string };
+  material_combo?: { primary_materials?: string[] };
+  silhouette?: { preferred?: string[] };
+  formality?: { average?: number; range?: [number, number] };
+}
+
+function applyDnaBonus(items: Record<string, any>, dna: DnaLabRules | null): number {
+  if (!dna) return 0;
+  let bonus = 0;
+  const all = Object.values(items).filter(Boolean);
+
+  if (dna.color_palette?.dominant_colors?.length) {
+    const learned = dna.color_palette.dominant_colors.map((c: string) => c.toLowerCase());
+    const itemColors = all.map((p: any) => resolveColorFamily(p.color || "", p.color_family).toLowerCase()).filter(Boolean);
+    const matches = itemColors.filter((c: string) => learned.includes(c)).length;
+    bonus += Math.min(8, (matches / Math.max(1, itemColors.length)) * 10);
+  }
+
+  if (dna.material_combo?.primary_materials?.length) {
+    const learned = dna.material_combo.primary_materials.map((m: string) => m.toLowerCase());
+    const itemMats = all.map((p: any) => (p.material || "").toLowerCase()).filter(Boolean);
+    const matches = itemMats.filter((m: string) => learned.some((l: string) => m.includes(l))).length;
+    bonus += Math.min(6, (matches / Math.max(1, itemMats.length)) * 8);
+  }
+
+  if (dna.formality?.average) {
+    const formalities = all.map(getFormality);
+    const avg = formalities.reduce((a: number, b: number) => a + b, 0) / Math.max(1, formalities.length);
+    const diff = Math.abs(avg - dna.formality.average);
+    if (diff <= 1) bonus += 4;
+    else if (diff <= 2) bonus += 2;
+  }
+
+  return bonus;
+}
+
+function scoreComposition(items: Record<string, any>, vibe: string, season: string, dnaRules?: DnaLabRules | null): {
   total: number;
   breakdown: Record<string, number>;
 } {
@@ -939,6 +976,8 @@ function scoreComposition(items: Record<string, any>, vibe: string, season: stri
   for (const [key, weight] of Object.entries(SCORE_WEIGHTS)) {
     total += (breakdown[key as keyof typeof breakdown] || 0) * weight;
   }
+
+  total += applyDnaBonus(items, dnaRules || null);
 
   return { total: Math.round(total), breakdown };
 }
@@ -1339,6 +1378,34 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      let dnaRulesMap: Record<string, DnaLabRules> = {};
+      try {
+        const lookKeys = lookBatchIds?.map((l: any) => l.lookKey) || ["A"];
+        for (const lk of lookKeys) {
+          const { data: rules } = await adminClient
+            .from("style_dna_learned_rules")
+            .select("rule_type, rule_data")
+            .eq("cell_id", (
+              await adminClient.from("style_dna_cells")
+                .select("id")
+                .eq("gender", gender)
+                .eq("body_type", body_type)
+                .eq("vibe", vibe)
+                .eq("look_key", lk)
+                .eq("season", season || "fall")
+                .eq("status", "ready")
+                .maybeSingle()
+            ).data?.id || "00000000-0000-0000-0000-000000000000");
+          if (rules && rules.length > 0) {
+            const merged: DnaLabRules = {};
+            for (const r of rules) {
+              (merged as any)[r.rule_type] = r.rule_data;
+            }
+            dnaRulesMap[lk] = merged;
+          }
+        }
+      } catch { /* DNA rules optional */ }
+
       let selectedCombos: ScoredOutfit[] = [];
 
       if (lookBatchIds && lookBatchIds.length > 0) {
@@ -1366,8 +1433,9 @@ Deno.serve(async (req: Request) => {
         const { data: newOutfit, error: outfitErr } = await adminClient.from("outfits").insert({
           gender, body_type, vibe,
           season: season ? [season] : [],
+          look_key: lookKey || null,
           status: "draft", tpo: "",
-          "AI insight": `Auto-pipeline (v4) | Look ${lookKey || "?"} | Score: ${score}${!diversityOk ? " | Low diversity" : ""}`,
+          "AI insight": `Auto-pipeline (v4) | Look ${lookKey || "?"} | Score: ${score}${!diversityOk ? " | Low diversity" : ""}${dnaRulesMap[lookKey || ""] ? " | DNA-enhanced" : ""}`,
           image_url_flatlay: "", image_url_on_model: "",
           flatlay_pins: [], on_model_pins: [], prompt_flatlay: "",
         }).select().single();

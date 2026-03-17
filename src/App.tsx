@@ -11,6 +11,7 @@ import AdminLayout from './screens/AdminLayout';
 import AdminAmazonSearch from './screens/AdminAmazonSearch';
 import AdminSmartSearch from './screens/AdminSmartSearch';
 import AdminAutoPipeline from './screens/AdminAutoPipeline';
+import StyleDnaLab from './screens/styleDnaLab';
 import GeminiKeyTest from './screens/GeminiKeyTest';
 import BottomNav, { NavTab } from './screens/BottomNav';
 import DesktopSidebar from './screens/DesktopSidebar';
@@ -27,7 +28,7 @@ import { Outfit } from './data/outfits';
 import { fetchOutfitsMetaOnly, fetchOutfitItemsForIds, fetchOutfitById } from './utils/outfitService';
 import { WeatherData, getSeasonsFromTemperature, getTargetWarmth, outfitWarmthMatchesTempF } from './utils/weather';
 
-type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-outfit-linker' | 'admin-users' | 'admin-amazon' | 'admin-smart' | 'admin-auto-pipeline' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
+type Screen = 'loading' | 'input' | 'generating' | 'results' | 'admin' | 'admin-products' | 'admin-outfit-linker' | 'admin-users' | 'admin-amazon' | 'admin-smart' | 'admin-auto-pipeline' | 'admin-style-dna' | 'test-gemini' | 'privacy-policy' | 'terms-of-service' | 'affiliate-disclosure' | 'dmca-policy' | 'accessibility';
 
 const RESULTS_KEY = 'slotedit_results';
 
@@ -43,6 +44,7 @@ function screenFromHash(h: string): Screen {
   if (h === 'admin-amazon') return 'admin-amazon';
   if (h === 'admin-smart') return 'admin-smart';
   if (h === 'admin-auto-pipeline') return 'admin-auto-pipeline';
+  if (h === 'admin-style-dna') return 'admin-style-dna';
   if (h === 'test-gemini') return 'test-gemini';
   if (h === 'privacy-policy') return 'privacy-policy';
   if (h === 'terms-of-service') return 'terms-of-service';
@@ -158,7 +160,7 @@ function computeWeatherFit(outfit: Outfit, targetWarmth: number, isWetWeather: b
 
 function App() {
   const initialHash = getHash();
-  const isAdmin = initialHash.startsWith('admin') || initialHash === 'admin-amazon' || initialHash === 'admin-smart' || initialHash === 'admin-outfit-linker' || initialHash === 'admin-auto-pipeline';
+  const isAdmin = initialHash.startsWith('admin') || initialHash === 'admin-amazon' || initialHash === 'admin-smart' || initialHash === 'admin-outfit-linker' || initialHash === 'admin-auto-pipeline' || initialHash === 'admin-style-dna';
 
   const [currentScreen, setCurrentScreen] = useState<Screen>(isAdmin ? screenFromHash(initialHash) : 'loading');
   const [outfits, setOutfits] = useState<Outfit[]>([]);
@@ -493,6 +495,11 @@ function App() {
       {currentScreen === 'admin-smart' && (
         <AdminLayout currentPage="smart-search">
           <AdminSmartSearch />
+        </AdminLayout>
+      )}
+      {currentScreen === 'admin-style-dna' && (
+        <AdminLayout currentPage="style-dna-lab">
+          <StyleDnaLab />
         </AdminLayout>
       )}
       {currentScreen === 'admin-auto-pipeline' && (

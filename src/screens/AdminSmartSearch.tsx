@@ -1,7 +1,19 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Camera, Search, Check, Star, ExternalLink, Loader2, AlertCircle, Tag, Zap, ChevronDown, ChevronUp, Image as ImageIcon, ArrowRight, X, Square, RefreshCw, Sparkles, ShoppingBag, ArrowUpDown } from 'lucide-react';
+import { Camera, Search, Check, Star, ExternalLink, Loader2, AlertCircle, Tag, Zap, ChevronDown, ChevronUp, Image as ImageIcon, ArrowRight, X, Square, RefreshCw, Sparkles, ShoppingBag, ArrowUpDown, Dna } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { scoreProductForVibe, COLOR_TIER_LABELS, type ColorTier } from '../utils/vibeCompatibility';
+
+const LOOK_OPTIONS = [
+  { value: 'A', label: 'Look A' },
+  { value: 'B', label: 'Look B' },
+  { value: 'C', label: 'Look C' },
+];
+
+const LOOK_COLORS_MAP: Record<string, { bg: string; text: string; border: string }> = {
+  A: { bg: 'bg-sky-500/15', text: 'text-sky-300', border: 'border-sky-500/30' },
+  B: { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/30' },
+  C: { bg: 'bg-rose-500/15', text: 'text-rose-300', border: 'border-rose-500/30' },
+};
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -152,7 +164,10 @@ export default function AdminSmartSearch() {
   const [gender, setGender] = useState(cached.current?.gender || '');
   const [bodyType, setBodyType] = useState(cached.current?.bodyType || '');
   const [vibe, setVibe] = useState(cached.current?.vibe || '');
+  const [look, setLook] = useState(cached.current?.look || '');
   const [season, setSeason] = useState(cached.current?.season || '');
+  const [dnaRulesLoaded, setDnaRulesLoaded] = useState(false);
+  const [dnaCellStatus, setDnaCellStatus] = useState<string | null>(null);
 
   const [phase, setPhase] = useState<SearchPhase>(cached.current?.phase === 'done' ? 'done' : 'idle');
   const [results, setResults] = useState<SmartResult[]>(cached.current?.results || []);
@@ -217,6 +232,27 @@ export default function AdminSmartSearch() {
   }, [phase, results, savedAsins, searchLog, imageUrl, gender, bodyType, vibe, season,
       lensDirectCount, keywordCount, detectedZones, geminiCategories, searchError, lastSearchFilters]);
 
+  useEffect(() => {
+    if (!gender || !vibe || !look || !season) {
+      setDnaCellStatus(null);
+      setDnaRulesLoaded(false);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('style_dna_cells')
+        .select('status, reference_count')
+        .eq('gender', gender)
+        .eq('vibe', vibe)
+        .eq('look_key', look)
+        .eq('season', season)
+        .limit(1)
+        .maybeSingle();
+      setDnaCellStatus(data?.status || null);
+      setDnaRulesLoaded(data?.status === 'ready');
+    })();
+  }, [gender, vibe, look, season]);
+
   const addLog = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') => {
     setSearchLog(prev => [...prev, { msg: `[${new Date().toLocaleTimeString()}] ${msg}`, type }]);
   }, []);
@@ -258,6 +294,7 @@ export default function AdminSmartSearch() {
           gender,
           body_type: bodyType,
           vibe,
+          look,
           season,
         }),
       });
@@ -698,6 +735,42 @@ export default function AdminSmartSearch() {
                   ))}
                 </div>
               </div>
+
+              {vibe && (
+                <div>
+                  <label className="block text-[10px] font-semibold text-white/30 mb-1.5">Look</label>
+                  <div className="flex gap-1.5">
+                    {LOOK_OPTIONS.map(opt => {
+                      const lc = LOOK_COLORS_MAP[opt.value];
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => setLook(prev => prev === opt.value ? '' : opt.value)}
+                          className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-all ${
+                            look === opt.value
+                              ? `${lc.bg} ${lc.text} border ${lc.border}`
+                              : 'text-white/40 bg-white/3 border border-transparent hover:bg-white/5 hover:text-white/60'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {look && dnaCellStatus && (
+                    <div className={`mt-1.5 flex items-center gap-1.5 px-2 py-1 rounded text-[10px] ${
+                      dnaCellStatus === 'ready'
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : dnaCellStatus === 'in_progress'
+                        ? 'bg-amber-500/10 text-amber-400'
+                        : 'bg-white/5 text-white/30'
+                    }`}>
+                      <Dna className="w-3 h-3" />
+                      DNA Lab: {dnaCellStatus === 'ready' ? 'Ready' : dnaCellStatus === 'in_progress' ? 'In Progress' : 'Empty'}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
