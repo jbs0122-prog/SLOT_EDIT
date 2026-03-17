@@ -20,7 +20,7 @@ function errResponse(message: string, status = 400) {
 }
 
 async function callGemini(prompt: string, imageUrls: string[] = []): Promise<string> {
-  const apiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY") || "";
+  const apiKey = Deno.env.get("GEMINI_API_KEY") || "";
   if (!apiKey) throw new Error("Missing Gemini API key");
 
   const parts: Array<Record<string, unknown>> = [];
@@ -340,7 +340,7 @@ Write a 3-5 sentence style brief that:
 Write in a direct, professional tone. Mix Korean style terminology where appropriate.
 Return only the brief text, no JSON wrapping.`;
 
-  const apiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY") || "";
+  const apiKey = Deno.env.get("GEMINI_API_KEY") || "";
   if (!apiKey) throw new Error("Missing Gemini API key");
 
   const body = {
