@@ -305,7 +305,7 @@ async function runPipeline(batchId: string, config: {
                 lookReg++;
                 totalRegistered++;
               } else {
-                const reason = d.error || d.warmth_rejected ? `warmth gate (${d.error || ""})` : (d.error || "unknown");
+                const reason = d.warmth_rejected ? `warmth gate: ${d.error || ""}` : (d.error || "unknown");
                 await log(batchId, "register", "progress", `[${lookKey}/${slot}] Failed: ${reason.slice(0, 120)}`);
               }
               break;
