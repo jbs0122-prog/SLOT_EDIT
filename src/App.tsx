@@ -299,6 +299,13 @@ function App() {
     const isWetWeather = weather.condition === 'Rainy' || weather.condition === 'Snow';
     const targetWarmth = getTargetWarmth(weather.temperature);
 
+    const ctx = { gender, bodyType, vibe, weather };
+    setContext(ctx);
+    setActiveTab('home');
+    setCurrentScreen('generating');
+
+    const startTime = Date.now();
+
     let outfitPool = outfits;
     if (outfitPool.length === 0) {
       try {
@@ -346,11 +353,7 @@ function App() {
       return computeWeatherFit(b, targetWarmth, isWetWeather, weatherSeasons) - computeWeatherFit(a, targetWarmth, isWetWeather, weatherSeasons);
     });
 
-    const ctx = { gender, bodyType, vibe, weather };
     setSelectedOutfits(sorted);
-    setContext(ctx);
-    setActiveTab('home');
-    setCurrentScreen('generating');
 
     const imageUrls: string[] = [];
     sorted.slice(0, 5).forEach(outfit => {
@@ -361,7 +364,6 @@ function App() {
 
     const MIN_DISPLAY_MS = 1800;
     const MAX_WAIT_MS = 4000;
-    const startTime = Date.now();
 
     const preloadImage = (url: string) =>
       new Promise<void>(resolve => {

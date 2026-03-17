@@ -101,7 +101,6 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   useEffect(() => {
     loadFeedbackCounts();
     loadOutfitProducts();
-    refreshOutfitImages();
     if (containerRef.current) {
       const scrollableDiv = containerRef.current.querySelector('.overflow-y-auto');
       if (scrollableDiv) scrollableDiv.scrollTop = 0;
@@ -140,7 +139,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
   });
 
   const preloadImages = (outfitList: Outfit[]) => {
-    outfitList.forEach(outfit => {
+    outfitList.slice(0, 3).forEach(outfit => {
       if (outfit.image_url_flatlay) {
         const img = new Image();
         img.src = outfit.image_url_flatlay;
@@ -205,7 +204,7 @@ export default function Results({ outfits, context, onBack, onGenerate, onReques
       if (allProductIds.size === 0) return;
 
       const { data: productsData, error: productsError } = await supabase
-        .from('products').select('*').in('id', [...allProductIds]);
+        .from('products').select('id, brand, name, category, gender, body_type, vibe, color, season, silhouette, image_url, product_link, affiliate_link, price, stock_status, material, color_family, color_tone, sub_category, pattern, formality, warmth, nobg_image_url, created_at, updated_at').in('id', [...allProductIds]);
       if (productsError) throw productsError;
 
       const productMap: { [outfitId: string]: Product[] } = {};
