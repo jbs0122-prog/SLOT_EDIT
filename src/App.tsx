@@ -37,20 +37,21 @@ function getHash(): string {
 }
 
 function screenFromHash(h: string): Screen {
-  if (h === 'admin') return 'admin';
-  if (h === 'admin-products') return 'admin-products';
-  if (h === 'admin-outfit-linker') return 'admin-outfit-linker';
-  if (h === 'admin-users') return 'admin-users';
-  if (h === 'admin-amazon') return 'admin-amazon';
-  if (h === 'admin-smart') return 'admin-smart';
-  if (h === 'admin-auto-pipeline') return 'admin-auto-pipeline';
-  if (h === 'admin-style-dna') return 'admin-style-dna';
-  if (h === 'test-gemini') return 'test-gemini';
-  if (h === 'privacy-policy') return 'privacy-policy';
-  if (h === 'terms-of-service') return 'terms-of-service';
-  if (h === 'affiliate-disclosure') return 'affiliate-disclosure';
-  if (h === 'dmca-policy') return 'dmca-policy';
-  if (h === 'accessibility') return 'accessibility';
+  const base = h.split('?')[0];
+  if (base === 'admin') return 'admin';
+  if (base === 'admin-products') return 'admin-products';
+  if (base === 'admin-outfit-linker') return 'admin-outfit-linker';
+  if (base === 'admin-users') return 'admin-users';
+  if (base === 'admin-amazon') return 'admin-amazon';
+  if (base === 'admin-smart') return 'admin-smart';
+  if (base === 'admin-auto-pipeline') return 'admin-auto-pipeline';
+  if (base === 'admin-style-dna') return 'admin-style-dna';
+  if (base === 'test-gemini') return 'test-gemini';
+  if (base === 'privacy-policy') return 'privacy-policy';
+  if (base === 'terms-of-service') return 'terms-of-service';
+  if (base === 'affiliate-disclosure') return 'affiliate-disclosure';
+  if (base === 'dmca-policy') return 'dmca-policy';
+  if (base === 'accessibility') return 'accessibility';
   if (h.startsWith('results')) return 'results';
   return 'input';
 }

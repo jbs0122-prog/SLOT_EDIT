@@ -189,15 +189,29 @@ interface AdminAmazonSearchProps {
   outfitContext?: OutfitContext;
 }
 
+function parseHashParams(): Record<string, string> {
+  const hash = window.location.hash.replace('#', '');
+  const qIdx = hash.indexOf('?');
+  if (qIdx < 0) return {};
+  const params: Record<string, string> = {};
+  const parts = hash.slice(qIdx + 1).split('&');
+  for (const p of parts) {
+    const [k, v] = p.split('=');
+    if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+  }
+  return params;
+}
+
 export default function AdminAmazonSearch({ outfitContext }: AdminAmazonSearchProps = {}) {
   const saved = loadSession();
+  const hashParams = parseHashParams();
 
   const [step, setStep] = useState<Step>(saved?.step || 'filter');
 
-  const [gender, setGender] = useState(saved?.gender || '');
+  const [gender, setGender] = useState(hashParams.gender || saved?.gender || '');
   const [bodyType, setBodyType] = useState(saved?.bodyType || '');
-  const [vibe, setVibe] = useState(saved?.vibe || '');
-  const [season, setSeason] = useState(saved?.season || '');
+  const [vibe, setVibe] = useState(hashParams.vibe || saved?.vibe || '');
+  const [season, setSeason] = useState(hashParams.season || saved?.season || '');
 
   const [keywords, setKeywords] = useState<string[]>(saved?.keywords || []);
   const [keywordCategories, setKeywordCategories] = useState<Record<string, string[]>>(saved?.keywordCategories || {});

@@ -305,14 +305,28 @@ function saveSession(session: PipelineSession) {
   try { localStorage.setItem(PIPELINE_SESSION_KEY, JSON.stringify(session)); } catch { /**/ }
 }
 
+function parseHashParams(): Record<string, string> {
+  const hash = window.location.hash.replace('#', '');
+  const qIdx = hash.indexOf('?');
+  if (qIdx < 0) return {};
+  const params: Record<string, string> = {};
+  const parts = hash.slice(qIdx + 1).split('&');
+  for (const p of parts) {
+    const [k, v] = p.split('=');
+    if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+  }
+  return params;
+}
+
 export default function AdminAutoPipeline() {
   const session = loadSession();
+  const hashParams = parseHashParams();
 
   const [mcpMode, setMcpMode] = useState(false);
-  const [gender, setGender] = useState<Gender>(session.gender ?? 'FEMALE');
-  const [bodyType, setBodyType] = useState<BodyType>(session.bodyType ?? 'regular');
-  const [vibe, setVibe] = useState<Vibe>(session.vibe ?? 'ELEVATED_COOL');
-  const [season, setSeason] = useState<Season>(session.season ?? 'winter');
+  const [gender, setGender] = useState<Gender>((hashParams.gender as Gender) || session.gender || 'FEMALE');
+  const [bodyType, setBodyType] = useState<BodyType>((hashParams.body_type as BodyType) || session.bodyType || 'regular');
+  const [vibe, setVibe] = useState<Vibe>((hashParams.vibe as Vibe) || session.vibe || 'ELEVATED_COOL');
+  const [season, setSeason] = useState<Season>((hashParams.season as Season) || session.season || 'winter');
   const outfitCount = 3;
   const [productsPerSlot, setProductsPerSlot] = useState(session.productsPerSlot ?? 3);
 
