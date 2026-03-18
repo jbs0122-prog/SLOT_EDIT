@@ -17,15 +17,15 @@ function adminClient() {
 
 async function log(batchId: string, step: string, status: string, message: string) {
   const db = adminClient();
-  await db.from("mcp_pipeline_logs").insert({ batch_id: batchId, step, status, message });
+  await db.from("mcp_pipeline_logs").insert({ batch_id: batchId, step, status, message }).catch(() => {});
 }
 
 async function updateRun(batchId: string, fields: Record<string, unknown>) {
   const db = adminClient();
-  await db.from("mcp_pipeline_runs").update({ ...fields, updated_at: new Date().toISOString() }).eq("batch_id", batchId);
+  await db.from("mcp_pipeline_runs").update({ ...fields, updated_at: new Date().toISOString() }).eq("batch_id", batchId).catch(() => {});
 }
 
-async function callFunction(fnName: string, body: unknown, authHeader: string, timeoutMs = 120000): Promise<any> {
+async function callFunction(fnName: string, body: unknown, authHeader: string, timeoutMs = 90000): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -65,7 +65,7 @@ async function loadKeywordScores(db: ReturnType<typeof adminClient>, vibeKey: st
         }
       }
     }
-  } catch { /* silent — scores are optional */ }
+  } catch { /* silent */ }
   return scoreMap;
 }
 
@@ -161,7 +161,7 @@ async function runPipeline(batchId: string, config: {
       await log(batchId, "system", "progress", `DNA Lab active: ${dna.cellCount} cells, ${Object.keys(dna.briefsByLook).length} briefs loaded`);
     }
 
-    // ── STEP 1: Keywords (reads keyword_performance + DNA rules) ─────────────
+    // ── STEP 1: Keywords ──────────────────────────────────────────────────────
     await log(batchId, "keywords", "start", `Generating keywords via rule engine + learning data${dna.enabled ? " + DNA Lab" : ""}...`);
     const kwData = await callFunction("auto-generate-keywords", { gender, body_type: bodyType, vibe, season, dna_mode: dnaMode }, authHeader);
     const byLook: Record<string, Record<string, string[]>> = kwData.byLook || {};
@@ -174,7 +174,6 @@ async function runPipeline(batchId: string, config: {
     const learnedCount = kwScores.size;
     await log(batchId, "keywords", "success", `${totalKw} keywords across ${lookKeys.length} looks (${learnedCount} learned scores loaded)${dnaTag}`);
 
-    // Apply learning scores: re-sort keywords per slot per look
     for (const lookKey of lookKeys) {
       for (const slot of Object.keys(byLook[lookKey] || {})) {
         byLook[lookKey][slot] = sortKeywordsByLearning(byLook[lookKey][slot], kwScores);
@@ -183,7 +182,7 @@ async function runPipeline(batchId: string, config: {
 
     await updateRun(batchId, { phase: "search", phase_data: { byLook, lookNames, lookKeys } });
 
-    // ── STEP 2: Fetch existing ASINs for dedup ───────────────────────────────
+    // ── STEP 2: Fetch existing ASINs for dedup ────────────────────────────────
     const existingAsinSet = new Set<string>();
     const { data: existingProducts } = await db.from("products").select("product_link").not("product_link", "is", null);
     if (existingProducts) {
@@ -199,75 +198,79 @@ async function runPipeline(batchId: string, config: {
     const globalSearchCache = new Map<string, unknown[]>();
     const lookSlotCandidatesMap: Record<string, Record<string, unknown[]>> = {};
 
-    // ── STEP 3: Search (per look, with cache + fallback) ─────────────────────
+    // ── STEP 3: Search (per look, parallel slots) ─────────────────────────────
     await log(batchId, "search", "start", `Searching Amazon for ${lookKeys.length} looks...`);
+
+    const SEARCH_PARALLEL = 3;
     for (const lookKey of lookKeys) {
       const lookCategories = byLook[lookKey] || {};
       const lookSeenAsins = new Set<string>();
       const slotCandidates: Record<string, unknown[]> = {};
 
-      for (const slot of PRIORITY_SLOTS) {
-        const isCore = CORE_SLOTS.includes(slot);
-        const isMandatory = ["top", "bottom", "shoes"].includes(slot);
-        const slotLimit = isMandatory ? Math.max(2, productsPerSlot) : isCore ? productsPerSlot : Math.max(1, productsPerSlot - 1);
-        const allKws = (lookCategories[slot] || []) as string[];
-        if (allKws.length === 0) continue;
-        const candidates: unknown[] = [];
+      const slotTasks = PRIORITY_SLOTS.map(slot => ({ slot, kws: (lookCategories[slot] || []) as string[] }))
+        .filter(t => t.kws.length > 0);
 
-        for (const kw of allKws) {
-          if (candidates.length >= slotLimit) break;
-          let results: unknown[];
-          if (globalSearchCache.has(kw)) {
-            results = globalSearchCache.get(kw)!;
-          } else {
-            try {
-              const d = await callFunction("auto-amazon-search", { query: kw, page: 1 }, authHeader);
-              const raw = d.results || [];
-              results = (raw as any[]).filter(isValidSearchResult);
-              globalSearchCache.set(kw, results);
-              const invalid = raw.length - results.length;
-              await log(batchId, "search", "progress", `[${lookKey}/${slot}] "${kw}" → ${results.length} valid${invalid > 0 ? `, ${invalid} filtered` : ""} (${d.total_filtered ?? 0}/${d.total_raw ?? 0})`);
-            } catch (e) {
-              results = [];
-              await log(batchId, "search", "progress", `[${lookKey}/${slot}] "${kw}" failed: ${(e as Error).message.slice(0, 80)}`);
-            }
-          }
-          const lookDnaColors = dna.colorsByLook[lookKey] || [];
-          const lookDnaMaterials = dna.materialsByLook[lookKey] || [];
-          const eligible = (results as any[]).filter(
-            (item: any) => item.asin && !lookSeenAsins.has(item.asin) && !existingAsinSet.has(item.asin)
-          );
-          if (dna.enabled && (lookDnaColors.length > 0 || lookDnaMaterials.length > 0)) {
-            eligible.sort((a: any, b: any) => scoreDnaRelevance(b, lookDnaColors, lookDnaMaterials) - scoreDnaRelevance(a, lookDnaColors, lookDnaMaterials));
-          }
-          for (const item of eligible) {
+      for (let i = 0; i < slotTasks.length; i += SEARCH_PARALLEL) {
+        const batch = slotTasks.slice(i, i + SEARCH_PARALLEL);
+        await Promise.allSettled(batch.map(async ({ slot, kws }) => {
+          const isCore = CORE_SLOTS.includes(slot);
+          const isMandatory = ["top", "bottom", "shoes"].includes(slot);
+          const slotLimit = isMandatory ? Math.max(2, productsPerSlot) : isCore ? productsPerSlot : Math.max(1, productsPerSlot - 1);
+          const candidates: unknown[] = [];
+
+          for (const kw of kws) {
             if (candidates.length >= slotLimit) break;
-            lookSeenAsins.add(item.asin);
-            candidates.push(item);
-          }
-        }
-
-        // Fallback for empty core slots
-        if (isCore && candidates.length === 0 && allKws.length > 0) {
-          await log(batchId, "search", "progress", `[${lookKey}/${slot}] Retrying with rating>=3.5...`);
-          try {
-            const d = await callFunction("auto-amazon-search", { query: allKws[0], page: 1, filter: { minRating: 3.5 } }, authHeader);
-            for (const item of (d.results || []) as any[]) {
-              if (isValidSearchResult(item) && !lookSeenAsins.has(item.asin) && candidates.length < slotLimit) {
-                lookSeenAsins.add(item.asin);
-                candidates.push(item);
+            let results: unknown[];
+            if (globalSearchCache.has(kw)) {
+              results = globalSearchCache.get(kw)!;
+            } else {
+              try {
+                const d = await callFunction("auto-amazon-search", { query: kw, page: 1 }, authHeader, 30000);
+                const raw = d.results || [];
+                results = (raw as any[]).filter(isValidSearchResult);
+                globalSearchCache.set(kw, results);
+                const invalid = raw.length - results.length;
+                await log(batchId, "search", "progress", `[${lookKey}/${slot}] "${kw}" → ${results.length} valid${invalid > 0 ? `, ${invalid} filtered` : ""} (${d.total_filtered ?? 0}/${d.total_raw ?? 0})`);
+              } catch (e) {
+                results = [];
+                await log(batchId, "search", "progress", `[${lookKey}/${slot}] "${kw}" failed: ${(e as Error).message.slice(0, 80)}`);
               }
             }
-          } catch { /* silent */ }
-        }
+            const lookDnaColors = dna.colorsByLook[lookKey] || [];
+            const lookDnaMaterials = dna.materialsByLook[lookKey] || [];
+            const eligible = (results as any[]).filter(
+              (item: any) => item.asin && !lookSeenAsins.has(item.asin) && !existingAsinSet.has(item.asin)
+            );
+            if (dna.enabled && (lookDnaColors.length > 0 || lookDnaMaterials.length > 0)) {
+              eligible.sort((a: any, b: any) => scoreDnaRelevance(b, lookDnaColors, lookDnaMaterials) - scoreDnaRelevance(a, lookDnaColors, lookDnaMaterials));
+            }
+            for (const item of eligible) {
+              if (candidates.length >= slotLimit) break;
+              lookSeenAsins.add(item.asin);
+              candidates.push(item);
+            }
+          }
 
-        if (candidates.length > 0) slotCandidates[slot] = candidates;
+          if (isCore && candidates.length === 0 && kws.length > 0) {
+            try {
+              const d = await callFunction("auto-amazon-search", { query: kws[0], page: 1, filter: { minRating: 3.5 } }, authHeader, 30000);
+              for (const item of (d.results || []) as any[]) {
+                if (isValidSearchResult(item) && !lookSeenAsins.has(item.asin) && candidates.length < slotLimit) {
+                  lookSeenAsins.add(item.asin);
+                  candidates.push(item);
+                }
+              }
+            } catch { /* silent */ }
+          }
+
+          if (candidates.length > 0) slotCandidates[slot] = candidates;
+        }));
       }
+
       lookSlotCandidatesMap[lookKey] = slotCandidates;
       await log(batchId, "search", "progress", `[Look ${lookKey}] ${Object.values(slotCandidates).reduce((a, b) => a + b.length, 0)} candidates found`);
     }
 
-    // Borrow across looks for missing core slots
     for (const lookKey of lookKeys) {
       const slotCandidates = lookSlotCandidatesMap[lookKey];
       for (const slot of ["top", "bottom", "shoes"]) {
@@ -287,8 +290,11 @@ async function runPipeline(batchId: string, config: {
     await log(batchId, "search", "success", `Search complete: ${globalSearchCache.size} unique API calls`);
     await updateRun(batchId, { phase: "register" });
 
-    // ── STEP 4: Register products ────────────────────────────────────────────
+    // ── STEP 4: Register products (parallel across looks) ─────────────────────
     let totalRegistered = 0;
+    const REGISTER_PARALLEL = 4;
+    const lookRegistrationTasks: Array<{ lookKey: string; lookBatchId: string }> = [];
+
     for (const lookKey of lookKeys) {
       const slotCandidates = lookSlotCandidatesMap[lookKey];
       const hasCoreSlots = ["top", "bottom"].every(s => slotCandidates[s]?.length);
@@ -296,75 +302,99 @@ async function runPipeline(batchId: string, config: {
         await log(batchId, "register", "error", `[Look ${lookKey}] Missing core slots, skipping`);
         continue;
       }
+      lookRegistrationTasks.push({ lookKey, lookBatchId: `${batchId}-${lookKey}` });
+    }
 
-      const lookBatchId = `${batchId}-${lookKey}`;
+    for (const { lookKey, lookBatchId } of lookRegistrationTasks) {
+      const slotCandidates = lookSlotCandidatesMap[lookKey];
       await log(batchId, "register", "start", `[Look ${lookKey}] Analyzing & registering products...`);
       let lookReg = 0;
 
+      const allProducts: Array<{ slot: string; product: any }> = [];
       for (const slot of PRIORITY_SLOTS) {
-        const products = (slotCandidates[slot] || []) as any[];
-        for (const product of products) {
+        for (const product of (slotCandidates[slot] || []) as any[]) {
+          allProducts.push({ slot, product });
+        }
+      }
+
+      for (let i = 0; i < allProducts.length; i += REGISTER_PARALLEL) {
+        const batch = allProducts.slice(i, i + REGISTER_PARALLEL);
+        const results = await Promise.allSettled(batch.map(async ({ slot, product }) => {
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
               const d = await callFunction("auto-pipeline", {
                 action: "register-product", product, gender, body_type: bodyType, vibe, season,
                 batchId: lookBatchId, slotHint: slot,
-              }, authHeader);
+              }, authHeader, 30000);
               if (d.success) {
                 if (product.asin) existingAsinSet.add(product.asin);
-                lookReg++;
-                totalRegistered++;
-              } else {
-                const reason = d.warmth_rejected ? `warmth gate: ${d.error || ""}` : (d.error || "unknown");
-                await log(batchId, "register", "progress", `[${lookKey}/${slot}] Failed: ${reason.slice(0, 120)}`);
+                return true;
               }
-              break;
+              const reason = d.warmth_rejected ? `warmth gate: ${d.error || ""}` : (d.error || "unknown");
+              await log(batchId, "register", "progress", `[${lookKey}/${slot}] Failed: ${reason.slice(0, 120)}`);
+              return false;
             } catch (e) {
               if (attempt === 2) {
                 await log(batchId, "register", "progress", `[${lookKey}/${slot}] Error: ${(e as Error).message.slice(0, 120)}`);
               }
             }
           }
-        }
-      }
-      await log(batchId, "register", "success", `[Look ${lookKey}] Registered ${lookReg} products`);
-      await updateRun(batchId, { registered_count: totalRegistered });
-
-      // ── STEP 5: Background removal ──────────────────────────────────────────
-      await updateRun(batchId, { phase: "nobg" });
-      await log(batchId, "nobg", "start", `[Look ${lookKey}] Extracting flatlays...`);
-      const { data: productsForBg } = await db.from("products")
-        .select("id, image_url, category, sub_category")
-        .eq("batch_id", lookBatchId)
-        .is("nobg_image_url", null);
-
-      if (productsForBg && productsForBg.length > 0) {
-        const PARALLEL = 3;
-        const NOBG_TIMEOUT = 60000;
-        let extracted = 0;
-        let failed = 0;
-        for (let i = 0; i < productsForBg.length; i += PARALLEL) {
-          const batch = productsForBg.slice(i, i + PARALLEL);
-          const results = await Promise.allSettled(batch.map(p =>
-            callFunction("auto-pipeline", {
-              action: "extract-nobg", productId: p.id, imageUrl: p.image_url,
-              category: p.category || "top", subCategory: p.sub_category || "",
-            }, authHeader, NOBG_TIMEOUT)
-          ));
-          for (const r of results) {
-            if (r.status === "fulfilled") extracted++;
-            else failed++;
+          return false;
+        }));
+        for (const r of results) {
+          if (r.status === "fulfilled" && r.value) {
+            lookReg++;
+            totalRegistered++;
           }
         }
-        await log(batchId, "nobg", "success", `[Look ${lookKey}] ${extracted}/${productsForBg.length} flatlays extracted${failed > 0 ? ` (${failed} failed/timed out)` : ""}`);
-      } else {
-        await log(batchId, "nobg", "success", `[Look ${lookKey}] All products have flatlays`);
       }
+
+      await log(batchId, "register", "success", `[Look ${lookKey}] Registered ${lookReg} products`);
+      await updateRun(batchId, { registered_count: totalRegistered });
     }
 
     if (totalRegistered === 0) throw new Error("No products were registered");
 
-    // ── STEP 6: Generate outfits ─────────────────────────────────────────────
+    // ── STEP 5: Background removal (all looks at once, high parallelism) ──────
+    await updateRun(batchId, { phase: "nobg" });
+    await log(batchId, "nobg", "start", `Extracting flatlays for all looks...`);
+
+    const allBgProducts: Array<{ id: string; image_url: string; category: string; sub_category: string; lookKey: string }> = [];
+    for (const { lookKey, lookBatchId } of lookRegistrationTasks) {
+      const { data: productsForBg } = await db.from("products")
+        .select("id, image_url, category, sub_category")
+        .eq("batch_id", lookBatchId)
+        .is("nobg_image_url", null);
+      if (productsForBg) {
+        for (const p of productsForBg) allBgProducts.push({ ...p, lookKey });
+      }
+    }
+
+    if (allBgProducts.length > 0) {
+      const NOBG_PARALLEL = 5;
+      const NOBG_TIMEOUT = 45000;
+      let extracted = 0;
+      let failed = 0;
+
+      for (let i = 0; i < allBgProducts.length; i += NOBG_PARALLEL) {
+        const batch = allBgProducts.slice(i, i + NOBG_PARALLEL);
+        const results = await Promise.allSettled(batch.map(p =>
+          callFunction("auto-pipeline", {
+            action: "extract-nobg", productId: p.id, imageUrl: p.image_url,
+            category: p.category || "top", subCategory: p.sub_category || "",
+          }, authHeader, NOBG_TIMEOUT)
+        ));
+        for (const r of results) {
+          if (r.status === "fulfilled") extracted++;
+          else failed++;
+        }
+      }
+      await log(batchId, "nobg", "success", `${extracted}/${allBgProducts.length} flatlays extracted${failed > 0 ? ` (${failed} timed out)` : ""}`);
+    } else {
+      await log(batchId, "nobg", "success", `All products already have flatlays`);
+    }
+
+    // ── STEP 6: Generate outfits ──────────────────────────────────────────────
     await log(batchId, "outfits", "start", `Generating outfits for ${lookKeys.length} looks...`);
     await updateRun(batchId, { phase: "outfits" });
 
@@ -386,7 +416,7 @@ async function runPipeline(batchId: string, config: {
       await log(batchId, "outfits", "success", `[Look ${c.lookKey || "?"}] Score: ${c.matchScore ?? "?"}`);
     }
 
-    // ── STEP 7: Generate outfit insights (template + DNA brief) ────────────
+    // ── STEP 7: Generate outfit insights ──────────────────────────────────────
     await log(batchId, "outfits", "progress", `Generating styling insights (template engine${dna.enabled ? " + DNA briefs" : ""})...`);
     const insightedCandidates = outfitCandidates.map((c: any) => ({
       ...c,
@@ -394,7 +424,7 @@ async function runPipeline(batchId: string, config: {
       dnaEnhanced: !!dna.briefsByLook[c.lookKey],
     }));
 
-    // ── DONE ─────────────────────────────────────────────────────────────────
+    // ── DONE ──────────────────────────────────────────────────────────────────
     await updateRun(batchId, {
       status: "completed",
       phase: "done",
@@ -462,7 +492,6 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     const action = url.searchParams.get("action") || (await req.clone().json().catch(() => ({}))).action;
 
-    // ── GET: Poll run status + logs ──────────────────────────────────────────
     if (req.method === "GET") {
       const getAction = url.searchParams.get("action");
 
@@ -540,7 +569,6 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const act = body.action || action;
 
-    // ── POST action: start ───────────────────────────────────────────────────
     if (act === "start") {
       const { gender = "FEMALE", bodyType = "regular", vibe = "ELEVATED_COOL", season = "fall", productsPerSlot = 3, dnaMode = "auto" } = body;
       const batchId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -557,7 +585,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── POST action: submit-feedback (acceptance + learning update) ──────────
     if (act === "submit-feedback") {
       const { batchId, acceptedIds = [], rejectedIds = [], vibe: fbVibe, season: fbSeason } = body;
       const db = adminClient();
@@ -571,7 +598,6 @@ Deno.serve(async (req: Request) => {
           : Promise.resolve(),
       ]);
 
-      // Read run to get keywords + items for learning
       const { data: runData } = await db.from("mcp_pipeline_runs")
         .select("outfit_candidates, phase_data")
         .eq("batch_id", batchId)
@@ -596,7 +622,6 @@ Deno.serve(async (req: Request) => {
             ai_score: c.matchScore || 0,
           });
 
-          // Update vibe_item_expansions via atomic RPC (no race conditions)
           const vibeKey = (fbVibe || "").toLowerCase().replace(/\s+/g, "_");
           for (const item of (c.items || []) as any[]) {
             if (!item.slot || !item.name) continue;
@@ -610,7 +635,6 @@ Deno.serve(async (req: Request) => {
             }
           }
 
-          // Update keyword_performance via atomic RPC (no race conditions)
           const lookKws: any[] = byLook[c.lookKey || "A"] ? Object.entries(byLook[c.lookKey]).flatMap(([slot, kws]) =>
             (kws as string[]).map(kw => ({ slot, kw }))
           ) : [];
@@ -643,7 +667,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── POST action: get-learning-insights ───────────────────────────────────
     if (act === "get-learning-insights") {
       const { vibe: lVibe, season: lSeason } = body;
       const db = adminClient();

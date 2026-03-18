@@ -1653,10 +1653,7 @@ Deno.serve(async (req: Request) => {
 
       const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
       const headers = { "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" };
-      const slot = ["outer", "mid", "top", "bottom", "shoes", "bag", "accessory"].includes(category) ? category : "top";
-      const label = subCategory || category;
       let nobgUrl: string | null = null;
-      let isModelShot = false;
 
       const fetchWithTimeout = (url: string, opts: RequestInit, ms = 25000): Promise<Response> => {
         const ctrl = new AbortController();
@@ -1665,38 +1662,14 @@ Deno.serve(async (req: Request) => {
       };
 
       try {
-        const detectRes = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/extract-products`, {
-          method: "POST", headers, body: JSON.stringify({ mode: "detect", imageUrl }),
-        }, 20000);
-        if (detectRes.ok) {
-          const detectData = await detectRes.json();
-          if (detectData.success && detectData.items?.length) {
-            isModelShot = true;
-            const targetItem = detectData.items.find((i: any) => i.slot === slot) ?? detectData.items[0];
-            const extractRes = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/extract-products`, {
-              method: "POST", headers,
-              body: JSON.stringify({ mode: "extract", imageUrl, slot: targetItem.slot, label: targetItem.label || label }),
-            }, 20000);
-            if (extractRes.ok) {
-              const extractData = await extractRes.json();
-              if (extractData.success && extractData.imageUrl) nobgUrl = extractData.imageUrl;
-            }
-          }
+        const pixianRes = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/remove-bg`, {
+          method: "POST", headers, body: JSON.stringify({ imageUrl, productId }),
+        }, 30000);
+        if (pixianRes.ok) {
+          const pixianData = await pixianRes.json();
+          if (pixianData.success && (pixianData.url || pixianData.image)) nobgUrl = pixianData.url || pixianData.image;
         }
-      } catch { /* fall through */ }
-
-      const pixianSourceUrl = nobgUrl || (!isModelShot ? imageUrl : null);
-      if (pixianSourceUrl) {
-        try {
-          const pixianRes = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/remove-bg`, {
-            method: "POST", headers, body: JSON.stringify({ imageUrl: pixianSourceUrl, productId }),
-          }, 30000);
-          if (pixianRes.ok) {
-            const pixianData = await pixianRes.json();
-            if (pixianData.success && (pixianData.url || pixianData.image)) nobgUrl = pixianData.url || pixianData.image;
-          }
-        } catch { /* silent */ }
-      }
+      } catch { /* silent */ }
 
       if (nobgUrl && !nobgUrl.startsWith("data:")) {
         await adminClient.from("products").update({ nobg_image_url: nobgUrl }).eq("id", productId);
