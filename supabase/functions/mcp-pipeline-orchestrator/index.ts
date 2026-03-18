@@ -490,7 +490,6 @@ Deno.serve(async (req: Request) => {
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || (await req.clone().json().catch(() => ({}))).action;
 
     if (req.method === "GET") {
       const getAction = url.searchParams.get("action");
@@ -566,8 +565,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const body = await req.json();
-    const act = body.action || action;
+    let body: any = {};
+    try { body = await req.json(); } catch { /* empty body */ }
+    const act = body.action || url.searchParams.get("action");
 
     if (act === "start") {
       const { gender = "FEMALE", bodyType = "regular", vibe = "ELEVATED_COOL", season = "fall", productsPerSlot = 3, dnaMode = "auto" } = body;
