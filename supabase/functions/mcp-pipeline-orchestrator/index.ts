@@ -1,5 +1,6 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+declare const EdgeRuntime: { waitUntil: (promise: Promise<any>) => void };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,13 +29,17 @@ function adminClient() {
 }
 
 async function logMsg(batchId: string, step: string, status: string, message: string) {
-  const db = adminClient();
-  await db.from("mcp_pipeline_logs").insert({ batch_id: batchId, step, status, message }).catch(() => {});
+  try {
+    const db = adminClient();
+    await db.from("mcp_pipeline_logs").insert({ batch_id: batchId, step, status, message });
+  } catch { /* silent */ }
 }
 
 async function updateRun(batchId: string, fields: Record<string, unknown>) {
-  const db = adminClient();
-  await db.from("mcp_pipeline_runs").update({ ...fields, updated_at: new Date().toISOString() }).eq("batch_id", batchId).catch(() => {});
+  try {
+    const db = adminClient();
+    await db.from("mcp_pipeline_runs").update({ ...fields, updated_at: new Date().toISOString() }).eq("batch_id", batchId);
+  } catch { /* silent */ }
 }
 
 async function callFunction(fnName: string, body: unknown, authHeader: string, timeoutMs = 90000): Promise<any> {
@@ -557,26 +562,6 @@ async function handlePoll(url: URL) {
 // POST handlers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function handleStart(body: any, authHeader: string) {
-  const { gender = "FEMALE", bodyType = "regular", vibe = "ELEVATED_COOL", season = "fall", productsPerSlot = 3, dnaMode = "auto" } = body;
-  const batchId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  try {
-    const db = adminClient();
-    await db.from("mcp_pipeline_runs").insert({
-      batch_id: batchId, status: "pending", gender, body_type: bodyType,
-      vibe, season, products_per_slot: productsPerSlot,
-    });
-  } catch (e: any) {
-    return err("DB insert failed: " + (e.message || String(e)), 500);
-  }
-
-  const pipelinePromise = runPipeline(batchId, { gender, bodyType, vibe, season, productsPerSlot, dnaMode }, authHeader);
-  pipelinePromise.catch(() => {});
-
-  return ok({ batchId, status: "started", dnaMode });
-}
-
 async function handleSubmitFeedback(body: any) {
   const { batchId, acceptedIds = [], rejectedIds = [], vibe: fbVibe, season: fbSeason } = body;
   const db = adminClient();
@@ -620,11 +605,13 @@ async function handleSubmitFeedback(body: any) {
         const itemName = (item.sub_category || item.name || "").toLowerCase().slice(0, 80);
         const lookKey = c.lookKey || "A";
 
-        if (accepted) {
-          await db.rpc("increment_vibe_expansion_success", { p_vibe: vibeKey, p_look: lookKey, p_slot: item.slot, p_item: itemName }).catch(() => {});
-        } else {
-          await db.rpc("increment_vibe_expansion_fail", { p_vibe: vibeKey, p_look: lookKey, p_slot: item.slot, p_item: itemName }).catch(() => {});
-        }
+        try {
+          if (accepted) {
+            await db.rpc("increment_vibe_expansion_success", { p_vibe: vibeKey, p_look: lookKey, p_slot: item.slot, p_item: itemName });
+          } else {
+            await db.rpc("increment_vibe_expansion_fail", { p_vibe: vibeKey, p_look: lookKey, p_slot: item.slot, p_item: itemName });
+          }
+        } catch { /* silent */ }
       }
 
       const lookKws: any[] = byLook[c.lookKey || "A"] ? Object.entries(byLook[c.lookKey]).flatMap(([slot, kws]) =>
@@ -632,25 +619,27 @@ async function handleSubmitFeedback(body: any) {
       ) : [];
 
       for (const { slot, kw } of lookKws) {
-        if (accepted) {
-          await db.rpc("increment_keyword_accepted", {
+        try {
+          if (accepted) {
+            await db.rpc("increment_keyword_accepted", {
+              p_keyword: kw,
+              p_vibe: (fbVibe || "").toLowerCase().replace(/\s+/g, "_"),
+              p_slot: slot,
+              p_season: fbSeason || "",
+            });
+          }
+          await db.rpc("increment_keyword_total", {
             p_keyword: kw,
             p_vibe: (fbVibe || "").toLowerCase().replace(/\s+/g, "_"),
             p_slot: slot,
             p_season: fbSeason || "",
-          }).catch(() => {});
-        }
-        await db.rpc("increment_keyword_total", {
-          p_keyword: kw,
-          p_vibe: (fbVibe || "").toLowerCase().replace(/\s+/g, "_"),
-          p_slot: slot,
-          p_season: fbSeason || "",
-        }).catch(() => {});
+          });
+        } catch { /* silent */ }
       }
     }
 
     if (feedbackRows.length > 0) {
-      await db.from("pipeline_feedback").insert(feedbackRows).catch(() => {});
+      try { await db.from("pipeline_feedback").insert(feedbackRows); } catch { /* silent */ }
     }
   }
 
@@ -723,7 +712,21 @@ Deno.serve(async (req: Request) => {
 
     const act = body.action;
 
-    if (act === "start") return await handleStart(body, authHeader);
+    if (act === "start") {
+      const { gender = "FEMALE", bodyType = "regular", vibe = "ELEVATED_COOL", season = "fall", productsPerSlot = 3, dnaMode = "auto" } = body;
+      const batchId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const db = adminClient();
+      await db.from("mcp_pipeline_runs").insert({
+        batch_id: batchId, status: "pending", gender, body_type: bodyType,
+        vibe, season, products_per_slot: productsPerSlot,
+      });
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          await runPipeline(batchId, { gender, bodyType, vibe, season, productsPerSlot, dnaMode }, authHeader);
+        } catch { /* errors handled inside runPipeline */ }
+      })());
+      return ok({ batchId, status: "started", dnaMode });
+    }
     if (act === "submit-feedback") return await handleSubmitFeedback(body);
     if (act === "get-learning-insights") return await handleLearningInsights(body);
 
