@@ -1658,19 +1658,25 @@ Deno.serve(async (req: Request) => {
       let nobgUrl: string | null = null;
       let isModelShot = false;
 
+      const fetchWithTimeout = (url: string, opts: RequestInit, ms = 25000): Promise<Response> => {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), ms);
+        return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+      };
+
       try {
-        const detectRes = await fetch(`${SUPABASE_URL}/functions/v1/extract-products`, {
+        const detectRes = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/extract-products`, {
           method: "POST", headers, body: JSON.stringify({ mode: "detect", imageUrl }),
-        });
+        }, 20000);
         if (detectRes.ok) {
           const detectData = await detectRes.json();
           if (detectData.success && detectData.items?.length) {
             isModelShot = true;
             const targetItem = detectData.items.find((i: any) => i.slot === slot) ?? detectData.items[0];
-            const extractRes = await fetch(`${SUPABASE_URL}/functions/v1/extract-products`, {
+            const extractRes = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/extract-products`, {
               method: "POST", headers,
               body: JSON.stringify({ mode: "extract", imageUrl, slot: targetItem.slot, label: targetItem.label || label }),
-            });
+            }, 20000);
             if (extractRes.ok) {
               const extractData = await extractRes.json();
               if (extractData.success && extractData.imageUrl) nobgUrl = extractData.imageUrl;
@@ -1682,9 +1688,9 @@ Deno.serve(async (req: Request) => {
       const pixianSourceUrl = nobgUrl || (!isModelShot ? imageUrl : null);
       if (pixianSourceUrl) {
         try {
-          const pixianRes = await fetch(`${SUPABASE_URL}/functions/v1/remove-bg`, {
+          const pixianRes = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/remove-bg`, {
             method: "POST", headers, body: JSON.stringify({ imageUrl: pixianSourceUrl, productId }),
-          });
+          }, 30000);
           if (pixianRes.ok) {
             const pixianData = await pixianRes.json();
             if (pixianData.success && (pixianData.url || pixianData.image)) nobgUrl = pixianData.url || pixianData.image;

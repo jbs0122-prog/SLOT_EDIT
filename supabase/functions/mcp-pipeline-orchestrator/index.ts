@@ -25,17 +25,27 @@ async function updateRun(batchId: string, fields: Record<string, unknown>) {
   await db.from("mcp_pipeline_runs").update({ ...fields, updated_at: new Date().toISOString() }).eq("batch_id", batchId);
 }
 
-async function callFunction(fnName: string, body: unknown, authHeader: string): Promise<any> {
-  const r = await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`, {
-    method: "POST",
-    headers: { Authorization: authHeader, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => `HTTP ${r.status}`);
-    throw new Error(`${fnName} failed (${r.status}): ${txt.slice(0, 200)}`);
+async function callFunction(fnName: string, body: unknown, authHeader: string, timeoutMs = 120000): Promise<any> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`, {
+      method: "POST",
+      headers: { Authorization: authHeader, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => `HTTP ${r.status}`);
+      throw new Error(`${fnName} failed (${r.status}): ${txt.slice(0, 200)}`);
+    }
+    return r.json();
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error(`${fnName} timed out after ${timeoutMs}ms`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return r.json();
 }
 
 async function loadKeywordScores(db: ReturnType<typeof adminClient>, vibeKey: string, seasonLabel: string): Promise<Map<string, number>> {
@@ -321,6 +331,7 @@ async function runPipeline(batchId: string, config: {
       await updateRun(batchId, { registered_count: totalRegistered });
 
       // ── STEP 5: Background removal ──────────────────────────────────────────
+      await updateRun(batchId, { phase: "nobg" });
       await log(batchId, "nobg", "start", `[Look ${lookKey}] Extracting flatlays...`);
       const { data: productsForBg } = await db.from("products")
         .select("id, image_url, category, sub_category")
@@ -328,20 +339,24 @@ async function runPipeline(batchId: string, config: {
         .is("nobg_image_url", null);
 
       if (productsForBg && productsForBg.length > 0) {
-        const PARALLEL = 2;
+        const PARALLEL = 3;
+        const NOBG_TIMEOUT = 60000;
         let extracted = 0;
+        let failed = 0;
         for (let i = 0; i < productsForBg.length; i += PARALLEL) {
           const batch = productsForBg.slice(i, i + PARALLEL);
           const results = await Promise.allSettled(batch.map(p =>
             callFunction("auto-pipeline", {
               action: "extract-nobg", productId: p.id, imageUrl: p.image_url,
               category: p.category || "top", subCategory: p.sub_category || "",
-            }, authHeader)
+            }, authHeader, NOBG_TIMEOUT)
           ));
-          extracted += results.filter(r => r.status === "fulfilled").length;
-          await new Promise(r => setTimeout(r, 300));
+          for (const r of results) {
+            if (r.status === "fulfilled") extracted++;
+            else failed++;
+          }
         }
-        await log(batchId, "nobg", "success", `[Look ${lookKey}] ${extracted}/${productsForBg.length} flatlays extracted`);
+        await log(batchId, "nobg", "success", `[Look ${lookKey}] ${extracted}/${productsForBg.length} flatlays extracted${failed > 0 ? ` (${failed} failed/timed out)` : ""}`);
       } else {
         await log(batchId, "nobg", "success", `[Look ${lookKey}] All products have flatlays`);
       }
